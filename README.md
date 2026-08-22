@@ -9,7 +9,7 @@
 
 ```
 campus-dash/
-├── campus-dash-backend/          # 后端项目（Java/Python + Spring Boot + Maven）
+├── campus-dash-backend/       # 后端项目（Java/Python + Spring Boot + Maven）
 │   ├── dash-domain/           # 领域层：业务规则、领域模型
 │   ├── dash-application/      # 应用层：发布/抢单/确认/流转/结算/退款/仲裁/对账编排
 │   ├── dash-infrastructure/   # 基础设施层：数据库、缓存、MQ、ShardingSphere 规则、Sentinel
