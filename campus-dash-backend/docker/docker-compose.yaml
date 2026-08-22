@@ -1,0 +1,91 @@
+# 一期只起 MySQL + Redis 两个中间件。
+# RocketMQ 在 P2（超时流转）加入，ES/Canal 在 P4（数据同步）加入，
+# Prometheus/Grafana 在 P7（压测调优）加入。一次只引入当期真正需要的东西。
+services:
+  mysql:
+    image: mysql:8.0.40
+    container_name: dash-mysql
+    ports:
+      - "3307:3306"          # 避开本机可能已占用的 3306
+    environment:
+      MYSQL_ROOT_PASSWORD: dash123456
+      MYSQL_DATABASE: campus_dash
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # RC 隔离级别：本项目写操作都是带条件的点更新，不依赖可重复读。
+      # RC 下没有间隙锁，能显著降低并发更新的锁冲突与死锁概率。
+      - --transaction-isolation=READ-COMMITTED
+      - --max_connections=500
+      - --innodb_buffer_pool_size=512M
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - dash-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pdash123456"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: dash-redis
+    ports:
+      - "6380:6379"          # 避开本机可能已占用的 6379
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ---------- P2 新增：RocketMQ 5.x ----------
+  # 只有 5.x 客户端支持任意时间定时消息（setDeliveryTimestamp）；
+  # 4.x 的 remoting 客户端只有 18 个固定 delay level，满足不了"5 分钟后精确投递"。
+  rmqnamesrv:
+    image: apache/rocketmq:5.3.1
+    container_name: dash-rmqnamesrv
+    command: sh mqnamesrv
+    ports:
+      - "9876:9876"
+    environment:
+      # 官方镜像默认 -Xms8g -Xmx8g，本机内存吃紧必须覆盖，否则容器直接起不来。
+      # 这是接入 RocketMQ 最容易踩的第一个坑。
+      JAVA_OPT_EXT: "-server -Xms256m -Xmx256m -Xmn128m"
+    healthcheck:
+      # 镜像里没有 netstat/ss/curl，只能用 ps 判进程存活。
+      # 这不检查端口，但足以区分"进程挂了"和"还在启动"；用 [N] 技巧避免 grep 匹配到自己。
+      test: ["CMD-SHELL", "ps -ef | grep -q '[N]amesrvStartup'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  rmqbroker:
+    image: apache/rocketmq:5.3.1
+    container_name: dash-rmqbroker
+    # --enable-proxy 让 broker 同时启动 gRPC proxy(8081)，5.x 客户端走它
+    command: sh mqbroker -n rmqnamesrv:9876 --enable-proxy
+    depends_on:
+      rmqnamesrv:
+        condition: service_started
+    ports:
+      - "10911:10911"
+      - "10909:10909"
+      - "8081:8081"
+    environment:
+      JAVA_OPT_EXT: "-server -Xms512m -Xmx512m -Xmn256m"
+      # macOS 上不配这个，客户端会拿到容器内网 IP 而连不上 broker
+      BROKER_IP1: "127.0.0.1"
+    healthcheck:
+      # 注意：--enable-proxy 模式下进程名是 ProxyStartup 而不是 BrokerStartup，
+      # 按 BrokerStartup 匹配会让容器永远 unhealthy（实测踩过）
+      test: ["CMD-SHELL", "ps -ef | grep -qE '[P]roxyStartup|[B]rokerStartup'"]
+      interval: 10s
+      timeout: 5s
+      retries: 9
+      start_period: 60s
+
+volumes:
+  dash-mysql-data:

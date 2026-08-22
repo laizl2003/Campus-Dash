@@ -1,0 +1,25 @@
+scenario: S2-稳态阶梯加压
+purpose: 补齐单机稳态 QPS、P95/P99、错误率曲线；不是验证零超卖
+target:
+  primary: GET /api/errands?campusId=1&status=PUBLISHED&size=20
+  optional_write: POST /api/errands
+model:
+  stages: [50, 100, 200, 400, 800]
+  warmup_per_stage: 30s
+  duration_per_stage: 180s
+  think_time: 0ms
+  client: com.campusdash.bench.RampLoadClient
+assertions:
+  error_rate_lt: 1%
+  p99_recorded: true
+  qps_recorded: true
+outputs:
+  bench_run:
+    scenario: S2
+    summary_fields: [stage, requests, errors, qps, p50Ms, p95Ms, p99Ms, maxMs]
+  report: bench/reports/report-P7-<timestamp>.md
+environment:
+  app: JDK 21 / Spring Boot 3.5.8 / 单实例
+  mysql: 8.0.40 (docker, RC 隔离级别, 3307)
+  redis: 7.4-alpine (docker, 6380)
+  note: 应用、worker、中间件、发压端同机；数字只作同机基线，不可外推

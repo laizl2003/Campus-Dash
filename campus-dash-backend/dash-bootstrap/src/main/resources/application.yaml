@@ -1,0 +1,82 @@
+server:
+  port: 8080
+  tomcat:
+    threads:
+      max: 200          # P7 的 R3 会用压测数据重新定这个值
+    accept-count: 500
+
+spring:
+  application:
+    name: campus-dash
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3307/campus_dash?useSSL=false&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
+    username: root
+    password: dash123456
+    hikari:
+      # 连接池不是越大越好：HikariCP 官方建议 CPU 核数 * 2 + 磁盘数。
+      # P7 的容量评估会用 10/50/100/200 的实测曲线验证这个结论。
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 3000
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6380
+      lettuce:
+        pool:
+          max-active: 64
+          max-idle: 32
+          min-idle: 8
+      timeout: 2000ms
+
+dash:
+  worker-id: 1
+  auth:
+    # 生产默认 false：只认 Bearer token。谁把这个开关开进生产，
+    # 等于任何人带个 X-User-Id 就能冒充任何人。
+    allow-header-identity: false
+    arbitrator-id: 9001
+    session-ttl-minutes: 120
+    refresh-ttl-minutes: 10080    # P6：JWT refresh token，默认 7 天
+  settle:
+    commission-rate: 0.05
+    auto-settle-seconds: 86400
+  mq:
+    enabled: true                 # 关掉则退化为纯兜底扫描，应用仍可用
+    endpoints: 127.0.0.1:8081     # RocketMQ 5.x gRPC proxy
+    topic:
+      confirm-timeout: errand-confirm-timeout
+  timeout:
+    confirm-seconds: 300
+    max-transfer-rounds: 5      # 防无限流转：超过则回退让所有人重新抢          # 生产 5 分钟；测试用 @TestPropertySource 压到 2 秒
+
+  grab:
+    limit:
+      type: sentinel            # P7：生产默认使用 Sentinel 热点参数限流；local 可切回单机固定窗口
+      enabled: true             # P7：抢单 L1 热点限流
+      per-second: 500           # 单实例、单任务每秒放行数，S2 阶梯加压后定参
+      resource: campus_dash_grab
+
+  credit:
+    min-score: 40
+    max-ongoing: 5
+    calibration-cron: "0 0 3 * * ?"
+    calibration-batch-size: 1000
+
+  cache:
+    enabled: true
+    shards: 4                 # 热 Key 分片数：读随机挑一片，失效时全片删
+    ttl-seconds: 600          # 物理 TTL 10 分钟
+    jitter-seconds: 120       # ±2 分钟随机抖动，防雪崩（大批 key 同时到期）
+    empty-ttl-seconds: 60     # 空值缓存 TTL，防穿透
+    double-delete-ms: 500     # 延迟双删间隔
+    double-delete-enabled: true
+    eviction-order: AFTER_COMMIT   # 生产恒为 AFTER_COMMIT；BEFORE_COMMIT 仅供对照实验
+    bloom-enabled: true
+    redisson-pool-size: 16    # 与 Lettuce 池分开，避免叠加打满 Redis
+  web:
+    cors-origins: http://localhost:5173,http://127.0.0.1:5173
+
+logging:
+  level:
+    com.campusdash: INFO

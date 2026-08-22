@@ -1,0 +1,82 @@
+# 集成测试专用配置（完整拷贝）：
+# Spring Boot 不会合并 src/main 与 src/test 的同名 application.yaml，
+# test resources 里的是完整替换——这里必须包含数据源等基础配置，
+# 缺任何一段都会报 "Failed to determine a suitable driver class"（实测踩过）。
+#
+# 与主配置的两处刻意差异：
+#   1. dash.auth.allow-header-identity: true —— 保留 X-User-Id 后门，
+#      既有集成测试与压测都靠它直接指定身份
+#   2. dash.mq.enabled: false —— 集成测试不依赖外部 broker
+server:
+  port: 8080
+  tomcat:
+    threads:
+      max: 200
+    accept-count: 500
+
+spring:
+  application:
+    name: campus-dash
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3307/campus_dash?useSSL=false&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
+    username: root
+    password: dash123456
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 3000
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6380
+      lettuce:
+        pool:
+          max-active: 64
+          max-idle: 32
+          min-idle: 8
+      timeout: 2000ms
+
+dash:
+  worker-id: 1
+  auth:
+    allow-header-identity: true
+    arbitrator-id: 9001
+    session-ttl-minutes: 120
+    refresh-ttl-minutes: 10080
+  settle:
+    commission-rate: 0.05
+    auto-settle-seconds: 86400
+  mq:
+    enabled: false
+    endpoints: 127.0.0.1:8081
+  timeout:
+    confirm-seconds: 300
+    max-transfer-rounds: 5
+  grab:
+    limit:
+      # 并发正确性集成测试要压 Lua + DB CAS 本体，不让 P7 治理层提前拦流
+      enabled: false
+      per-second: 500
+  credit:
+    # 测试库被各测试类共享，跑腿的在途任务会跨测试累积，
+    # 上限放宽到 1000 避免 L2 资格校验干扰无关测试（生产保持 5）
+    max-ongoing: 1000
+    calibration-cron: "0 0 3 * * ?"
+    calibration-batch-size: 1000
+  cache:
+    enabled: true
+    shards: 4                 # 热 Key 分片数：读随机挑一片，失效时全片删
+    ttl-seconds: 600          # 物理 TTL 10 分钟
+    jitter-seconds: 120       # ±2 分钟随机抖动，防雪崩（大批 key 同时到期）
+    empty-ttl-seconds: 60     # 空值缓存 TTL，防穿透
+    double-delete-ms: 500     # 延迟双删间隔
+    double-delete-enabled: true
+    eviction-order: AFTER_COMMIT   # 生产恒为 AFTER_COMMIT；BEFORE_COMMIT 仅供对照实验
+    bloom-enabled: true
+    redisson-pool-size: 16    # 与 Lettuce 池分开，避免叠加打满 Redis
+  web:
+    cors-origins: http://localhost:5173,http://127.0.0.1:5173
+
+logging:
+  level:
+    com.campusdash: INFO

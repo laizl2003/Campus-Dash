@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: campus-dash-worker
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3307/campus_dash?useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: dash123456
+    hikari:
+      maximum-pool-size: 10     # worker 是后台批量任务，不需要和在线服务抢连接
+      minimum-idle: 2
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6380
+
+dash:
+  ws:
+    # worker 进程不持有 WebSocket 连接，推送由 app 进程负责；
+    # 这里显式关闭以装配 NoopRealtimeNotifier（用例依赖该端口）
+    enabled: false
+  worker-id: 2                  # 与在线服务（1）区分，避免雪花 ID 重复
+  mq:
+    enabled: true               # 主通道；关掉则退化为纯兜底扫描
+    endpoints: 127.0.0.1:8081
+    topic:
+      confirm-timeout: errand-confirm-timeout
+    group:
+      confirm-timeout: dash-timeout-consumer
+  timeout:
+    confirm-seconds: 300
+    max-transfer-rounds: 5      # 防无限流转：超过则回退让所有人重新抢        # 生产 5 分钟；测试用 10 秒
+    scan-interval-ms: 5000
+    scan-grace-seconds: 2       # 宽限期：让 MQ 主通道先处理
+  message:
+    retry-interval-ms: 10000
+  credit:
+    calibration-cron: "0 0 3 * * ?"
+    calibration-batch-size: 1000
+
+logging:
+  level:
+    com.campusdash: INFO

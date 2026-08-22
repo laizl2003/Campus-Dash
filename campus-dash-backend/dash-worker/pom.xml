@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.campusdash</groupId>
+    <artifactId>campus-dash</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>dash-worker</artifactId>
+  <dependencies>
+    <!-- 复用应用层与基础设施层，业务逻辑不重复写，只是启动入口与装配不同 -->
+    <dependency><groupId>com.campusdash</groupId><artifactId>dash-application</artifactId></dependency>
+    <dependency><groupId>com.campusdash</groupId><artifactId>dash-infrastructure</artifactId></dependency>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter</artifactId></dependency>
+    <dependency><groupId>org.apache.rocketmq</groupId><artifactId>rocketmq-client-java</artifactId></dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <executions><execution><goals><goal>repackage</goal></goals></execution></executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

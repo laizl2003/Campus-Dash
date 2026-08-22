@@ -1,0 +1,22 @@
+scenario: S1-单任务尖峰抢单（N 抢 1）
+purpose: 验证并发正确性（零超卖、零重复抢），不是测吞吐
+target: POST /api/errands/{id}/grab
+model:
+  concurrency: 2000
+  ramp_up: 0                  # 用 CountDownLatch 对齐后瞬时释放，不做爬升
+  loops: 1
+  sync_barrier: true          # 所有线程凑齐后同时开闸，比逐个启动更接近秒杀
+warmup:
+  concurrency: 20
+  duration: 30s               # JVM 预热：让热点方法被 JIT 编译、连接池填满
+slot_total: 1
+assertions:
+  success_count: 1            # 严格等于名额数
+  oversold_count: 0
+  duplicate_grab_count: 0
+  redis_db_slot_consistent: true
+environment:
+  app: JDK 21 / Spring Boot 3.5.8 / 单实例
+  mysql: 8.0.40 (docker, RC 隔离级别, 3307)
+  redis: 7.4-alpine (docker, 6380)
+  note: 应用与中间件同机运行，存在资源争抢，报告中需显式标注

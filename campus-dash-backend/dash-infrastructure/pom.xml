@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.campusdash</groupId>
+    <artifactId>campus-dash</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>dash-infrastructure</artifactId>
+  <dependencies>
+    <dependency><groupId>com.campusdash</groupId><artifactId>dash-domain</artifactId></dependency>
+    <!-- JdbcTemplate：一期用它落地带条件的 CAS SQL，affectedRows 判定最直观 -->
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-jdbc</artifactId></dependency>
+    <!-- Lettuce：一期只需 EVAL(Lua) / ZSET / String，不需要 Redisson 的看门狗锁 -->
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-redis</artifactId></dependency>
+    <dependency><groupId>com.mysql</groupId><artifactId>mysql-connector-j</artifactId><scope>runtime</scope></dependency>
+    <dependency><groupId>org.apache.rocketmq</groupId><artifactId>rocketmq-client-java</artifactId></dependency>
+    <!-- P5：布隆过滤器（防穿透）与互斥重建锁（防击穿）。与 Lettuce 各自独立连接池 -->
+    <dependency><groupId>org.redisson</groupId><artifactId>redisson</artifactId></dependency>
+    <!-- P6：ShardingSphere JDBC 规则工厂与 class-based 分片算法 -->
+    <dependency><groupId>org.apache.shardingsphere</groupId><artifactId>shardingsphere-jdbc</artifactId></dependency>
+    <!-- P5：JWT 实现，与 Session 由 dash.auth.mode 二选一装配 -->
+    <dependency><groupId>io.jsonwebtoken</groupId><artifactId>jjwt-api</artifactId></dependency>
+    <dependency><groupId>io.jsonwebtoken</groupId><artifactId>jjwt-impl</artifactId></dependency>
+    <dependency><groupId>io.jsonwebtoken</groupId><artifactId>jjwt-jackson</artifactId></dependency>
+    <!-- P7：Sentinel 热点参数限流适配器 -->
+    <dependency><groupId>com.alibaba.csp</groupId><artifactId>sentinel-core</artifactId></dependency>
+    <dependency><groupId>com.alibaba.csp</groupId><artifactId>sentinel-parameter-flow-control</artifactId></dependency>
+  </dependencies>
+</project>

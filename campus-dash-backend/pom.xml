@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.campusdash</groupId>
+  <artifactId>campus-dash</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>campus-dash</name>
+  <description>校园跑腿抢单市场 - DDD 洋葱架构高并发后端</description>
+
+  <modules>
+    <module>dash-shared</module>
+    <module>dash-domain</module>
+    <module>dash-application</module>
+    <module>dash-infrastructure</module>
+    <module>dash-presentation</module>
+    <module>dash-bootstrap</module>
+    <module>dash-worker</module>
+    <module>dash-bench</module>
+  </modules>
+
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- 一期依赖收敛为 Spring 官方 starter，降低构建不确定性；
+         MyBatis-Plus 留到需要替换仓储 API 时再引入，Redisson 留到讲锁方案对比时引入 -->
+    <spring.boot.version>3.5.8</spring.boot.version>
+    <archunit.version>1.3.0</archunit.version>
+    <!-- 只有 5.x 客户端支持任意时间定时消息（setDeliveryTimestamp） -->
+    <rocketmq.version>5.2.0</rocketmq.version>
+    <sentinel.version>1.8.8</sentinel.version>
+    <shardingsphere.version>5.5.2</shardingsphere.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring.boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- 内部模块 -->
+      <dependency>
+        <groupId>com.campusdash</groupId>
+        <artifactId>dash-shared</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.campusdash</groupId>
+        <artifactId>dash-domain</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.campusdash</groupId>
+        <artifactId>dash-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.campusdash</groupId>
+        <artifactId>dash-infrastructure</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.campusdash</groupId>
+        <artifactId>dash-presentation</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <!-- 三方 -->
+      <dependency>
+        <groupId>org.apache.rocketmq</groupId>
+        <artifactId>rocketmq-client-java</artifactId>
+        <version>${rocketmq.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.tngtech.archunit</groupId>
+        <artifactId>archunit-junit5</artifactId>
+        <version>${archunit.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <!-- P5：Redisson 只用于布隆过滤器与互斥重建锁，不做分布式锁主方案
+           （抢单的正确性靠 Lua + DB CAS，见第 7 章的六种方案对比） -->
+      <dependency>
+        <groupId>org.redisson</groupId>
+        <artifactId>redisson</artifactId>
+        <version>3.22.0</version>
+      </dependency>
+      <!-- P6：ShardingSphere JDBC 运行时规则对象与 class-based 分片算法。 -->
+      <dependency>
+        <groupId>org.apache.shardingsphere</groupId>
+        <artifactId>shardingsphere-jdbc</artifactId>
+        <version>${shardingsphere.version}</version>
+      </dependency>
+      <!-- P7：抢单热点参数限流，按 errandId 维度快速失败，保护 Redis Lua 与 DB CAS。 -->
+      <dependency>
+        <groupId>com.alibaba.csp</groupId>
+        <artifactId>sentinel-core</artifactId>
+        <version>${sentinel.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.alibaba.csp</groupId>
+        <artifactId>sentinel-parameter-flow-control</artifactId>
+        <version>${sentinel.version}</version>
+      </dependency>
+      <!-- P5：JWT 与 Session 双实现，由 dash.auth.mode 切换 -->
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-api</artifactId>
+        <version>0.13.0</version>
+      </dependency>
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-impl</artifactId>
+        <version>0.13.0</version>
+        <scope>runtime</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-jackson</artifactId>
+        <version>0.13.0</version>
+        <scope>runtime</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+          <version>${spring.boot.version}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>${maven.compiler.release}</release>
+          <parameters>true</parameters>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <!-- 默认模式不含 *IT.java（那是 failsafe 的约定）。
+               这里显式纳入，让 mvn test 一条命令就能同时跑单测与集成测试；
+               集成测试自带中间件端口探测，没起 Docker 时会 skip 而不是 fail。 -->
+          <includes>
+            <include>**/*Test.java</include>
+            <include>**/*Tests.java</include>
+            <include>**/*IT.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
