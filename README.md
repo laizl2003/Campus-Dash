@@ -16,12 +16,12 @@ campus-dash/
 │   ├── dash-infrastructure/   # 基础设施层：数据库、缓存、MQ、ShardingSphere 规则、Sentinel
 │   ├── dash-presentation/     # 接口层：REST API
 │   ├── dash-worker/           # 后台任务：超时流转/自动结算/资金事件消费者、兜底扫描、对账 job
-│   ├── dash-bootstrap/           # 应用装配 + 54 个集成测试
+│   ├── dash-bootstrap/        # 应用装配 + 54 个集成测试
 │   ├── dash-bench/            # 压测工具
 │   ├── dash-shared/           # ErrorCode / Money（long 存分）/ Result / 雪花 ID
 │   ├── docker/                # Docker Compose 编排
 │   └── docs/                  # 设计文档、分期决策、踩坑记录
-└── campus-dash-frontend/         # 前端项目（React + TypeScript + Vite）
+└── campus-dash-frontend/      # 前端项目（React + TypeScript + Vite）
     ├── src/                   # 源代码
     │   ├── components/        # 通用组件
     │   └── pages/             # 页面
