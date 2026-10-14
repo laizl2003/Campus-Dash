@@ -18,6 +18,7 @@ import com.campusdash.shared.SnowflakeIdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * 仲裁用例：DISPUTED -> SETTLED（支持跑腿）或 DISPUTED -> REFUNDED（支持发单人）。
@@ -44,6 +45,7 @@ public class ArbitrateErrandUseCase {
     private final CreditRepository creditRepository;
     private final SnowflakeIdGenerator idGenerator;
     private final RealtimeNotifier notifier;
+    private final long arbitratorId;
 
     public ArbitrateErrandUseCase(ErrandRepository errandRepository,
                                   WalletRepository walletRepository,
@@ -54,7 +56,8 @@ public class ArbitrateErrandUseCase {
                                   CacheEvictSupport cacheEvict,
                                   CreditRepository creditRepository,
                                   SnowflakeIdGenerator idGenerator,
-                                  RealtimeNotifier notifier) {
+                                  RealtimeNotifier notifier,
+                                  @Value("${dash.auth.arbitrator-id:9001}") long arbitratorId) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.refundUseCase = refundUseCase;
@@ -65,6 +68,7 @@ public class ArbitrateErrandUseCase {
         this.creditRepository = creditRepository;
         this.idGenerator = idGenerator;
         this.notifier = notifier;
+        this.arbitratorId = arbitratorId;
     }
 
     /** 仲裁裁决方向 */
@@ -73,6 +77,9 @@ public class ArbitrateErrandUseCase {
     public enum Result { SETTLED_TO_RUNNER, REFUNDED_TO_PUBLISHER, ALREADY_DONE, CONFLICT }
 
     public Result arbitrate(long errandId, Favor favor, long operatorId) {
+        if (operatorId != arbitratorId) {
+            throw new BizException(ErrorCode.UNAUTHORIZED, "只有仲裁员可以裁决，actor=" + operatorId);
+        }
         Errand errand = errandRepository.findById(errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ERRAND_NOT_FOUND, "id=" + errandId));
         if (errand.status() != ErrandStatus.DISPUTED) {

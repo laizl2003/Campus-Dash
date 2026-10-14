@@ -1,0 +1,474 @@
+{
+  "mode": "真实浏览器与真实 API 联调；无路由 mock；仅已确认隔离测试环境",
+  "base": "http://127.0.0.1:5173",
+  "startedAt": "2026-10-14T17:10:53.771292",
+  "checks": [
+    {
+      "name": "发单人真实登录",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "发布成功并保留长任务ID",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实接口金额为字符串1234且发单人只能取消",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "发布后钱包扣除1234分进入托管",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "泡身份只显示可执行抢单动作",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实抢单进入待确认",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实确认接单进入待取货",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实取货进入配送中",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实送达等待发单人确认",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实结算返回SETTLED且页面结束任务",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "泡钱包显示结算后余额与1173分收入",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "钱包流水关联真实任务长ID",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实结算流水为单笔贷记1173分",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "真实信用增加2分并展示本任务足迹",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "信用接口事件对应任务且只计分一次",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "MQ真实结算通知已落库",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "消息页面能打开真实结算通知",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实消息跳转完整长ID详情",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实取消退款返回REFUNDED",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "取消后任务终态正确",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "取消退款后发单人余额全额恢复",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "真实发起争议进入争议中",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "普通参与者没有仲裁按钮",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "仲裁员真实退款裁决成功",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "仲裁退款后发单人钱包余额正确",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "仲裁退款流水关联原任务",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "MQ真实仲裁退款通知已落库",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "发单人消息展示真实退款通知",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "我的任务显示本轮三笔真实任务",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "1440px真实钱包无横向溢出",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "390px真实钱包无横向溢出",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "320px真实钱包无横向溢出",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实流程无未捕获JavaScript异常",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实流程无控制台错误",
+      "scope": "UI",
+      "passed": true
+    },
+    {
+      "name": "真实流程无HTTP错误响应",
+      "scope": "API",
+      "passed": true
+    }
+  ],
+  "tasks": {
+    "完成配送": "236053153227739136",
+    "取消退款": "236053164334256128",
+    "争议仲裁": "236053166339133440"
+  },
+  "balances": {
+    "before": {
+      "publisher": 98766,
+      "runner": 6173
+    },
+    "after": {
+      "publisher": 97532,
+      "runnerExpected": 7346
+    }
+  },
+  "pageErrors": [],
+  "consoleErrors": [],
+  "httpErrors": [],
+  "requestFailures": [],
+  "websocketEvents": [
+    {
+      "type": "connected",
+      "payload": null
+    },
+    {
+      "type": "errand.status",
+      "payload": {
+        "errandId": "236053153227739136",
+        "status": "LOCKED",
+        "round": 0
+      }
+    },
+    {
+      "type": "errand.status",
+      "payload": {
+        "errandId": "236053153227739136",
+        "status": "ACCEPTED",
+        "round": 0
+      }
+    },
+    {
+      "type": "errand.status",
+      "payload": {
+        "errandId": "236053153227739136",
+        "status": "PICKED_UP",
+        "round": 0
+      }
+    },
+    {
+      "type": "errand.status",
+      "payload": {
+        "errandId": "236053153227739136",
+        "status": "DELIVERED",
+        "round": 0
+      }
+    },
+    {
+      "type": "errand.status",
+      "payload": {
+        "errandId": "236053153227739136",
+        "status": "SETTLED",
+        "round": 0
+      }
+    },
+    {
+      "type": "notification.new",
+      "payload": {
+        "errandId": "236053164334256128",
+        "noticeType": "REFUNDED",
+        "content": "任务已退款，560 分已退回你的账户"
+      }
+    },
+    {
+      "type": "errand.status",
+      "payload": {
+        "errandId": "236053164334256128",
+        "status": "CANCELLED",
+        "round": 0
+      }
+    },
+    {
+      "type": "errand.status",
+      "payload": {
+        "errandId": "236053166339133440",
+        "status": "LOCKED",
+        "round": 0
+      }
+    },
+    {
+      "type": "errand.status",
+      "payload": {
+        "errandId": "236053166339133440",
+        "status": "ACCEPTED",
+        "round": 0
+      }
+    },
+    {
+      "type": "errand.status",
+      "payload": {
+        "errandId": "236053166339133440",
+        "status": "DISPUTED",
+        "round": 0
+      }
+    }
+  ],
+  "overflow": [
+    {
+      "page": "wallet-1440",
+      "viewport": 1440,
+      "document": 1440
+    },
+    {
+      "page": "wallet-390",
+      "viewport": 390,
+      "document": 390
+    },
+    {
+      "page": "wallet-320",
+      "viewport": 320,
+      "document": 320
+    }
+  ],
+  "uiWrites": [
+    {
+      "path": "/api/auth/login",
+      "status": 200,
+      "code": "OK",
+      "data": {
+        "authentication": "[不记录]"
+      }
+    },
+    {
+      "path": "/api/errands",
+      "status": 200,
+      "code": "OK",
+      "data": {
+        "errandId": "236053153227739136",
+        "status": "PUBLISHED",
+        "frozenCents": "1234"
+      }
+    },
+    {
+      "path": "/api/errands/236053153227739136/grab",
+      "status": 200,
+      "code": "OK",
+      "data": {
+        "code": "OK",
+        "grabbed": true,
+        "candidateRank": null
+      }
+    },
+    {
+      "path": "/api/errands/236053153227739136/confirm",
+      "status": 200,
+      "code": "OK",
+      "data": null
+    },
+    {
+      "path": "/api/errands/236053153227739136/pickup",
+      "status": 200,
+      "code": "OK",
+      "data": null
+    },
+    {
+      "path": "/api/errands/236053153227739136/deliver",
+      "status": 200,
+      "code": "OK",
+      "data": null
+    },
+    {
+      "path": "/api/errands/236053153227739136/settle",
+      "status": 200,
+      "code": "OK",
+      "data": {
+        "result": "SETTLED"
+      }
+    },
+    {
+      "path": "/api/errands",
+      "status": 200,
+      "code": "OK",
+      "data": {
+        "errandId": "236053164334256128",
+        "status": "PUBLISHED",
+        "frozenCents": "560"
+      }
+    },
+    {
+      "path": "/api/errands/236053164334256128/cancel",
+      "status": 200,
+      "code": "OK",
+      "data": {
+        "result": "REFUNDED"
+      }
+    },
+    {
+      "path": "/api/errands",
+      "status": 200,
+      "code": "OK",
+      "data": {
+        "errandId": "236053166339133440",
+        "status": "PUBLISHED",
+        "frozenCents": "789"
+      }
+    },
+    {
+      "path": "/api/errands/236053166339133440/grab",
+      "status": 200,
+      "code": "OK",
+      "data": {
+        "code": "OK",
+        "grabbed": true,
+        "candidateRank": null
+      }
+    },
+    {
+      "path": "/api/errands/236053166339133440/confirm",
+      "status": 200,
+      "code": "OK",
+      "data": null
+    },
+    {
+      "path": "/api/errands/236053166339133440/dispute",
+      "status": 200,
+      "code": "OK",
+      "data": null
+    },
+    {
+      "path": "/api/errands/236053166339133440/arbitrate",
+      "status": 200,
+      "code": "OK",
+      "data": {
+        "result": "REFUNDED_TO_PUBLISHER"
+      }
+    }
+  ],
+  "apiReads": [
+    {
+      "path": "/api/wallet",
+      "status": 200
+    },
+    {
+      "path": "/api/wallet",
+      "status": 200
+    },
+    {
+      "path": "/api/credit/self",
+      "status": 200
+    },
+    {
+      "path": "/api/errands/236053153227739136",
+      "status": 200
+    },
+    {
+      "path": "/api/wallet",
+      "status": 200
+    },
+    {
+      "path": "/api/wallet/ledger",
+      "status": 200
+    },
+    {
+      "path": "/api/credit/self",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "status": 200
+    },
+    {
+      "path": "/api/wallet",
+      "status": 200
+    },
+    {
+      "path": "/api/wallet/ledger",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "status": 200
+    },
+    {
+      "path": "/api/wallet",
+      "status": 200
+    }
+  ],
+  "scope": {
+    "ui": "登录、身份切换、发布、抢单、确认接单、取货、送达、结算、取消、争议、仲裁，以及钱包信用消息页面",
+    "api": "只读核对实际任务状态、余额、流水、信用事件与通知；业务状态全部由真实 UI 操作产生"
+  },
+  "passed": true,
+  "finishedAt": "2026-10-14T17:11:02.399979"
+}

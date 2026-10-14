@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 /**
  * 仲裁裁给跑腿时的事务性资金步骤。
@@ -55,12 +56,12 @@ public class ArbitrateSettleStep {
         if (walletRepository.casEscrowStatus(errand.campusId(), errandId,
                 EscrowOrder.EscrowStatus.HELD, EscrowOrder.EscrowStatus.RELEASED) == 0) {
             log.info("仲裁结算幂等：escrow 已非 HELD errandId={}", errandId);
-            return false;
+            return rollbackConflict();
         }
         // 闸门 2：任务 DISPUTED -> SETTLED
         if (errandRepository.casSettleFromDispute(errandId, errand.version()) == 0) {
             log.info("仲裁结算幂等：errand 已非 DISPUTED errandId={}", errandId);
-            return false;
+            return rollbackConflict();
         }
         errandRepository.appendStatusLog(errandId, ErrandStatus.DISPUTED, ErrandStatus.SETTLED,
                 errand.round(), operatorId);
@@ -77,9 +78,10 @@ public class ArbitrateSettleStep {
         WalletAccount commissionAccount = walletRepository
                 .findByOwner(COMMISSION_ACCOUNT_OWNER, AccountType.COMMISSION).orElseThrow();
 
-        walletRepository.casDebit(escrowAccount.id(), escrow.amount());
-        walletRepository.casCredit(runnerAccount.id(), runnerAmount);
-        walletRepository.casCredit(commissionAccount.id(), commissionAmount);
+        if (walletRepository.casDebit(escrowAccount.id(), escrow.amount()) != 1) return rollbackConflict();
+        if (walletRepository.casCredit(runnerAccount.id(), runnerAmount) != 1) return rollbackConflict();
+        if (commissionCents > 0
+                && walletRepository.casCredit(commissionAccount.id(), commissionAmount) != 1) return rollbackConflict();
 
         // 闸门 3：bizNo 唯一索引
         walletRepository.insertLedger(new LedgerEntry(
@@ -105,5 +107,11 @@ public class ArbitrateSettleStep {
                 CreditEventType.SETTLE, CreditEventType.SETTLE.delta(), "ERRAND", errandId,
                 java.time.Instant.now()));
         return true;
+    }
+
+    private boolean rollbackConflict() {
+        // 方法由独立 Step 的 Spring 代理调用；正常返回冲突也必须撤销整笔事务。
+        TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        return false;
     }
 }

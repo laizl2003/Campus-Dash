@@ -11,20 +11,26 @@ export interface ApiResult<T> {
 }
 
 let token: string | null = localStorage.getItem('dash_token');
-let currentUserId: number | null = JSON.parse(localStorage.getItem('dash_user') || 'null');
+let currentUserId: number | null = null;
+try { currentUserId = token ? JSON.parse(localStorage.getItem('dash_user') || 'null') : null; } catch { /* 无效本地身份按未登录处理。 */ }
 
 export function getToken() { return token; }
 export function getUserId() { return currentUserId; }
 
-export async function login(userId: number): Promise<string> {
+export async function issueToken(userId: number): Promise<string> {
   const resp = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId }),
   });
+  if (!resp.ok) throw new Error('登录服务暂时不可用，请确认服务已启动后重试');
   const body = (await resp.json()) as ApiResult<{ token: string; userId: number }>;
   if (body.code !== 'OK') throw new Error(body.message);
-  token = body.data.token;
+  return body.data.token;
+}
+
+export async function login(userId: number): Promise<string> {
+  token = await issueToken(userId);
   currentUserId = userId;
   localStorage.setItem('dash_token', token!);
   localStorage.setItem('dash_user', JSON.stringify(userId));
@@ -45,6 +51,7 @@ export function logout() {
   currentUserId = null;
   localStorage.removeItem('dash_token');
   localStorage.removeItem('dash_user');
+  window.dispatchEvent(new Event('dash:logout'));
 }
 
 export class BizError extends Error {
@@ -57,8 +64,9 @@ export class BizError extends Error {
 
 /** 发请求并返回 data；code 非 OK 时抛 BizError（带业务码） */
 async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  const requestToken = token;
   const headers: Record<string, string> = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (requestToken) headers['Authorization'] = `Bearer ${requestToken}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const resp = await fetch(path, {
     method,
@@ -66,11 +74,20 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (resp.status === 401) {
-    logout();
-    location.hash = '#/';
+    // 已切换身份时，旧请求的 401 不能把新会话退出。
+    if (token === requestToken) { logout(); location.hash = '#/'; }
     throw new BizError('UNAUTHORIZED', '会话已过期，请重新登录');
   }
-  const result = (await resp.json()) as ApiResult<T>;
+  if (!resp.ok) throw new BizError('HTTP_ERROR', '服务暂时不可用，请稍后重试');
+  // 后端所有 long 都序列化为 string；仅金额转安全整数，ID 保留原始字符串。
+  const result = JSON.parse(await resp.text(), (key, value) => {
+    if (['rewardCents', 'amountCents', 'availableCents', 'frozenCents'].includes(key)) {
+      const amount = Number(value);
+      if (!Number.isSafeInteger(amount)) throw new BizError('INVALID_AMOUNT', '金额数据超出可显示范围');
+      return amount;
+    }
+    return value;
+  }) as ApiResult<T>;
   if (result.code !== 'OK') throw new BizError(result.code, result.message);
   return result.data;
 }
@@ -98,6 +115,8 @@ export interface StatusChange {
 }
 
 export const api = {
+  creditSelf: () => request<{ score: number; windowDays: number; events: { type: string; description: string; delta: number; refId: string; time: string }[] }>('/api/credit/self'),
+  creditRanking: (campusId = 1, limit = 20) => request<{ userId: string; score: number }[]>(`/api/credit/ranking?campusId=${campusId}&limit=${limit}`),
   health: () => request<{ status: string }>('/api/health'),
   list: (campusId = 1, status?: string) =>
     request<ErrandCard[]>(`/api/errands?campusId=${campusId}${status ? `&status=${status}` : ''}`),
@@ -121,7 +140,10 @@ export const api = {
   notifications: () => request<{
     id: string; errandId: string; type: string; content: string; time: string;
   }[]>('/api/notifications'),
-  unread: () => request<{ count: number }>('/api/notifications/unread'),
+  unread: async () => {
+    const result = await request<{ count: number | string }>('/api/notifications/unread');
+    return { count: Number(result.count) };
+  },
 };
 
 /** 金额展示：分 -> 元 */
@@ -140,3 +162,6 @@ export const ACTION_TEXT: Record<string, string> = {
   SETTLE: '确认完成（结算）', CANCEL: '取消并退款', DISPUTE: '发起争议',
   ARBITRATE: '仲裁',
 };
+
+export const TYPE_TEXT: Record<string, string> = { DELIVERY: '跑腿配送', BUY: '帮我买', QUEUE: '代排队', OTHER: '其他帮忙' };
+export const TYPE_ICON: Record<string, string> = { DELIVERY: 'package', BUY: 'bag', QUEUE: 'clock', OTHER: 'grid' };

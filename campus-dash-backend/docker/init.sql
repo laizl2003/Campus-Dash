@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS errand (
   round         INT          NOT NULL DEFAULT 0 COMMENT '流转轮次',
   version       BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
   locked_at     DATETIME(3)  NULL     COMMENT '本轮抢中时间，P2 超时扫描用',
+  delivered_at  DATETIME(3)  NULL     COMMENT '送达时间，自动结算扫描用',
   created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (id),
@@ -115,9 +116,13 @@ INSERT INTO wallet_account (id, owner_id, owner_type, available, frozen, version
   (2, -2, 'COMMISSION', 0, 0, 0)
 ON DUPLICATE KEY UPDATE id = id;
 
--- 测试用户：1001 发单人（余额 1000 元），2001-2100 跑腿
+-- 登录页演示用户：1001 发单人（余额 1000 元）、2001/2002 跑腿、9001 仲裁员。
+-- 重复执行只补缺失账户，不覆盖已有余额；批量压测用户由 bench/scripts/seed.sql 单独创建。
 INSERT INTO wallet_account (id, owner_id, owner_type, available, frozen, version) VALUES
-  (1001, 1001, 'USER', 100000, 0, 0)
+  (1001, 1001, 'USER', 100000, 0, 0),
+  (2001, 2001, 'USER', 0, 0, 0),
+  (2002, 2002, 'USER', 0, 0, 0),
+  (9001, 9001, 'USER', 0, 0, 0)
 ON DUPLICATE KEY UPDATE id = id;
 
 -- ==================== P2 新增 ====================

@@ -1,0 +1,143 @@
+{
+  "command": "mvn -o test '-Dtest=*Test,*Tests' -Dsurefire.failIfNoSpecifiedTests=false",
+  "buildSuccess": true,
+  "totals": {
+    "tests": 59,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "classes": [
+    {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.domain.ArchitectureRuleTest"
+    },
+    {
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.domain.ErrandTransferTest"
+    },
+    {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.domain.ErrandStatusMachineTest"
+    },
+    {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.domain.ErrandAggregateTest"
+    },
+    {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.domain.MoneyTest"
+    },
+    {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.application.usecase.GrabErrandUseCaseTest"
+    },
+    {
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.application.usecase.FundOperationSafetyTest"
+    },
+    {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.application.usecase.query.QueryErrandListUseCaseTest"
+    },
+    {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.application.usecase.CreditCalibrationUseCaseTest"
+    },
+    {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.infrastructure.grab.LocalGrabRateLimiterAdapterTest"
+    },
+    {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.infrastructure.grab.SentinelGrabRateLimiterAdapterTest"
+    },
+    {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.infrastructure.sharding.CampusDashShardingRuleFactoryTest"
+    },
+    {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.infrastructure.sharding.CampusDashShardingPolicyTest"
+    },
+    {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.infrastructure.realtime.FundEventPushConsumerConditionTest"
+    },
+    {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.presentation.auth.AuthControllerTest"
+    },
+    {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.bench.SpikeLoadClientTest"
+    },
+    {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "name": "com.campusdash.worker.AutoSettleConsumerTest"
+    }
+  ],
+  "integrationClassesNotSelected": 18,
+  "changedFiles": [
+    {
+      "path": "dash-infrastructure/src/main/java/com/campusdash/infrastructure/realtime/FundEventPushConsumer.java",
+      "sha256": "94ab7b34cdc6d4cb5a3dc0630997fbea577f063634ff8b30921f680380197de1"
+    },
+    {
+      "path": "dash-infrastructure/src/test/java/com/campusdash/infrastructure/realtime/FundEventPushConsumerConditionTest.java",
+      "sha256": "e5e01352f4ba32bf1b0773cf4566d20b1f62f769c553d659a1a8052fd0aae7dc"
+    }
+  ],
+  "note": "新增5项真实Spring条件装配测试；延迟实例化避免MQ连接，验证worker关闭WS时根本不注册推送消费者。"
+}

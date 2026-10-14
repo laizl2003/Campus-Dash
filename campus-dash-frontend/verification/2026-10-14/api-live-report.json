@@ -1,0 +1,5391 @@
+{
+  "mode": "真实 HTTP + 轮询 + worker 日志；不改库、不 mock；仅专用测试账户",
+  "startedAt": "2026-10-14T17:20:12.802664",
+  "checks": [
+    {
+      "name": "系统账户-1不能通过演示登录",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "系统账户-2不能通过演示登录",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "20个真实并发抢单请求恰好1个成功",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "并发抢单后名额与实际接单人一致",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "非发单人12001结算被拒绝",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "非发单人12002结算被拒绝",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "同单20并发结算恰好1次SETTLED",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "并发结算只到账950分",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "并发结算只有1条真实入账流水",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "并发结算信用只增加一次",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "20并发取消只有1次实际退款",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "重复取消不会增加钱包余额",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "重复取消只有1条777分退款入账流水",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "非仲裁员11001裁决被拒绝",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "非仲裁员12001裁决被拒绝",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "非仲裁员12002裁决被拒绝",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "真实仲裁可将争议悬赏结算给跑腿",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "已裁决争议重复提交不再次入账",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "仲裁支持跑腿只有1条475分入账流水",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "未抢中同学实际进入候选队列",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "确认超时自动转给12002且轮次增加",
+      "scope": "MQ状态",
+      "passed": true
+    },
+    {
+      "name": "候选接单人可真实确认",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "超时转候选由MQ消费者触发",
+      "scope": "MQ日志",
+      "passed": true
+    },
+    {
+      "name": "候选为空自动回退并归还名额",
+      "scope": "MQ状态",
+      "passed": true
+    },
+    {
+      "name": "空候选回退由MQ消费者触发",
+      "scope": "MQ日志",
+      "passed": true
+    },
+    {
+      "name": "送达超时自动结算到账528分",
+      "scope": "MQ状态",
+      "passed": true
+    },
+    {
+      "name": "自动结算只有1条528分入账流水",
+      "scope": "API",
+      "passed": true
+    },
+    {
+      "name": "自动结算由MQ消费者触发",
+      "scope": "MQ日志",
+      "passed": true
+    },
+    {
+      "name": "自动结算后手动重复结算保持幂等",
+      "scope": "API",
+      "passed": true
+    }
+  ],
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "actor": null,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 281
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "actor": null,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 3
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "actor": null,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 2
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "actor": null,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 2
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 175,
+      "data": {
+        "availableCents": "97612",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "availableCents": "1953",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "availableCents": "317",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "actor": null,
+      "http": 200,
+      "code": "UNAUTHORIZED",
+      "elapsedMs": 2
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "actor": null,
+      "http": 200,
+      "code": "UNAUTHORIZED",
+      "elapsedMs": 2
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 84,
+      "data": {
+        "errandId": "236055484866498560",
+        "status": "PUBLISHED",
+        "frozenCents": "1000"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "ALREADY_GRABBED",
+      "elapsedMs": 132,
+      "data": {
+        "code": "ALREADY_GRABBED",
+        "grabbed": false,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "ALREADY_GRABBED",
+      "elapsedMs": 132,
+      "data": {
+        "code": "ALREADY_GRABBED",
+        "grabbed": false,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "ALREADY_GRABBED",
+      "elapsedMs": 133,
+      "data": {
+        "code": "ALREADY_GRABBED",
+        "grabbed": false,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "ALREADY_GRABBED",
+      "elapsedMs": 133,
+      "data": {
+        "code": "ALREADY_GRABBED",
+        "grabbed": false,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "ALREADY_GRABBED",
+      "elapsedMs": 133,
+      "data": {
+        "code": "ALREADY_GRABBED",
+        "grabbed": false,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "ALREADY_GRABBED",
+      "elapsedMs": 134,
+      "data": {
+        "code": "ALREADY_GRABBED",
+        "grabbed": false,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "ALREADY_GRABBED",
+      "elapsedMs": 134,
+      "data": {
+        "code": "ALREADY_GRABBED",
+        "grabbed": false,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "ALREADY_GRABBED",
+      "elapsedMs": 134,
+      "data": {
+        "code": "ALREADY_GRABBED",
+        "grabbed": false,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "ALREADY_GRABBED",
+      "elapsedMs": 134,
+      "data": {
+        "code": "ALREADY_GRABBED",
+        "grabbed": false,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 137,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 137,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 137,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 137,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 138,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 137,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 138,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 137,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 137,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 137,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 227,
+      "data": {
+        "code": "OK",
+        "grabbed": true,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055484866498560",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 21,
+      "data": {
+        "id": "236055484866498560",
+        "title": "真实API验收 1014-172012 · 20请求竞争单名额",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "1000",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12002",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/confirm",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 21,
+      "data": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/pickup",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 51,
+      "data": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/deliver",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 30,
+      "data": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 12001,
+      "http": 200,
+      "code": "NOT_PUBLISHER",
+      "elapsedMs": 11,
+      "data": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055484866498560",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 18,
+      "data": {
+        "id": "236055484866498560",
+        "title": "真实API验收 1014-172012 · 20请求竞争单名额",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "1000",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12002",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 12002,
+      "http": 200,
+      "code": "NOT_PUBLISHER",
+      "elapsedMs": 5,
+      "data": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055484866498560",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055484866498560",
+        "title": "真实API验收 1014-172012 · 20请求竞争单名额",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "1000",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12002",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": {
+        "availableCents": "317",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 111,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 108,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 110,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 110,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 108,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 111,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 108,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 110,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 111,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 113,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 113,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 113,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 113,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 113,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 112,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 114,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 115,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 114,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 114,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055484866498560/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 133,
+      "data": {
+        "result": "SETTLED"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "availableCents": "1267",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet/ledger?size=100",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 13,
+      "data": [
+        {
+          "refType": "SETTLE",
+          "refId": "236055484866498560",
+          "direction": "CREDIT",
+          "amountCents": "950",
+          "bizNo": "settle:236055484866498560",
+          "time": "2026-10-14T09:20:13.834Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054384440512512",
+          "direction": "CREDIT",
+          "amountCents": "317",
+          "bizNo": "settle:236054384440512512",
+          "time": "2026-10-14T01:16:21.701Z"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/credit/self",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 10,
+      "data": {
+        "events": [
+          {
+            "description": "完成结算",
+            "type": "SETTLE",
+            "refId": "236055484866498560",
+            "delta": 2,
+            "time": "2026-10-14T09:20:13.845Z"
+          },
+          {
+            "description": "完成结算",
+            "type": "SETTLE",
+            "refId": "236054384440512512",
+            "delta": 2,
+            "time": "2026-10-14T01:16:21.702Z"
+          }
+        ],
+        "windowDays": 30,
+        "score": 64
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 6,
+      "data": {
+        "availableCents": "96612",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 37,
+      "data": {
+        "errandId": "236055487626350592",
+        "status": "PUBLISHED",
+        "frozenCents": "777"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 71,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 72,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 72,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 82,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 82,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 82,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 85,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 87,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 86,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 87,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 90,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 91,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 95,
+      "data": {
+        "result": "REFUNDED"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 299,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 297,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 300,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 300,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 297,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 300,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055487626350592/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 301,
+      "data": {
+        "result": "CONFLICT"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "availableCents": "96612",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055487626350592",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 12,
+      "data": {
+        "id": "236055487626350592",
+        "title": "真实API验收 1014-172012 · 20请求重复退款",
+        "status": "CANCELLED",
+        "type": "DELIVERY",
+        "rewardCents": "777",
+        "slotTotal": 1,
+        "slotTaken": 0,
+        "publisherId": "11001",
+        "grabberId": "-1",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet/ledger?size=100",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": [
+        {
+          "refType": "REFUND",
+          "refId": "236055487626350592",
+          "direction": "CREDIT",
+          "amountCents": "777",
+          "bizNo": "refund:236055487626350592",
+          "time": "2026-10-14T09:20:14.033Z"
+        },
+        {
+          "refType": "REFUND",
+          "refId": "236055487626350592",
+          "direction": "DEBIT",
+          "amountCents": "777",
+          "bizNo": "refund:236055487626350592",
+          "time": "2026-10-14T09:20:14.032Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236055487626350592",
+          "direction": "CREDIT",
+          "amountCents": "777",
+          "bizNo": "escrow:236055487626350592",
+          "time": "2026-10-14T09:20:13.952Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236055487626350592",
+          "direction": "DEBIT",
+          "amountCents": "777",
+          "bizNo": "escrow:236055487626350592",
+          "time": "2026-10-14T09:20:13.951Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236055484866498560",
+          "direction": "DEBIT",
+          "amountCents": "1000",
+          "bizNo": "settle:236055484866498560",
+          "time": "2026-10-14T09:20:13.832Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236055484866498560",
+          "direction": "CREDIT",
+          "amountCents": "1000",
+          "bizNo": "escrow:236055484866498560",
+          "time": "2026-10-14T09:20:13.301Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236055484866498560",
+          "direction": "DEBIT",
+          "amountCents": "1000",
+          "bizNo": "escrow:236055484866498560",
+          "time": "2026-10-14T09:20:13.300Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054384750891008",
+          "direction": "DEBIT",
+          "amountCents": "555",
+          "bizNo": "settle:236054384750891008",
+          "time": "2026-10-14T09:19:25.673Z"
+        },
+        {
+          "refType": "REFUND",
+          "refId": "236054384599896064",
+          "direction": "CREDIT",
+          "amountCents": "444",
+          "bizNo": "refund:236054384599896064",
+          "time": "2026-10-14T01:16:21.771Z"
+        },
+        {
+          "refType": "REFUND",
+          "refId": "236054384599896064",
+          "direction": "DEBIT",
+          "amountCents": "444",
+          "bizNo": "refund:236054384599896064",
+          "time": "2026-10-14T01:16:21.770Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054384440512512",
+          "direction": "DEBIT",
+          "amountCents": "333",
+          "bizNo": "settle:236054384440512512",
+          "time": "2026-10-14T01:16:21.701Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054384750891008",
+          "direction": "CREDIT",
+          "amountCents": "555",
+          "bizNo": "escrow:236054384750891008",
+          "time": "2026-10-14T01:15:51.036Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054384750891008",
+          "direction": "DEBIT",
+          "amountCents": "555",
+          "bizNo": "escrow:236054384750891008",
+          "time": "2026-10-14T01:15:51.036Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054384599896064",
+          "direction": "CREDIT",
+          "amountCents": "444",
+          "bizNo": "escrow:236054384599896064",
+          "time": "2026-10-14T01:15:51.001Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054384599896064",
+          "direction": "DEBIT",
+          "amountCents": "444",
+          "bizNo": "escrow:236054384599896064",
+          "time": "2026-10-14T01:15:51.001Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054384440512512",
+          "direction": "CREDIT",
+          "amountCents": "333",
+          "bizNo": "escrow:236054384440512512",
+          "time": "2026-10-14T01:15:50.963Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054384440512512",
+          "direction": "DEBIT",
+          "amountCents": "333",
+          "bizNo": "escrow:236054384440512512",
+          "time": "2026-10-14T01:15:50.962Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054382968311808",
+          "direction": "DEBIT",
+          "amountCents": "500",
+          "bizNo": "settle:236054382968311808",
+          "time": "2026-10-14T01:15:50.713Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054382968311808",
+          "direction": "CREDIT",
+          "amountCents": "500",
+          "bizNo": "escrow:236054382968311808",
+          "time": "2026-10-14T01:15:50.611Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054382968311808",
+          "direction": "DEBIT",
+          "amountCents": "500",
+          "bizNo": "escrow:236054382968311808",
+          "time": "2026-10-14T01:15:50.611Z"
+        },
+        {
+          "refType": "REFUND",
+          "refId": "236054382687293440",
+          "direction": "CREDIT",
+          "amountCents": "777",
+          "bizNo": "refund:236054382687293440",
+          "time": "2026-10-14T01:15:50.572Z"
+        },
+        {
+          "refType": "REFUND",
+          "refId": "236054382687293440",
+          "direction": "DEBIT",
+          "amountCents": "777",
+          "bizNo": "refund:236054382687293440",
+          "time": "2026-10-14T01:15:50.571Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054382687293440",
+          "direction": "CREDIT",
+          "amountCents": "777",
+          "bizNo": "escrow:236054382687293440",
+          "time": "2026-10-14T01:15:50.545Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054382687293440",
+          "direction": "DEBIT",
+          "amountCents": "777",
+          "bizNo": "escrow:236054382687293440",
+          "time": "2026-10-14T01:15:50.544Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054380913102848",
+          "direction": "DEBIT",
+          "amountCents": "1000",
+          "bizNo": "settle:236054380913102848",
+          "time": "2026-10-14T01:15:50.475Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054380913102848",
+          "direction": "CREDIT",
+          "amountCents": "1000",
+          "bizNo": "escrow:236054380913102848",
+          "time": "2026-10-14T01:15:50.136Z"
+        },
+        {
+          "refType": "ESCROW",
+          "refId": "236054380913102848",
+          "direction": "DEBIT",
+          "amountCents": "1000",
+          "bizNo": "escrow:236054380913102848",
+          "time": "2026-10-14T01:15:50.133Z"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 27,
+      "data": {
+        "errandId": "236055489153077248",
+        "status": "PUBLISHED",
+        "frozenCents": "500"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055489153077248/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 49,
+      "data": {
+        "code": "OK",
+        "grabbed": true,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055489153077248/confirm",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 16,
+      "data": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055489153077248/dispute",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 26,
+      "data": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055489153077248/arbitrate",
+      "actor": 11001,
+      "http": 200,
+      "code": "UNAUTHORIZED",
+      "elapsedMs": 4,
+      "data": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055489153077248",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 12,
+      "data": {
+        "id": "236055489153077248",
+        "title": "真实API验收 1014-172012 · 仲裁支持跑腿",
+        "status": "DISPUTED",
+        "type": "DELIVERY",
+        "rewardCents": "500",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055489153077248/arbitrate",
+      "actor": 12001,
+      "http": 200,
+      "code": "UNAUTHORIZED",
+      "elapsedMs": 3,
+      "data": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055489153077248",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055489153077248",
+        "title": "真实API验收 1014-172012 · 仲裁支持跑腿",
+        "status": "DISPUTED",
+        "type": "DELIVERY",
+        "rewardCents": "500",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055489153077248/arbitrate",
+      "actor": 12002,
+      "http": 200,
+      "code": "UNAUTHORIZED",
+      "elapsedMs": 4,
+      "data": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055489153077248",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055489153077248",
+        "title": "真实API验收 1014-172012 · 仲裁支持跑腿",
+        "status": "DISPUTED",
+        "type": "DELIVERY",
+        "rewardCents": "500",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": {
+        "availableCents": "1953",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055489153077248/arbitrate",
+      "actor": 9001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 48,
+      "data": {
+        "result": "SETTLED_TO_RUNNER"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055489153077248",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 11,
+      "data": {
+        "id": "236055489153077248",
+        "title": "真实API验收 1014-172012 · 仲裁支持跑腿",
+        "status": "SETTLED",
+        "type": "DELIVERY",
+        "rewardCents": "500",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": {
+        "availableCents": "2428",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055489153077248/arbitrate",
+      "actor": 9001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "result": "ALREADY_DONE"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": {
+        "availableCents": "2428",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet/ledger?size=100",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": [
+        {
+          "refType": "SETTLE",
+          "refId": "236055489153077248",
+          "direction": "CREDIT",
+          "amountCents": "475",
+          "bizNo": "settle:236055489153077248",
+          "time": "2026-10-14T09:20:14.483Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054384750891008",
+          "direction": "CREDIT",
+          "amountCents": "528",
+          "bizNo": "settle:236054384750891008",
+          "time": "2026-10-14T09:19:25.674Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054382968311808",
+          "direction": "CREDIT",
+          "amountCents": "475",
+          "bizNo": "settle:236054382968311808",
+          "time": "2026-10-14T01:15:50.713Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054380913102848",
+          "direction": "CREDIT",
+          "amountCents": "950",
+          "bizNo": "settle:236054380913102848",
+          "time": "2026-10-14T01:15:50.476Z"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 19,
+      "data": {
+        "errandId": "236055490121961472",
+        "status": "PUBLISHED",
+        "frozenCents": "333"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490121961472/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 54,
+      "data": {
+        "code": "OK",
+        "grabbed": true,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490121961472/grab",
+      "actor": 12002,
+      "http": 200,
+      "code": "SLOT_FULL",
+      "elapsedMs": 11,
+      "data": {
+        "code": "SLOT_FULL",
+        "grabbed": false,
+        "candidateRank": "1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 26,
+      "data": {
+        "errandId": "236055490474283008",
+        "status": "PUBLISHED",
+        "frozenCents": "444"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490474283008/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 34,
+      "data": {
+        "code": "OK",
+        "grabbed": true,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 25,
+      "data": {
+        "errandId": "236055490721746944",
+        "status": "PUBLISHED",
+        "frozenCents": "555"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "availableCents": "2428",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490721746944/grab",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 31,
+      "data": {
+        "code": "OK",
+        "grabbed": true,
+        "candidateRank": null
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490721746944/confirm",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 15,
+      "data": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490721746944/pickup",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 15,
+      "data": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490721746944/deliver",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 17,
+      "data": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 12,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 13,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 13,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 11,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 10,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 10,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 17,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 22,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 13,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 15,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 6,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 10,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 6,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 6,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 6,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 6,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 12,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 17,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 17,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 22,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 18,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 18,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 23,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 14,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 18,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 9,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 10,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 14,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 10,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 10,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 12,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12002",
+        "round": 1,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12002",
+        "round": 1,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "LOCKED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12002",
+        "round": 1,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490121961472/confirm",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 17,
+      "data": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "ACCEPTED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12002",
+        "round": 1,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490121961472",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 3,
+      "data": {
+        "id": "236055490121961472",
+        "title": "真实API验收 1014-172012 · MQ超时转候选",
+        "status": "ACCEPTED",
+        "type": "DELIVERY",
+        "rewardCents": "333",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12002",
+        "round": 1,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490121961472/pickup",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 11,
+      "data": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490121961472/deliver",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 10,
+      "data": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490121961472/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 26,
+      "data": {
+        "result": "SETTLED"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490474283008",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490474283008",
+        "title": "真实API验收 1014-172012 · MQ候选空回退",
+        "status": "PUBLISHED",
+        "type": "DELIVERY",
+        "rewardCents": "444",
+        "slotTotal": 1,
+        "slotTaken": 0,
+        "publisherId": "11001",
+        "grabberId": "-1",
+        "round": 1,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "CANCEL"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490474283008",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 2,
+      "data": {
+        "id": "236055490474283008",
+        "title": "真实API验收 1014-172012 · MQ候选空回退",
+        "status": "PUBLISHED",
+        "type": "DELIVERY",
+        "rewardCents": "444",
+        "slotTotal": 1,
+        "slotTaken": 0,
+        "publisherId": "11001",
+        "grabberId": "-1",
+        "round": 1,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "CANCEL"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490474283008",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 2,
+      "data": {
+        "id": "236055490474283008",
+        "title": "真实API验收 1014-172012 · MQ候选空回退",
+        "status": "PUBLISHED",
+        "type": "DELIVERY",
+        "rewardCents": "444",
+        "slotTotal": 1,
+        "slotTaken": 0,
+        "publisherId": "11001",
+        "grabberId": "-1",
+        "round": 1,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "CANCEL"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490474283008/cancel",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 22,
+      "data": {
+        "result": "REFUNDED"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 6,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 13,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 17,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 14,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 16,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 18,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 15,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 9,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 15,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 12,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 6,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 6,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 21,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 7,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 9,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 11,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 26,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 17,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 9,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 6,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 10,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 11,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 5,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 13,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 12,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 17,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 13,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 10,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "DELIVERED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": [
+          "SETTLE",
+          "DISPUTE"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/errands/236055490721746944",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 34,
+      "data": {
+        "id": "236055490721746944",
+        "title": "真实API验收 1014-172012 · MQ送达自动结算",
+        "status": "SETTLED",
+        "type": "DELIVERY",
+        "rewardCents": "555",
+        "slotTotal": 1,
+        "slotTaken": 1,
+        "publisherId": "11001",
+        "grabberId": "12001",
+        "round": 0,
+        "role": "PUBLISHER",
+        "availableActions": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 8,
+      "data": {
+        "availableCents": "2956",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": {
+        "availableCents": "2956",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet/ledger?size=100",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": [
+        {
+          "refType": "SETTLE",
+          "refId": "236055490721746944",
+          "direction": "CREDIT",
+          "amountCents": "528",
+          "bizNo": "settle:236055490721746944",
+          "time": "2026-10-14T09:21:06.110Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236055489153077248",
+          "direction": "CREDIT",
+          "amountCents": "475",
+          "bizNo": "settle:236055489153077248",
+          "time": "2026-10-14T09:20:14.483Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054384750891008",
+          "direction": "CREDIT",
+          "amountCents": "528",
+          "bizNo": "settle:236054384750891008",
+          "time": "2026-10-14T09:19:25.674Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054382968311808",
+          "direction": "CREDIT",
+          "amountCents": "475",
+          "bizNo": "settle:236054382968311808",
+          "time": "2026-10-14T01:15:50.713Z"
+        },
+        {
+          "refType": "SETTLE",
+          "refId": "236054380913102848",
+          "direction": "CREDIT",
+          "amountCents": "950",
+          "bizNo": "settle:236054380913102848",
+          "time": "2026-10-14T01:15:50.476Z"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/errands/236055490721746944/settle",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": {
+        "result": "ALREADY_SETTLED"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": {
+        "availableCents": "2956",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 11001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 3,
+      "data": {
+        "availableCents": "95224",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12001,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 3,
+      "data": {
+        "availableCents": "2956",
+        "frozenCents": "0"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/wallet",
+      "actor": 12002,
+      "http": 200,
+      "code": "OK",
+      "elapsedMs": 4,
+      "data": {
+        "availableCents": "1584",
+        "frozenCents": "0"
+      }
+    }
+  ],
+  "tasks": {
+    "20请求竞争单名额": {
+      "id": "236055484866498560",
+      "rewardCents": 1000
+    },
+    "20请求重复退款": {
+      "id": "236055487626350592",
+      "rewardCents": 777
+    },
+    "仲裁支持跑腿": {
+      "id": "236055489153077248",
+      "rewardCents": 500
+    },
+    "MQ超时转候选": {
+      "id": "236055490121961472",
+      "rewardCents": 333
+    },
+    "MQ候选空回退": {
+      "id": "236055490474283008",
+      "rewardCents": 444
+    },
+    "MQ送达自动结算": {
+      "id": "236055490721746944",
+      "rewardCents": 555
+    }
+  },
+  "concurrency": {
+    "grab20": [
+      {
+        "actor": 12001,
+        "http": 200,
+        "body": {
+          "code": "SLOT_FULL",
+          "message": "名额已满",
+          "data": {
+            "code": "SLOT_FULL",
+            "grabbed": false,
+            "candidateRank": "1"
+          }
+        }
+      },
+      {
+        "actor": 12002,
+        "http": 200,
+        "body": {
+          "code": "ALREADY_GRABBED",
+          "message": "你已抢过该任务",
+          "data": {
+            "code": "ALREADY_GRABBED",
+            "grabbed": false,
+            "candidateRank": null
+          }
+        }
+      },
+      {
+        "actor": 12001,
+        "http": 200,
+        "body": {
+          "code": "SLOT_FULL",
+          "message": "名额已满",
+          "data": {
+            "code": "SLOT_FULL",
+            "grabbed": false,
+            "candidateRank": "1"
+          }
+        }
+      },
+      {
+        "actor": 12002,
+        "http": 200,
+        "body": {
+          "code": "ALREADY_GRABBED",
+          "message": "你已抢过该任务",
+          "data": {
+            "code": "ALREADY_GRABBED",
+            "grabbed": false,
+            "candidateRank": null
+          }
+        }
+      },
+      {
+        "actor": 12001,
+        "http": 200,
+        "body": {
+          "code": "SLOT_FULL",
+          "message": "名额已满",
+          "data": {
+            "code": "SLOT_FULL",
+            "grabbed": false,
+            "candidateRank": "1"
+          }
+        }
+      },
+      {
+        "actor": 12002,
+        "http": 200,
+        "body": {
+          "code": "ALREADY_GRABBED",
+          "message": "你已抢过该任务",
+          "data": {
+            "code": "ALREADY_GRABBED",
+            "grabbed": false,
+            "candidateRank": null
+          }
+        }
+      },
+      {
+        "actor": 12001,
+        "http": 200,
+        "body": {
+          "code": "SLOT_FULL",
+          "message": "名额已满",
+          "data": {
+            "code": "SLOT_FULL",
+            "grabbed": false,
+            "candidateRank": "1"
+          }
+        }
+      },
+      {
+        "actor": 12002,
+        "http": 200,
+        "body": {
+          "code": "ALREADY_GRABBED",
+          "message": "你已抢过该任务",
+          "data": {
+            "code": "ALREADY_GRABBED",
+            "grabbed": false,
+            "candidateRank": null
+          }
+        }
+      },
+      {
+        "actor": 12001,
+        "http": 200,
+        "body": {
+          "code": "SLOT_FULL",
+          "message": "名额已满",
+          "data": {
+            "code": "SLOT_FULL",
+            "grabbed": false,
+            "candidateRank": "1"
+          }
+        }
+      },
+      {
+        "actor": 12002,
+        "http": 200,
+        "body": {
+          "code": "ALREADY_GRABBED",
+          "message": "你已抢过该任务",
+          "data": {
+            "code": "ALREADY_GRABBED",
+            "grabbed": false,
+            "candidateRank": null
+          }
+        }
+      },
+      {
+        "actor": 12001,
+        "http": 200,
+        "body": {
+          "code": "SLOT_FULL",
+          "message": "名额已满",
+          "data": {
+            "code": "SLOT_FULL",
+            "grabbed": false,
+            "candidateRank": "1"
+          }
+        }
+      },
+      {
+        "actor": 12002,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "code": "OK",
+            "grabbed": true,
+            "candidateRank": null
+          }
+        }
+      },
+      {
+        "actor": 12001,
+        "http": 200,
+        "body": {
+          "code": "SLOT_FULL",
+          "message": "名额已满",
+          "data": {
+            "code": "SLOT_FULL",
+            "grabbed": false,
+            "candidateRank": "1"
+          }
+        }
+      },
+      {
+        "actor": 12002,
+        "http": 200,
+        "body": {
+          "code": "ALREADY_GRABBED",
+          "message": "你已抢过该任务",
+          "data": {
+            "code": "ALREADY_GRABBED",
+            "grabbed": false,
+            "candidateRank": null
+          }
+        }
+      },
+      {
+        "actor": 12001,
+        "http": 200,
+        "body": {
+          "code": "SLOT_FULL",
+          "message": "名额已满",
+          "data": {
+            "code": "SLOT_FULL",
+            "grabbed": false,
+            "candidateRank": "1"
+          }
+        }
+      },
+      {
+        "actor": 12002,
+        "http": 200,
+        "body": {
+          "code": "ALREADY_GRABBED",
+          "message": "你已抢过该任务",
+          "data": {
+            "code": "ALREADY_GRABBED",
+            "grabbed": false,
+            "candidateRank": null
+          }
+        }
+      },
+      {
+        "actor": 12001,
+        "http": 200,
+        "body": {
+          "code": "SLOT_FULL",
+          "message": "名额已满",
+          "data": {
+            "code": "SLOT_FULL",
+            "grabbed": false,
+            "candidateRank": "1"
+          }
+        }
+      },
+      {
+        "actor": 12002,
+        "http": 200,
+        "body": {
+          "code": "ALREADY_GRABBED",
+          "message": "你已抢过该任务",
+          "data": {
+            "code": "ALREADY_GRABBED",
+            "grabbed": false,
+            "candidateRank": null
+          }
+        }
+      },
+      {
+        "actor": 12001,
+        "http": 200,
+        "body": {
+          "code": "SLOT_FULL",
+          "message": "名额已满",
+          "data": {
+            "code": "SLOT_FULL",
+            "grabbed": false,
+            "candidateRank": "1"
+          }
+        }
+      },
+      {
+        "actor": 12002,
+        "http": 200,
+        "body": {
+          "code": "ALREADY_GRABBED",
+          "message": "你已抢过该任务",
+          "data": {
+            "code": "ALREADY_GRABBED",
+            "grabbed": false,
+            "candidateRank": null
+          }
+        }
+      }
+    ],
+    "settle20": [
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "SETTLED"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      }
+    ],
+    "cancel20": [
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "REFUNDED"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      },
+      {
+        "actor": 11001,
+        "http": 200,
+        "body": {
+          "code": "OK",
+          "message": "成功",
+          "data": {
+            "result": "CONFLICT"
+          }
+        }
+      }
+    ]
+  },
+  "polls": [
+    {
+      "name": "确认超时转给候选",
+      "id": "236055490121961472",
+      "elapsedSeconds": 30.32,
+      "states": [
+        {
+          "elapsedSeconds": 0.01,
+          "state": {
+            "status": "LOCKED",
+            "round": 0,
+            "grabberId": "12001",
+            "slotTaken": 1
+          }
+        },
+        {
+          "elapsedSeconds": 30.32,
+          "state": {
+            "status": "LOCKED",
+            "round": 1,
+            "grabberId": "12002",
+            "slotTaken": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "空候选队列回退",
+      "id": "236055490474283008",
+      "elapsedSeconds": 0.01,
+      "states": [
+        {
+          "elapsedSeconds": 0.01,
+          "state": {
+            "status": "PUBLISHED",
+            "round": 1,
+            "grabberId": "-1",
+            "slotTaken": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "送达超时自动结算",
+      "id": "236055490721746944",
+      "elapsedSeconds": 21.11,
+      "states": [
+        {
+          "elapsedSeconds": 0.01,
+          "state": {
+            "status": "DELIVERED",
+            "round": 0,
+            "grabberId": "12001",
+            "slotTaken": 1
+          }
+        },
+        {
+          "elapsedSeconds": 21.11,
+          "state": {
+            "status": "SETTLED",
+            "round": 0,
+            "grabberId": "12001",
+            "slotTaken": 1
+          }
+        }
+      ]
+    }
+  ],
+  "mqEvidence": [
+    {
+      "name": "确认超时转候选",
+      "id": "236055490121961472",
+      "source": "worker MQ 消费者日志",
+      "lines": [
+        "2026-10-14T17:20:45.099+08:00 DEBUG 67295 --- [campus-dash-worker] [nsumption-5-179] c.c.worker.TimeoutTransferConsumer       : 超时消息处理完成 errandId=236055490121961472 round=0 outcome=TRANSFERRED"
+      ]
+    },
+    {
+      "name": "空候选回退",
+      "id": "236055490474283008",
+      "source": "worker MQ 消费者日志",
+      "lines": [
+        "2026-10-14T17:20:45.131+08:00 DEBUG 67295 --- [campus-dash-worker] [nsumption-5-180] c.c.worker.TimeoutTransferConsumer       : 超时消息处理完成 errandId=236055490474283008 round=0 outcome=REVERTED"
+      ]
+    },
+    {
+      "name": "送达超时自动结算",
+      "id": "236055490721746944",
+      "source": "worker MQ 消费者日志",
+      "lines": [
+        "2026-10-14T17:21:06.136+08:00  INFO 67295 --- [campus-dash-worker] [nsumption-2-192] c.campusdash.worker.AutoSettleConsumer   : 自动结算消息处理 errandId=236055490721746944 result=SETTLED"
+      ]
+    }
+  ],
+  "balances": {
+    "before": {
+      "11001": 97612,
+      "12001": 1953,
+      "12002": 317
+    },
+    "after": {
+      "11001": 95224,
+      "12001": 2956,
+      "12002": 1584
+    }
+  },
+  "passed": true,
+  "mqWaitingStartedAt": "2026-10-14T17:20:14.793067",
+  "finishedAt": "2026-10-14T17:21:06.379677",
+  "outcomeCounts": {
+    "grab20": {
+      "SLOT_FULL": 10,
+      "ALREADY_GRABBED": 9,
+      "OK": 1
+    },
+    "settle20": {
+      "CONFLICT": 19,
+      "SETTLED": 1
+    },
+    "cancel20": {
+      "CONFLICT": 19,
+      "REFUNDED": 1
+    }
+  },
+  "scannerLogLines": []
+}

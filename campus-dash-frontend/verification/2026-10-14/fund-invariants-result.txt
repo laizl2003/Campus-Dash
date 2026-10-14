@@ -1,0 +1,16 @@
+account_count	available_total_cents	frozen_total_cents	total_cents
+9	210000	0	210000
+unbalanced_businesses
+0
+escrow_balance_cents	held_total_cents	difference_cents
+0	0	0
+id	owner_id	owner_type	current_cents	ledger_net_cents	inferred_initial_cents
+1	-1	ESCROW	0	0	0
+2	-2	COMMISSION	358	358	0
+1001	1001	USER	97532	-2468	100000
+2001	2001	USER	7346	2346	5000
+2002	2002	USER	5000	0	5000
+9001	9001	USER	0	0	0
+11001	11001	USER	95224	-4776	100000
+12001	12001	USER	2956	2956	0
+12002	12002	USER	1584	1584	0

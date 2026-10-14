@@ -1,146 +1,88 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, BizError, yuan, STATUS_TEXT } from '../api';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, issueToken, TYPE_TEXT, TYPE_ICON, yuan } from '../api';
 import type { ErrandCard } from '../api';
+import { subscribeWs } from '../ws';
 import ErrandCardView from '../components/ErrandCard';
-import { login, getUserId, getToken, restoreIdentity } from '../api';
-
-interface GrabResultRow {
-  label: string;
-  ok: boolean;
-  code: string;
-  ms: number;
-}
-
-/**
- * 任务广场：列表 + 抢单 + "模拟 N 人同时抢"演示。
- *
- * 并发抢单演示的实现方式：当前浏览器以当前身份发 N 个抢单请求。
- * 注意浏览器对同域并发连接有限制（HTTP/1.1 约 6 条），所以这只能演示
- * "少量并发下名额不超发"；真实的 2000 并发压测看后端的 SpikeLoadClient 报告，
- * 页面上对此做了如实标注——不把演示当压测。
- *
- * 另一个诚实的边界：同一用户重复抢会被幂等拦成 ALREADY_GRABBED，
- * 所以演示"多个不同跑腿抢"需要用不同的 token——这里通过"临时登录 N 个跑腿身份
- * 各拿一个 token、然后并发发请求"实现，与真实多人抢单等价。
- */
+import Icon from '../components/Icon';
+import CampusArt from '../components/CampusArt';
+interface GrabRow { label: string; ok: boolean; code: string; ms: number }
+const STARTERS = [
+  { type: 'DELIVERY', icon: 'package', title: '快递帮我取', text: '把等待，变成顺路送达', template: '帮我从快递站取一个包裹送到宿舍' },
+  { type: 'BUY', icon: 'bag', title: '好吃的帮我带', text: '食堂带饭，日常代买', template: '帮我从食堂带一份午餐到宿舍' },
+  { type: 'OTHER', icon: 'receipt', title: '其他事帮个忙', text: '送份文件，解决小事', template: '帮我把一份文件送到教学楼' },
+];
 export default function Square() {
   const [cards, setCards] = useState<ErrandCard[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [grabLog, setGrabLog] = useState<GrabResultRow[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('ALL');
+  const [sort, setSort] = useState('default');
+  const [labOpen, setLabOpen] = useState(false);
+  const [target, setTarget] = useState('');
+  const [count, setCount] = useState(6);
   const [grabbing, setGrabbing] = useState(false);
-  const targetRef = useRef<string | null>(null);
-
-  const load = useCallback(() => {
-    api.list(1).then(setCards).catch((e) => setError(e.message));
+  const grabLock = useRef(false);
+  const [grabLog, setGrabLog] = useState<GrabRow[]>([]);
+  const [grabMessage, setGrabMessage] = useState('');
+  const requestId = useRef(0);
+  const load = useCallback(async () => {
+    const id = ++requestId.current;
+    setLoading(true); setError('');
+    try { const result = await api.list(1); if (id === requestId.current) { setCards(result); setUpdatedAt(new Date()); } }
+    catch (e) { if (id === requestId.current) setError(e instanceof Error ? e.message : '任务加载失败'); }
+    finally { if (id === requestId.current) setLoading(false); }
   }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  /** 并发抢单演示：临时登录 N 个跑腿身份，同时发抢单请求 */
-  const spikeGrab = async (errandId: string, n: number) => {
-    targetRef.current = errandId;
-    setGrabbing(true);
-    setGrabLog([]);
-    setError(null);
-    const myToken = getToken();
-    const myUserId = getUserId();
+  useEffect(() => {
+    void load();
+    const unsub = subscribeWs(event => { if (event.type === 'errand.status') void load(); });
+    const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 30000);
+    return () => { requestId.current++; unsub(); clearInterval(timer); };
+  }, [load]);
+  const filtered = useMemo(() => {
+    const result = cards.filter(c => (category === 'ALL' || c.type === category) && `${c.title} ${c.id}`.toLowerCase().includes(query.trim().toLowerCase()));
+    if (sort === 'reward') result.sort((a, b) => b.rewardCents - a.rewardCents);
+    return result;
+  }, [cards, category, query, sort]);
+  const available = cards.filter(c => c.status === 'PUBLISHED');
+  const totalReward = cards.reduce((sum, c) => sum + c.rewardCents, 0);
+  const eligible = available.filter(c => c.slotTotal === 1 && c.slotTaken === 0);
+  const spikeGrab = async () => {
+    if (!target || grabLock.current) return;
+    grabLock.current = true; setGrabbing(true); setGrabLog([]); setGrabMessage('');
     try {
-      // 给 N 个临时跑腿身份（30000+i）各登录拿 token。
-      // 临时身份在 wallet_account 没有记录，抢单资格校验会通过（本项目未强制要求账户存在），
-      // 抢中与否只取决于名额裁决——这正是演示想展示的
-      const tokens: string[] = [];
-      for (let i = 0; i < n; i++) {
-        tokens.push(await login(30000 + i));
-      }
-
-      // 对齐释放：所有请求同时发出
-      const t0 = performance.now();
-      const results = await Promise.all(
-        tokens.map(async (tok, i) => {
-          const start = performance.now();
-          try {
-            const resp = await fetch(`/api/errands/${errandId}/grab`, {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${tok}` },
-            });
-            const body = await resp.json();
-            return {
-              label: `跑腿 ${30000 + i}`,
-              ok: body.code === 'OK',
-              code: body.code,
-              ms: Math.round(performance.now() - start),
-            };
-          } catch {
-            return { label: `跑腿 ${30000 + i}`, ok: false, code: 'NETWORK', ms: 0 };
-          }
-        })
-      );
+      // 获取临时身份令牌不触碰当前登录会话，避免并发请求串号。
+      const tokens = await Promise.all(Array.from({ length: count }, (_, i) => issueToken(30000 + i)));
+      const results = await Promise.all(tokens.map(async (tok, i) => {
+        const start = performance.now();
+        try {
+          const resp = await fetch(`/api/errands/${target}/grab`, { method: 'POST', headers: { Authorization: `Bearer ${tok}` } });
+          const body = await resp.json();
+          return { label: `同学 ${30000 + i}`, ok: body.code === 'OK', code: body.code, ms: Math.round(performance.now() - start) };
+        } catch { return { label: `同学 ${30000 + i}`, ok: false, code: 'NETWORK', ms: Math.round(performance.now() - start) }; }
+      }));
       setGrabLog(results.sort((a, b) => Number(b.ok) - Number(a.ok)));
-      const winners = results.filter((r) => r.ok).length;
-      if (winners === 1) {
-        setError(`✅ 并发演示完成：${n} 人同时抢，恰好 1 人成功（总耗时 ${Math.round(performance.now() - t0)}ms）。名额守恒，零超卖。`);
-      } else {
-        setError(`⚠️ ${n} 人抢单成功 ${winners} 人——若非 1，请检查后端防护！`);
-      }
-      load();
-    } finally {
-      // 恢复当前用户的 token 与身份
-      restoreIdentity(myToken, myUserId);
-      setGrabbing(false);
-    }
+      setGrabMessage(`${count} 个请求已结束，${results.filter(r => r.ok).length} 人抢单成功。`);
+      void load();
+    } catch (e) { setGrabMessage(e instanceof Error ? e.message : '演示执行失败，请重试'); }
+    finally { setGrabbing(false); grabLock.current = false; }
   };
-
-  return (
-    <div>
-      <div className="page-head">
-        <h2>任务广场</h2>
-        <button className="btn" onClick={load}>刷新</button>
-      </div>
-
-      {error && <div className={`banner ${error.startsWith('⚠️') ? 'warn' : 'info'}`}>{error}</div>}
-
-      {cards.length === 0 && (
-        <div className="empty">
-          暂无可抢任务。<a href="#/publish">去发布一个</a>，
-          或切到"发单人 1001"身份发布后再切回来抢。
-        </div>
-      )}
-
-      <div className="card-grid">
-        {cards.map((c) => (
-          <div key={c.id} className="card-wrap">
-            <ErrandCardView card={c} onChanged={load} />
-            {c.status === 'PUBLISHED' && (
-              <div className="spike-zone">
-                <button className="btn btn-spike" disabled={grabbing}
-                        onClick={() => spikeGrab(c.id, 6)}>
-                  ⚡ 模拟 6 人同时抢
-                </button>
-                <button className="btn btn-spike" disabled={grabbing}
-                        onClick={() => spikeGrab(c.id, 12)}>
-                  ⚡ 模拟 12 人同时抢
-                </button>
-              </div>
-            )}
-            {targetRef.current === c.id && grabLog.length > 0 && (
-              <div className="grab-log">
-                <p className="grab-log-hint">
-                  并发结果（浏览器同域并发连接有限，此为小并发演示；
-                  2000 并发零超卖见后端 SpikeLoadClient 压测报告）：
-                </p>
-                {grabLog.map((r, i) => (
-                  <div key={i} className={`grab-row ${r.ok ? 'win' : 'lose'}`}>
-                    <span>{r.ok ? '🏆' : '✗'}</span>
-                    <span>{r.label}</span>
-                    <span>{r.ok ? '抢中' : r.code}</span>
-                    <span className="muted">{r.ms}ms</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <div className="square-page">
+    <div className="page-head"><div><span className="eyebrow">CAMPUS LIFE, MADE EASIER</span><h1>任务广场<span className="heading-dot">.</span></h1><p>发现校园里的小委托，让每一段顺路都有价值。</p></div><button className="btn btn-ghost" onClick={() => void load()} disabled={loading}><Icon name="refresh" size={15} className={loading ? 'is-spinning' : ''}/>刷新任务</button></div>
+    <section className="square-hero"><div className="hero-copy"><span className="soft-label"><Icon name="spark" size={13}/>把小事托付，把时间留给自己</span><h2>刚好顺路，<br/><em>刚好帮你。</em></h2><p>一份热饭、一个包裹、一件小事。<br/>在校园，让互相帮助变得简单。</p><a href="#/publish" className="btn btn-primary">发布我的委托<Icon name="arrow-right" size={15}/></a></div><CampusArt/><span className="hero-caption">THE LITTLE THINGS MATTER</span></section>
+    <div className="service-shortcuts">{STARTERS.map(s => <a key={s.type} href={`#/publish?type=${s.type}&template=${encodeURIComponent(s.template)}`}><span className={`shortcut-icon type-${s.type}`}><Icon name={s.icon} size={20}/></span><span><strong>{s.title}</strong><small>{s.text}</small></span><Icon name="arrow-right" size={16}/></a>)}</div>
+    <div className="square-workspace"><section className="task-market" aria-label="任务列表">
+      <div className="section-title"><h2>发现任务 <span>{loading && !updatedAt ? '—' : cards.length}</span></h2><span className="update-time">{updatedAt ? `${updatedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 更新` : '等待加载'}</span></div>
+      <div className="market-toolbar"><div className="category-tabs" aria-label="任务分类">{[['ALL', '全部任务'], ...Object.entries(TYPE_TEXT)].map(([key, label]) => <button key={key} className={category === key ? 'active' : ''} aria-pressed={category === key} onClick={() => setCategory(key)}>{label}</button>)}</div><div className="market-search-row"><label className="search-field"><Icon name="search" size={16}/><input aria-label="搜索任务" placeholder="搜索任务名称或编号" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button aria-label="清除搜索" onClick={() => setQuery('')}><Icon name="close" size={14}/></button>}</label><select aria-label="任务排序" value={sort} onChange={e => setSort(e.target.value)}><option value="default">默认排序</option><option value="reward">悬赏从高到低</option></select></div></div>
+      {error && <div className="banner warn" role="alert"><Icon name="info" size={17}/><span>{error}{updatedAt && '。下方保留上次加载的任务。'}</span><button className="text-button" onClick={() => void load()}>重试</button></div>}
+      {loading && !updatedAt ? <div className="card-grid" aria-label="正在加载任务">{[0, 1, 2, 3].map(n => <div key={n} className="skeleton-card"><i/><i/><i/><i/></div>)}</div> : filtered.length > 0 ? <div className="card-grid">{filtered.map(c => <ErrandCardView key={c.id} card={c} onChanged={() => void load()}/>)}</div> : !error && <div className="empty-state"><span className="empty-icon"><Icon name={query || category !== 'ALL' ? 'search' : 'package'} size={30}/></span><h3>{query || category !== 'ALL' ? '没有找到匹配的任务' : '新的委托，正在路上'}</h3><p>{query || category !== 'ALL' ? '换个关键词，或者看看其他类型的委托。' : '暂时还没有可浏览的任务，你也可以发布第一份委托。'}</p>{query || category !== 'ALL' ? <button className="btn" onClick={() => { setQuery(''); setCategory('ALL'); }}>清除筛选</button> : <a className="btn btn-primary" href="#/publish"><Icon name="plus" size={16}/>发布任务</a>}</div>}
+      {updatedAt && cards.length > 0 && <p className="list-footnote">{query || category !== 'ALL' ? `匹配 ${filtered.length} 条 · ` : ''}展示当前加载的 {cards.length} 条任务 · 名额与操作以最新状态为准</p>}
+    </section><aside className="market-aside">
+      <section className="overview-panel"><div className="section-title"><h3>广场一览</h3><Icon name="grid" size={16}/></div><p>当前已加载任务</p><div className="overview-numbers"><div><strong>{updatedAt ? available.length : '—'}</strong><span>等待接单</span></div><div><strong>{updatedAt ? yuan(totalReward) : '—'}</strong><span>悬赏合计</span></div></div><div className="overview-types">{Object.entries(TYPE_TEXT).map(([type, label]) => <div key={type}><span><Icon name={TYPE_ICON[type]} size={14}/>{label}</span><strong>{updatedAt ? cards.filter(c => c.type === type).length : '—'}</strong></div>)}</div></section>
+      <section className="how-it-works"><span className="soft-label"><Icon name="shield" size={14}/>安心托付</span><h3>每一份委托，<br/>都有清晰的下一步。</h3><ol><li><span>01</span><div><strong>发布与托管</strong><p>说清需求，悬赏由平台托管。</p></div></li><li><span>02</span><div><strong>接单与送达</strong><p>及时确认，任务进度随时可查。</p></div></li><li><span>03</span><div><strong>确认与结算</strong><p>完成后确认，悬赏结算给同学。</p></div></li></ol><a href="#/mine">查看我的任务<Icon name="arrow-right" size={14}/></a></section>
+      <div className="lab-entry"><Icon name="lab" size={17}/><span><strong>并发抢单演示</strong><small>探索多人同时接单的结果</small></span><button className="icon-button" aria-label={labOpen ? '收起并发演示' : '打开并发演示'} aria-expanded={labOpen} onClick={() => setLabOpen(!labOpen)}><Icon name={labOpen ? 'close' : 'plus'} size={16}/></button></div>
+    </aside></div>
+    {labOpen && <section className="lab-panel"><div className="section-title"><h2><Icon name="lab" size={20}/>并发抢单演示</h2><span className="soft-label">教学工具</span></div><p>选择一个单名额任务，让多个演示身份同时抢单。执行会真实占用任务名额；浏览器的少量并发仅用于观察结果。</p><div className="lab-controls"><select aria-label="演示目标任务" value={target} onChange={e => setTarget(e.target.value)} disabled={grabbing}><option value="">请选择待抢任务</option>{eligible.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select><select aria-label="并发人数" value={count} onChange={e => setCount(Number(e.target.value))} disabled={grabbing}><option value={6}>6 人同时抢</option><option value={12}>12 人同时抢</option></select><button className="btn btn-primary" disabled={grabbing || !eligible.some(c => c.id === target)} onClick={() => void spikeGrab()}>{grabbing ? '正在执行…' : '开始演示'}</button></div>{grabMessage && <p className="banner info" role="status">{grabMessage}</p>}{grabLog.length > 0 && <div className="grab-log">{grabLog.map(r => <div key={r.label} className={`grab-row ${r.ok ? 'win' : ''}`}><Icon name={r.ok ? 'check' : 'close'} size={14}/><span>{r.label}</span><strong>{r.ok ? '抢单成功' : r.code}</strong><span>{r.ms} ms</span></div>)}</div>}</section>}
+  </div>;
 }

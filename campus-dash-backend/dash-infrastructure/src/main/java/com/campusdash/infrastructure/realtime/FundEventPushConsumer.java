@@ -31,6 +31,8 @@ import java.util.Collections;
  */
 @Component
 @ConditionalOnProperty(name = "dash.mq.enabled", havingValue = "true")
+// worker 不持有 WebSocket；加入相同消费组会抢走 app 的消息并由空推送器 ACK。
+@ConditionalOnProperty(name = "dash.ws.enabled", havingValue = "true", matchIfMissing = true)
 public class FundEventPushConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(FundEventPushConsumer.class);

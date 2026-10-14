@@ -88,8 +88,17 @@ public class SettleErrandUseCase {
         Errand errand = errandRepository.findById(errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ERRAND_NOT_FOUND, "id=" + errandId));
 
+        // 幂等返回也必须先鉴权，不能把终态当作绕过业务权限的入口。
+        if (operatorId != Errand.SYSTEM_OPERATOR && operatorId != errand.publisherId()) {
+            throw new BizException(ErrorCode.NOT_PUBLISHER, "actor=" + operatorId);
+        }
         if (errand.status() == com.campusdash.domain.errand.model.ErrandStatus.SETTLED) {
             return Result.ALREADY_SETTLED;
+        }
+        // 争议单只能走仲裁，其他未送达阶段不能触碰托管状态。
+        if (errand.status() != com.campusdash.domain.errand.model.ErrandStatus.DELIVERED) {
+            throw new BizException(ErrorCode.ILLEGAL_STATE_TRANSITION,
+                    "只有 DELIVERED 可以结算，当前=" + errand.status());
         }
 
         EscrowOrder escrow = walletRepository.findEscrowByErrandId(errand.campusId(), errandId)
@@ -110,8 +119,13 @@ public class SettleErrandUseCase {
         // 在自调用下不生效（P3 遗留隐患，P5 修复）。改用程序化事务，
         // 保证"资金分账 + 信用事件"要么一起提交、要么一起回滚
         boolean committed = fundEventPort.publishInTransaction(event, () ->
-                Boolean.TRUE.equals(transactionTemplate.execute(status ->
-                        doSettle(errandId, errand, escrow, runnerAmount, commissionAmount, bizNo, operatorId))));
+                Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+                    boolean settled = doSettle(errandId, errand, escrow,
+                            runnerAmount, commissionAmount, bizNo, operatorId);
+                    // 返回 false 本身不会触发 Spring 回滚，必须撤销此前成功的 CAS。
+                    if (!settled) status.setRollbackOnly();
+                    return settled;
+                })));
 
         if (committed) {
             // 状态变为 SETTLED，详情缓存失效。这里事务已提交（publishInTransaction 返回后），
@@ -173,11 +187,11 @@ public class SettleErrandUseCase {
                 .orElseThrow();
 
         // 托管户扣减
-        walletRepository.casDebit(escrowAccount.id(), escrow.amount());
-        // 跑腿加
-        walletRepository.casCredit(runnerAccount.id(), runnerAmount);
-        // 佣金加
-        walletRepository.casCredit(commissionAccount.id(), commissionAmount);
+        if (walletRepository.casDebit(escrowAccount.id(), escrow.amount()) != 1) return false;
+        // 任一账户更新失败，都交由外层事务整体回滚。
+        if (walletRepository.casCredit(runnerAccount.id(), runnerAmount) != 1) return false;
+        if (commissionAmount.cents() > 0
+                && walletRepository.casCredit(commissionAccount.id(), commissionAmount) != 1) return false;
 
         // 流水（闸门 3：bizNo 唯一索引）
         walletRepository.insertLedger(new LedgerEntry(

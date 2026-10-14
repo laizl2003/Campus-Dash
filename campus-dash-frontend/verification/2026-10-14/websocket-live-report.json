@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "checks": [
+    "真实WebSocket握手",
+    "取消退款经MQ发送notification.new",
+    "worker通知落库"
+  ],
+  "taskId": "236054218518040576",
+  "events": [
+    {
+      "type": "notification.new",
+      "payload": {
+        "errandId": "236054218518040576",
+        "noticeType": "REFUNDED",
+        "content": "任务已退款，100 分已退回你的账户"
+      }
+    },
+    {
+      "type": "errand.status",
+      "payload": {
+        "errandId": "236054218518040576",
+        "status": "CANCELLED",
+        "round": 0
+      }
+    }
+  ],
+  "workerPushConsumerRegistered": false
+}

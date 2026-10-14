@@ -28,6 +28,10 @@ public class AuthController {
 
     @PostMapping("/login")
     public Result<Map<String, Object>> login(@RequestBody LoginRequest req) {
+        // 负数用于系统内部账户，不能通过演示登录获取系统操作者的令牌。
+        if (req == null || req.userId() == null || req.userId() <= 0) {
+            return Result.fail(ErrorCode.UNAUTHORIZED);
+        }
         if (authPort instanceof RefreshTokenPort refreshTokenPort) {
             var pair = refreshTokenPort.loginWithRefresh(req.userId());
             Map<String, Object> data = new LinkedHashMap<>();

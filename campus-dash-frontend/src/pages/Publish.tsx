@@ -1,51 +1,121 @@
-import { useState } from 'react';
-import { api, BizError, yuan } from '../api';
+import { useEffect, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
+import { api, TYPE_ICON, TYPE_TEXT, yuan } from '../api';
+import Icon from '../components/Icon';
+import './taskPages.css';
+
+const CATEGORIES = [
+  { type: 'DELIVERY', description: '快递、餐食与日常物品', example: '帮我从三食堂带一份晚饭到 6 号楼' },
+  { type: 'BUY', description: '顺路带回你需要的好物', example: '帮我从校园超市买两瓶矿泉水' },
+  { type: 'QUEUE', description: '替你等一会儿，省下时间', example: '帮我在图书馆打印室排队取资料' },
+  { type: 'OTHER', description: '校园里的其他小小帮忙', example: '帮我把借阅的书送还图书馆' },
+];
+
+function initialValues() {
+  const params = new URLSearchParams(location.hash.split('?')[1] || '');
+  const requestedType = params.get('type') || 'DELIVERY';
+  const type = CATEGORIES.some((item) => item.type === requestedType) ? requestedType : 'DELIVERY';
+  return { type, title: params.get('template') || '' };
+}
+
+/** 使用十进制拆分，避免浮点数把分值转换出误差。 */
+function parseReward(value: string): number | null {
+  if (!/^\d+(?:\.\d{1,2})?$/.test(value.trim())) return null;
+  const [whole, decimal = ''] = value.trim().split('.');
+  const cents = Number(whole) * 100 + Number(decimal.padEnd(2, '0'));
+  return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
+}
 
 export default function Publish() {
-  const [title, setTitle] = useState('');
+  const [initial] = useState(initialValues);
+  const [title, setTitle] = useState(initial.title);
   const [reward, setReward] = useState('15');
-  const [type, setType] = useState('DELIVERY');
-  const [msg, setMsg] = useState<string | null>(null);
+  const [type, setType] = useState(initial.type);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [published, setPublished] = useState<{ id: string; title: string; rewardCents: number } | null>(null);
+  const submitting = useRef(false);
+  const rewardCents = parseReward(reward);
+  const category = CATEGORIES.find((item) => item.type === type)!;
 
-  const submit = async () => {
+  useEffect(() => {
+    let active = true;
+    api.wallet().then((wallet) => { if (active) setBalance(wallet.availableCents); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (submitting.current) return;
+    setError(null);
+    if (!title.trim()) { setError('请描述一下你需要的帮助。'); return; }
+    if (title.trim().length > 64) { setError('请将任务内容控制在 64 字以内，方便同学快速了解需求。'); return; }
+    if (rewardCents === null) { setError('请输入大于 0 的金额，最多保留两位小数。'); return; }
+    submitting.current = true;
+    setBusy(true);
     try {
-      const rewardCents = Math.round(parseFloat(reward) * 100);
-      if (!title.trim()) throw new Error('请填写任务标题');
-      if (!rewardCents || rewardCents <= 0) throw new Error('悬赏金额必须大于 0');
-      const r = await api.publish({ title: title.trim(), rewardCents, slotTotal: 1, type });
-      setMsg(`✅ 发布成功，悬赏 ${yuan(rewardCents)} 已从余额托管。任务 #${String(r.errandId).slice(-8)}`);
-      setTitle('');
-    } catch (e) {
-      setMsg(e instanceof BizError ? `❌ ${e.message}（${e.code}）` : `❌ ${(e as Error).message}`);
+      const result = await api.publish({ title: title.trim(), rewardCents, slotTotal: 1, type });
+      setPublished({ id: result.errandId, title: title.trim(), rewardCents });
+      window.dispatchEvent(new Event('dash:changed'));
+      api.wallet().then((wallet) => setBalance(wallet.availableCents)).catch(() => {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '暂时没有发布成功，请稍后再试。');
+    } finally {
+      submitting.current = false;
+      setBusy(false);
     }
   };
 
+  if (published) return (
+    <div className="task-publish-page">
+      <div className="page-head"><div><span className="eyebrow">CREATE AN ERRAND</span><h1>发布任务</h1><p>让校园里的顺路，成为你的便利。</p></div></div>
+      <section className="panel task-publish-success" aria-live="polite">
+        <div className="task-success-icon"><Icon name="check" size={30} /></div>
+        <span className="eyebrow">READY TO GO</span>
+        <h2>任务已发布，等一位顺路的同学</h2>
+        <p>{published.title}</p>
+        <div className="task-success-reward"><span>已托管悬赏</span><strong>{yuan(published.rewardCents)}</strong></div>
+        <p className="muted">完成后确认结算，悬赏会转入跑腿同学的钱包。</p>
+        <div className="task-success-actions"><a className="btn btn-primary" href={`#/detail/${published.id}`}>查看任务进度 <Icon name="arrow-right" size={16} /></a><button className="btn btn-ghost" onClick={() => { setPublished(null); setTitle(''); }}>再发一个任务</button></div>
+        <span className="task-order-id">任务编号 {published.id}</span>
+      </section>
+    </div>
+  );
+
   return (
-    <div className="publish-page">
-      <h2>发布任务</h2>
-      <p className="muted">
-        发布即托管：悬赏金额在一个数据库事务内完成"余额扣减 → 复式记账 → 托管单 → 任务上架"，
-        余额不足会整体回滚，不会留下半发布状态的任务。
-      </p>
-      <div className="panel form-panel">
-        <label>任务标题
-          <input value={title} onChange={(e) => setTitle(e.target.value)}
-                 placeholder="例如：帮我从三食堂带一份饭到 6 号楼" />
-        </label>
-        <label>悬赏金额（元）
-          <input type="number" min="1" step="0.5" value={reward}
-                 onChange={(e) => setReward(e.target.value)} />
-        </label>
-        <label>类型
-          <select value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="DELIVERY">跑腿配送</option>
-            <option value="BUY">代购</option>
-            <option value="QUEUE">代排队</option>
-            <option value="OTHER">其他</option>
-          </select>
-        </label>
-        <button className="btn btn-deliver" onClick={submit}>发布并托管</button>
-        {msg && <div className="banner info">{msg}</div>}
+    <div className="task-publish-page">
+      <div className="page-head"><div><span className="eyebrow">CREATE AN ERRAND</span><h1>小事交给同学，大事留给自己</h1><p>说清需求，设好悬赏。让顺路的同学来帮你。</p></div><a className="btn btn-ghost" href="#/square"><Icon name="arrow-left" size={16} /> 返回广场</a></div>
+      <div className="task-publish-layout">
+        <form className="panel task-compose" onSubmit={submit} noValidate>
+          <fieldset disabled={busy}>
+            <div className="task-form-section">
+              <div className="task-section-heading"><span className="task-step-number">01</span><div><h2>需要什么帮助？</h2><p>选一个类型，让合适的同学更容易找到你。</p></div></div>
+              <div className="task-type-grid" role="group" aria-label="任务类型">
+                {CATEGORIES.map((item) => <button type="button" key={item.type} aria-pressed={type === item.type} className={`task-type-option ${type === item.type ? 'is-selected' : ''}`} onClick={() => { setType(item.type); setError(null); }}><span className="task-type-symbol"><Icon name={TYPE_ICON[item.type]} size={21} /></span><span><strong>{TYPE_TEXT[item.type]}</strong><small>{item.description}</small></span><span className="task-selection-dot">{type === item.type && <Icon name="check" size={11} />}</span></button>)}
+              </div>
+            </div>
+            <div className="task-form-section">
+              <div className="task-section-heading"><span className="task-step-number">02</span><div><h2>把需求说清楚</h2><p>物品、地点和注意事项，都可以写在这里。</p></div></div>
+              <label className="task-field-label" htmlFor="task-title">任务内容 <span>必填</span></label>
+              <textarea id="task-title" value={title} rows={4} maxLength={64} placeholder={`例如：${category.example}`} onChange={(event) => { setTitle(event.target.value); setError(null); }} aria-describedby="task-title-hint" />
+              <div className="task-field-foot"><span id="task-title-hint">清晰的描述，能让接单更顺利。</span><span>{title.length} / 64 字</span></div>
+            </div>
+            <div className="task-form-section task-reward-section">
+              <div className="task-section-heading"><span className="task-step-number">03</span><div><h2>给这份帮助一份悬赏</h2><p>按任务难度设置，发布时将从钱包托管。</p></div></div>
+              <label className="task-field-label" htmlFor="task-reward">悬赏金额 <span>人民币</span></label>
+              <div className="task-reward-input"><span>¥</span><input id="task-reward" type="text" inputMode="decimal" value={reward} onChange={(event) => { setReward(event.target.value); setError(null); }} autoComplete="off" aria-describedby="task-reward-hint" /><span>元</span></div>
+              <div className="task-price-presets">{[5, 10, 15, 20, 30].map((amount) => <button type="button" className={rewardCents === amount * 100 ? 'is-selected' : ''} key={amount} onClick={() => { setReward(String(amount)); setError(null); }}>¥{amount}</button>)}</div>
+              <div className="task-balance-line" id="task-reward-hint"><span><Icon name="wallet" size={15} /> {balance === null ? '发布时将校验钱包余额' : `钱包可用 ${yuan(balance)}`}</span><a href="#/wallet">查看钱包 <Icon name="arrow-right" size={13} /></a></div>
+            </div>
+          </fieldset>
+          {error && <div className="banner warn" role="alert">{error}</div>}
+          <div className="task-compose-footer"><span><Icon name="shield" size={17} /> 悬赏托管，确认完成后结算</span><button className="btn btn-primary task-submit" type="submit" disabled={busy}>{busy ? '正在发布…' : '发布并托管'}{!busy && <Icon name="arrow-right" size={17} />}</button></div>
+        </form>
+        <aside className="task-publish-aside">
+          <section className="panel task-preview"><div className="task-aside-heading"><span>任务预览</span><span className="task-live-tag">实时预览</span></div><div className="task-preview-symbol"><Icon name={TYPE_ICON[type]} size={28} /></div><span className="task-category-label">{TYPE_TEXT[type]}</span><h2 className={!title.trim() ? 'task-placeholder' : ''}>{title.trim() || '你的下一件小事，从这里开始'}</h2><div className="task-preview-meta"><span><Icon name="user" size={14} /> 1 位同学协助</span><span>发布后等待接单</span></div><div className="task-preview-reward"><span>任务悬赏</span><strong>{rewardCents === null ? '待填写' : yuan(rewardCents)}</strong></div></section>
+          <section className="task-publish-guide"><div className="task-guide-title"><Icon name="shield" size={18} /><h3>每一步，都有记录</h3></div><ol><li><span>1</span><div><strong>发布并托管</strong><p>悬赏由平台托管，等待同学接单。</p></div></li><li><span>2</span><div><strong>跟进任务进度</strong><p>接单、取货、送达，动态随时可查。</p></div></li><li><span>3</span><div><strong>完成后确认结算</strong><p>确认帮助已完成，再把悬赏交给对方。</p></div></li></ol><a href="#/mine">查看我发布的任务 <Icon name="arrow-right" size={14} /></a></section>
+        </aside>
       </div>
     </div>
   );

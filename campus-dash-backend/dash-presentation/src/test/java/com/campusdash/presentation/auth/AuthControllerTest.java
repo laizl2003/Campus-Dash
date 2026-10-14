@@ -1,6 +1,7 @@
 package com.campusdash.presentation.auth;
 
 import com.campusdash.domain.auth.ports.RefreshTokenPort;
+import com.campusdash.domain.auth.ports.AuthPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -29,6 +30,37 @@ class AuthControllerTest {
 
         var replay = controller.refresh(new AuthController.RefreshRequest(refreshToken));
         assertEquals("UNAUTHORIZED", replay.code());
+    }
+
+    @Test
+    @DisplayName("演示登录拒绝空值、零和系统负数身份，不发出 JWT 或刷新令牌")
+    void login_rejects_non_positive_or_missing_identity_before_issuing_tokens() {
+        FakeRefreshAuthPort auth = new FakeRefreshAuthPort();
+        AuthController controller = new AuthController(auth);
+        for (Long userId : new Long[] { null, 0L, -1L, -2L, Long.MIN_VALUE }) {
+            assertEquals("UNAUTHORIZED", controller.login(new AuthController.LoginRequest(userId)).code());
+        }
+        assertEquals("UNAUTHORIZED", controller.login(null).code());
+        assertEquals(0, auth.accessSeq);
+        assertEquals(0, auth.refreshSeq);
+    }
+
+    @Test
+    @DisplayName("Session 模式同样拒绝系统身份，仍允许正常演示用户")
+    void session_login_rejects_system_identity_but_accepts_positive_users() {
+        int[] issued = { 0 };
+        AuthPort auth = new AuthPort() {
+            @Override public String login(long userId) { issued[0]++; return "session-" + userId; }
+            @Override public Optional<Long> resolve(String token) { return Optional.empty(); }
+            @Override public void logout(String token) {}
+        };
+        AuthController controller = new AuthController(auth);
+        assertEquals("UNAUTHORIZED", controller.login(new AuthController.LoginRequest(-1L)).code());
+        assertEquals(0, issued[0]);
+        var result = controller.login(new AuthController.LoginRequest(2001L));
+        assertEquals("OK", result.code());
+        assertEquals("session-2001", result.data().get("token"));
+        assertEquals(1, issued[0]);
     }
 
     private static final class FakeRefreshAuthPort implements RefreshTokenPort {

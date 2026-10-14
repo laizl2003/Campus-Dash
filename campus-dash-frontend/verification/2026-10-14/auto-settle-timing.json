@@ -1,0 +1,14 @@
+{
+  "configuredDelaySeconds": 45,
+  "actualDeliveryToSettlementSeconds": 51.353,
+  "scheduledAt": "2026-10-14T17:20:14.783+08:00",
+  "dueAt": "2026-10-14T17:20:59.781918+08:00",
+  "consumedAt": "2026-10-14T17:21:06.136+08:00",
+  "note": "自动结算本地消息由10秒周期的LocalMessageRetryJob派发，本次比预定到期晚约6.35秒；消费者明确返回SETTLED。",
+  "appLines": [
+    "2026-10-14T17:20:14.783+08:00  INFO 67015 --- [campus-dash] [nio-8080-exec-6] c.c.a.usecase.DeliverErrandUseCase       : 已登记自动结算延迟消息 errandId=236055490721746944 deliverAt=2026-10-14T09:20:59.781918Z"
+  ],
+  "workerLines": [
+    "2026-10-14T17:21:06.136+08:00  INFO 67295 --- [campus-dash-worker] [nsumption-2-192] c.campusdash.worker.AutoSettleConsumer   : 自动结算消息处理 errandId=236055490721746944 result=SETTLED"
+  ]
+}

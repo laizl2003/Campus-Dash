@@ -72,12 +72,8 @@ public class RefundErrandUseCase {
         ErrandStatus from = errand.status();
         errand.cancelByPublisher(publisherId, errand.version());
 
-        int cancelled = errandRepository.casCancel(errandId, errand.version() - 1);
-        if (cancelled == 0) {
-            return Result.CONFLICT;
-        }
-        errandRepository.appendStatusLog(errandId, from, ErrandStatus.CANCELLED, errand.round(), publisherId);
-        return doRefund(errandId, errand, publisherId);
+        return doRefund(errandId, errand, publisherId, from, ErrandStatus.CANCELLED,
+                errand.version() - 1);
     }
 
     /** 仲裁支持发单人 */
@@ -87,13 +83,14 @@ public class RefundErrandUseCase {
         if (errand.status() != ErrandStatus.DISPUTED) {
             throw new BizException(ErrorCode.NOT_ARBITRABLE, "status=" + errand.status());
         }
-        int updated = errandRepository.casRefundFromDispute(errandId, errand.version());
-        if (updated == 0) return Result.CONFLICT;
-        errandRepository.appendStatusLog(errandId, ErrandStatus.DISPUTED, ErrandStatus.REFUNDED, errand.round(), operatorId);
-        return doRefund(errandId, errand, operatorId);
+        long expectedVersion = errand.version();
+        errand.arbitrateToPublisher(expectedVersion);
+        return doRefund(errandId, errand, operatorId, ErrandStatus.DISPUTED, ErrandStatus.REFUNDED,
+                expectedVersion);
     }
 
-    private Result doRefund(long errandId, Errand errand, long operatorId) {
+    private Result doRefund(long errandId, Errand errand, long operatorId,
+                            ErrandStatus from, ErrandStatus target, long expectedVersion) {
         EscrowOrder escrow = walletRepository.findEscrowByErrandId(errand.campusId(), errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ESCROW_NOT_FOUND, "errandId=" + errandId));
         if (escrow.status() != EscrowOrder.EscrowStatus.HELD) {
@@ -107,8 +104,12 @@ public class RefundErrandUseCase {
         // 与结算同理：lambda 自调用下 @Transactional 不生效（P3 遗留隐患，P5 修复），
         // 改用程序化事务保证退款动作的原子性
         boolean committed = fundEventPort.publishInTransaction(event, () ->
-                Boolean.TRUE.equals(transactionTemplate.execute(status ->
-                        doRefundInTx(errand.campusId(), errandId, escrow, bizNo, operatorId))));
+                Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+                    boolean refunded = doRefundInTx(errandId, errand, escrow, bizNo,
+                            operatorId, from, target, expectedVersion);
+                    if (!refunded) status.setRollbackOnly();
+                    return refunded;
+                })));
         if (committed) {
             cacheEvict.evictAfterCommit(errandId);
             notifier.errandStatusChanged(errandId, errand.publisherId(), errand.grabberId(),
@@ -122,16 +123,24 @@ public class RefundErrandUseCase {
     }
 
     /** 退款事务体，由 TransactionTemplate 包裹（见 doRefund 注释） */
-    boolean doRefundInTx(long campusId, long errandId, EscrowOrder escrow, String bizNo, long operatorId) {
-        int escrowed = walletRepository.casEscrowStatus(campusId, errandId,
+    boolean doRefundInTx(long errandId, Errand errand, EscrowOrder escrow, String bizNo,
+                         long operatorId, ErrandStatus from, ErrandStatus target, long expectedVersion) {
+        int escrowed = walletRepository.casEscrowStatus(errand.campusId(), errandId,
                 EscrowOrder.EscrowStatus.HELD, EscrowOrder.EscrowStatus.REFUNDED);
         if (escrowed == 0) return false;
+
+        // 任务状态、托管状态和资金流水必须处于同一事务，冲突时全部撤销。
+        int updated = target == ErrandStatus.CANCELLED
+                ? errandRepository.casCancel(errandId, expectedVersion)
+                : errandRepository.casRefundFromDispute(errandId, expectedVersion);
+        if (updated == 0) return false;
+        errandRepository.appendStatusLog(errandId, from, target, errand.round(), operatorId);
 
         WalletAccount escrowAccount = walletRepository.findByOwner(ESCROW_ACCOUNT_OWNER, AccountType.ESCROW).orElseThrow();
         WalletAccount publisherAccount = walletRepository.findByOwner(escrow.publisherId(), AccountType.USER).orElseThrow();
 
-        walletRepository.casDebit(escrowAccount.id(), escrow.amount());
-        walletRepository.casCredit(publisherAccount.id(), escrow.amount());
+        if (walletRepository.casDebit(escrowAccount.id(), escrow.amount()) != 1) return false;
+        if (walletRepository.casCredit(publisherAccount.id(), escrow.amount()) != 1) return false;
 
         walletRepository.insertLedger(new LedgerEntry(
                 idGenerator.nextId(), bizNo, escrowAccount.id(), escrow.publisherId(),
