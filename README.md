@@ -4,7 +4,7 @@
 → 限时未确认自动流转 → 送达确认后结算给跑腿与平台。业务链路短，但每个环节都踩在硬骨头上：
 抢单正确性可验证（超卖就是错）、资金正确性可验证（借贷不平就是错）。
 
-<img width="2048" height="1152" alt="小程序截图1" src="https://github.com/user-attachments/assets/a04e1ddd-3f23-4950-8541-836504c63e13" />
+![CampusDash 手机 App 五页总览：任务广场、发布任务、我的钱包、信用中心和登录页](docs/images/campus-app-overview.png)
 
 ## 项目结构
 
