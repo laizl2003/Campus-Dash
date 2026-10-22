@@ -29,44 +29,206 @@ P8 完成报告见 [docs/P8-教程正文完成报告.md](docs/P8-教程正文完
 - Docker（MySQL 8 + Redis 7 + RocketMQ 5.3.1，由 docker-compose 管理）
 - Node 18+（仅前端 campus-dash-frontend 需要）
 
-## 快速开始
 
-```bash
-# 1. 起中间件并初始化（表、topic、消费组）
-cd docker
-docker compose up -d && sleep 15 && ./init-mq.sh
-cd ..
+## 日常启动与关闭（本机 Windows 已验证）
 
-# 2. 跑单元与集成测试（中间件没起时集成测试 skip 而不是 fail）
-mvn clean test
+前置：Docker Desktop 已启动（托盘鲸鱼图标变绿）；JDK 21、Maven 3.9+、Node 18+ 已安装。
 
-# 3. 启动应用（默认 8080，后门关闭，只认 Bearer token）
-mvn -pl dash-bootstrap spring-boot:run
+### 启动
 
-# 4. 启动 worker（超时流转 / 自动结算 / 资金事件消费 / 消息重发）
-mvn install -DskipTests
-java -jar dash-worker/target/dash-worker-1.0.0-SNAPSHOT.jar
+**一键启动/重启/停止（推荐）**
 
-# 5. 启动前端（5173，vite 代理 /api -> 8080）
-cd ../campus-dash-frontend && npm install && npm run dev
+在仓库根目录执行：
 
-# 6. 浏览器打开 http://localhost:5173，选择演示身份登录
-#    发单人 1001 / 跑腿 2001、2002 / 仲裁员 9001
+```powershell
+.\dev.ps1 start      # 也可以直接 .\dev.ps1（默认就是 start）
 ```
 
-### API 快速体验（不走前端）
+脚本按顺序做这些事：检查 Docker 引擎 / JDK 21 / npm → `docker compose up -d` 并等 4 个容器 healthy → 幂等初始化 topic 与消费组 → 在**独立窗口**分别启动后端(8080)与前端(5173) → 轮询 `/api/health` 直到 UP，最后打印访问地址。已经跑着的部分会自动跳过，不会重复启动。
+
+`dev.ps1` 的其余用法：
+
+```powershell
+.\dev.ps1 restart    # 停服务 → 重新编译 → 再启动（改完后端业务代码用这个）
+.\dev.ps1 status     # 看容器状态与端口健康
+.\dev.ps1 stop       # 全部停止（含 Ctrl+C 没杀干净的残留进程）
+.\dev.ps1 reset-mq   # 删除并重建 4 个 topic（broker 被重建、topic 类型不对时用）
+```
+
+两点说明：
+
+- 脚本顶部的 `$JdkHome` 与 `$DockerBin` 是本机路径，换机器只改这两处；`$BackendPort` / `$FrontendPort` 也在同一段。
+- 若提示「无法加载脚本，因为在此系统上禁止运行脚本」，是执行策略被限制了，改用 `powershell -ExecutionPolicy Bypass -File .\dev.ps1 start`。
+
+**手动启动（与脚本等价的步骤，便于理解每一环）**
+
+**1. 中间件**（MySQL 3307 / Redis 6380 / RocketMQ 8081）
+
+```powershell
+cd docker
+docker compose up -d
+docker compose ps        # 等 4 个容器都变成 (healthy)；首次拉镜像较慢
+cd ..
+```
+
+初始化 topic 与消费组。`init-mq.sh` 需要 bash，PowerShell 下用等价的 `docker exec`：
+
+```powershell
+$inner = 'cd /home/rocketmq/rocketmq-*/bin && sh mqadmin'
+foreach ($t in 'errand-confirm-timeout','errand-auto-settle','errand-cache-evict') {
+  docker exec dash-rmqbroker sh -c "$inner updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t $t -a +message.type=DELAY"
+}
+docker exec dash-rmqbroker sh -c "$inner updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t errand-fund-event -a +message.type=TRANSACTION"
+foreach ($g in 'dash-timeout-consumer','dash-autosettle-consumer','dash-fund-event-consumer','dash-cache-evict-consumer') {
+  docker exec dash-rmqbroker sh -c "$inner updateSubGroup -n rmqnamesrv:9876 -c DefaultCluster -g $g"
+}
+```
+
+> Git Bash / WSL 下可直接 `./init-mq.sh`。
+> broker 容器被重建后（改过 compose 配置、或 `down` 后再 `up`）容器内存储会清空，需重跑上面这段。
+
+**2. 后端**（8080）
+
+```powershell
+$env:JAVA_HOME='D:\develop\jdk21'   # 本机默认 JAVA_HOME 是 jdk11，必须显式切换，否则编译失败
+mvn -pl dash-bootstrap spring-boot:run
+```
+
+**3. worker**（可选：超时流转兜底扫描 / 自动结算 / 资金事件落库 / 消息重发）
+
+worker 是独立进程，需要先打出可执行 jar 再启动：
+
+```powershell
+mvn install -DskipTests        # 首次、或改过代码后需要；这一步只是为了产出 jar
+java -jar dash-worker/target/dash-worker-1.0.0-SNAPSHOT.jar
+```
+
+**4. 前端**（5173）
+
+```powershell
+cd ../campus-dash-frontend
+npm install
+npm run dev
+```
+
+### 启动后访问
+
+| 入口 | 地址 | 说明 |
+|---|---|---|
+| **前端页面** | **http://localhost:5173** | 选择演示身份登录：发单人 `1001`、跑腿 `2001` / `2002`、仲裁员 `9001` |
+| 后端健康检查 | http://localhost:8080/api/health | 无需认证，返回 `{"code":"OK","data":{"status":"UP","project":"campus-dash"}}` |
+| 后端 API | http://localhost:8080/api/errands | 需请求头 `Authorization: Bearer <token>` |
+
+Vite 已把 `/api` 与 `/ws` 代理到 8080，前端不用处理跨域；后端也配了 CORS（`dash.web.cors-origins`）。
+
+### 关闭
+
+最省事的是根目录执行 `.\dev.ps1 stop`：按端口停掉后端/前端，再停中间件。下面是手工做法，便于理解每一步在做什么。
+
+**1. 前台终端启动的（后端 / worker / 前端）**
+
+在运行它的那个终端按 `Ctrl+C`。`spring-boot:run` 会 fork 子 JVM，正常情况下一次就能连带退出。
+
+**2. 验证是否真的停了**
+
+Windows 上 `Ctrl+C`（或直接关终端窗口）有时只杀掉 Maven 父进程，fork 出来的 `java.exe` 会继续占着 8080 —— 这就是 `Port 8080 was already in use` 最常见的原因。所以关完要验一下：
+
+```powershell
+try { (Invoke-WebRequest http://localhost:8080/api/health -TimeoutSec 3 -UseBasicParsing).StatusCode } catch { "后端已停止" }
+try { (Invoke-WebRequest http://localhost:5173/ -TimeoutSec 3 -UseBasicParsing).StatusCode } catch { "前端已停止" }
+```
+
+**3. 还有残留就按端口兜底杀**
+
+```powershell
+Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue |
+  ForEach-Object { "kill PID $($_.OwningProcess)"; Stop-Process -Id $_.OwningProcess -Force }
+```
+
+把 `8080` 换成 `5173` 即可停前端。
+
+> 变量名别用 `$pid`：PowerShell 里 `$PID` 是只读自动变量，赋值会直接报错，用管道 `$_` 避开。
+> 能 `Ctrl+C` 就别用 `-Force`：优雅退出会走 `@PreDestroy`（关闭 RocketMQ 消费者、连接池），强杀只是兜底手段。
+
+**4. 中间件**
+
+```powershell
+cd docker
+docker compose stop      # 停容器、保留数据；下次 docker compose start 恢复
+docker compose ps        # 看状态
+```
+
+`docker compose down` 会删容器：MySQL 数据在具名卷 `dash-mysql-data` 里不会丢，但 **RocketMQ 的 topic 会丢**（broker 没挂卷），下次启动必须重跑上面的 topic 初始化。所以日常用 `stop` 就够。
+
+Docker 引擎本身：托盘鲸鱼图标右键 → Quit Docker Desktop。
+
+**5. 一键全停**
+
+```powershell
+foreach ($port in 8080, 5173) {
+  Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+    ForEach-Object { Stop-Process -Id $_.OwningProcess -Force; "已停端口 $port (PID $($_.OwningProcess))" }
+}
+cd d:\Code\Campus_PaoTui\campus-dash-1\campus-dash-backend\docker
+docker compose stop
+```
+
+### 后端 API 示例（不走前端）
+
+演示认证是教学模式：给 `userId` 即可登录并返回 Bearer token。以下示例已在本机实测。
+
+```powershell
+# 0. 登录换 token
+$token = (Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/auth/login `
+  -ContentType 'application/json' -Body '{"userId":1001}').data.token
+$h = @{ Authorization = "Bearer $token" }
+
+# 1. 健康检查（无需 token）
+Invoke-RestMethod http://localhost:8080/api/health
+# => {"code":"OK","message":"成功","data":{"project":"campus-dash","status":"UP"}}
+
+# 2. 发布任务：资金同步托管（1001 初始可用余额 1000 元）
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/errands -Headers $h `
+  -ContentType 'application/json' -Body '{"title":"帮我带份饭","rewardCents":1500,"slotTotal":1}'
+# => {"code":"OK","data":{"errandId":"236438927295123456","status":"PUBLISHED","frozenCents":"1500"}}
+
+# 3. 任务广场（campusId 默认 1；返回体含 availableActions，前端按钮完全由它驱动）
+Invoke-RestMethod -Uri 'http://localhost:8080/api/errands?campusId=1' -Headers $h
+
+# 4. 我的钱包
+Invoke-RestMethod http://localhost:8080/api/wallet -Headers $h
+# => {"code":"OK","data":{"availableCents":"98500","frozenCents":"0"}}
+```
+
+等价的 curl（Git Bash / WSL / macOS）：
 
 ```bash
-TOKEN=$(curl -s -X POST localhost:8080/api/auth/login \
-  -H 'Content-Type: application/json' -d '{"userId":1001}' \
-  | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['token'])")
+TOKEN=$(curl -s -X POST localhost:8080/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"userId":1001}' | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['token'])")
 
-# 发布（资金同步托管）、抢单、全生命周期操作
 curl -s -X POST localhost:8080/api/errands -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"title":"帮我带份饭","rewardCents":1500,"slotTotal":1}'
-# 详情响应含 availableActions：前端按钮完全由它驱动，不实现第二份状态机
 ```
+
+全生命周期端点（除健康检查与登录外均需 Bearer token）：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/auth/login` | 演示登录，换 token |
+| GET | `/api/errands?campusId=1` | 任务广场（游标分页） |
+| GET | `/api/errands/mine?role=PUBLISHED_BY_ME` | 我发布的；`GRABBED_BY_ME` 为我接的 |
+| GET | `/api/errands/{id}` | 详情（含 `availableActions`） |
+| GET | `/api/errands/{id}/timeline` | 状态流转时间线 |
+| POST | `/api/errands/{id}/grab` | 抢单 |
+| POST | `/api/errands/{id}/pickup` | 取货 |
+| POST | `/api/errands/{id}/deliver` | 送达 |
+| POST | `/api/errands/{id}/confirm` | 确认签收（结算给跑腿与平台） |
+| POST | `/api/errands/{id}/settle` | 结算 |
+| POST | `/api/errands/{id}/cancel` | 取消并退款 |
+| POST | `/api/errands/{id}/dispute` | 发起争议 |
+| POST | `/api/errands/{id}/arbitrate` | 仲裁裁决 |
+| GET | `/api/wallet` · `/api/wallet/ledger` | 余额 · 记账流水 |
 
 ### 压测与数据治理
 

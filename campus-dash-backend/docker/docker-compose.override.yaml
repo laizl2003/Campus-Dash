@@ -1,0 +1,18 @@
+# 本机补充配置（Windows + Docker Desktop / WSL2），由 compose 自动合并，不需要 -f 指定。
+#
+# 背景：Docker Desktop 下容器内网 IP（如 172.18.0.5）在宿主机上不可达。
+# RocketMQ 5.x 的 broker/proxy 会把「已注册的 broker IP + gRPC 端口」通告给客户端，
+# 客户端拿到 172.18.0.5:8081 后直接连接超时，表现为：
+#   Failed to fetch topics after 3 attempts
+#   Caused by: ConnectTimeoutException: connection timed out: /172.18.0.5:8081
+#
+# 原 docker-compose.yaml 里的 BROKER_IP1=127.0.0.1 是无效配置：
+# apache/rocketmq:5.3.1 镜像的启动脚本并不读取该变量（bin/ 下零引用），
+# 所以 broker 依然注册成了容器内网 IP。
+#
+# 这里改用 broker 配置文件显式指定 brokerIP1=127.0.0.1：
+# compose 已把 8081(gRPC proxy)/10911/10909 发布到宿主机，
+# 宿主机上的应用与 worker 即可直连 127.0.0.1:8081。
+services:
+  rmqbroker:
+    command: sh -c "printf 'brokerClusterName=DefaultCluster\nbrokerName=broker-a\nbrokerId=0\nbrokerIP1=127.0.0.1\n' > /home/rocketmq/broker.conf && sh mqbroker -n rmqnamesrv:9876 --enable-proxy -c /home/rocketmq/broker.conf"
