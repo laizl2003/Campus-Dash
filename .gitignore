@@ -1,0 +1,6 @@
+# 编辑器/本机配置
+.vscode/
+.idea/
+
+# 仓库根没有 package.json，这是误生成的锁文件
+/package-lock.json
