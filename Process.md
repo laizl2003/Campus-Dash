@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | [day-01.md](Process/day-01.md) | 环境搭建 + 项目启动 + 一键脚本 | JDK 21 / Docker / 前端依赖就绪；`dev.ps1` 启动停止；本机 6 个踩坑 |
 | [day-02.md](Process/day-02.md) | worker 接入 + 后端架构梳理 | worker 进程管理与自动重编；PowerShell 数组展开坑；后端八模块、功能清单、抢单五层防线、资金三闸门、缓存与分片 |
-| [day-03.md](Process/day-03.md) | domain 层详解（35 个文件） | 逐类列出字段、构造器/工厂、方法签名与职责；class/record/enum/interface 的选型对比；19 个端口一览 |
+| [day-03.md](Process/day-03.md) | domain 层详解（35 个文件） | 类名中英对照表；逐类列出字段、构造器/工厂、方法签名与职责；class/record/enum/interface 选型对比；19 个端口一览 |
 
 ## 新增一天
 

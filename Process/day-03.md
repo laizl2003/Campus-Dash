@@ -18,9 +18,51 @@
 
 ---
 
+## 0.1 类名中文对照
+
+| 包 | 类名 | 中文名 | 类型 | 一句话职责 |
+| --- | --- | --- | --- | --- |
+| auth | `AuthPort` | 认证端口 | interface | 登录 / 解析 token / 登出 |
+| auth | `RefreshTokenPort` | 刷新令牌端口 | interface | 在认证之上加 refresh 续期与吊销 |
+| credit | `CreditScore` | 信用分 | class | 分数快照，apply 时夹在 [0,100] |
+| credit | `CreditEvent` | 信用事件 | record | 一次加减分的事实，只增不改 |
+| credit | `CreditEventType` | 信用事件类型 | enum | 分值规则与窗口/初始分常量 |
+| credit | `CreditRepository` | 信用分仓储 | interface | 查分、写事件、滑窗重算 |
+| credit | `CreditRankingPort` | 信用排行榜端口 | interface | ZSET 排行榜的读写 |
+| errand | `Errand` | 任务聚合根 | class | 状态机唯一入口，维护名额/轮次/版本 |
+| errand | `ErrandStatus` | 任务状态机 | enum | 11 个状态与允许流转集合 |
+| errand | `ErrandType` | 任务类型 | enum | 代拿/代买/代排队/其他 |
+| errand | `ErrandRepository` | 任务仓储（写） | interface | CAS 更新与超时/结算扫描 |
+| errand | `ErrandQueryPort` | 任务查询端口（读） | interface | 列表、游标、我的任务、时间线 |
+| errand | `ErrandCachePort` | 任务缓存端口 | interface | 详情缓存 + 布隆 + 重建锁 |
+| errand | `DelayMessagePort` | 延迟消息端口 | interface | 在指定时刻投递一条消息 |
+| errand | `CacheEvictDelayPort` | 延迟删缓存端口 | interface | 延迟双删的第二次删除 |
+| errand | `LocalMessageRepository` | 本地消息表仓储 | interface | 事务内登记消息、重发、退避 |
+| errand | `SyncDiffRepository` | 缓存差异仓储 | interface | MySQL 与 Redis 不一致的记录 |
+| grab | `GrabRecord` | 抢单记录 | record | GRABBED/CANDIDATE 的落库凭证 |
+| grab | `SlotOutcome` | 名额判定结果 | enum | Lua 五个返回码的 Java 映射 |
+| grab | `GrabSlotPort` | 抢单名额端口 | interface | 原子占位、回滚、初始化名额 |
+| grab | `GrabRecordRepository` | 抢单记录仓储 | interface | 插记录（冲突必须抛）与计数 |
+| grab | `CandidateQueuePort` | 候选队列端口 | interface | ZSET 排队与取最优候选人 |
+| grab | `GrabRateLimiterPort` | 抢单限流端口 | interface | 热点任务是否放行 |
+| wallet | `AccountType` | 账户类型 | enum | 用户 / 托管户 / 佣金户 |
+| wallet | `WalletAccount` | 钱包账户 | class | 余额快照与转出/转入 |
+| wallet | `EscrowOrder` | 托管单 | record | HELD → RELEASED / REFUNDED |
+| wallet | `LedgerEntry` | 资金流水 | record | 复式记账的一借一贷 |
+| wallet | `WalletRepository` | 钱包仓储（写） | interface | CAS 收付、流水、托管单状态 |
+| wallet | `WalletQueryPort` | 钱包查询端口（读） | interface | 余额与流水分页 |
+| wallet | `FundAuditPort` | 资金审计端口 | interface | 独立事务写审计日志 |
+| wallet | `FundEventPort` | 资金事件端口 | interface | 事务消息包裹本地事务 |
+| notify | `NotificationRepository` | 站内消息仓储 | interface | 按 msgKey + userId 幂等插入 |
+| notify | `NotificationQueryPort` | 站内消息查询端口 | interface | 消息列表与未读数 |
+| notify | `RealtimeNotifier` | 实时推送端口 | interface | 状态/消息/信用变化的 WebSocket 推送 |
+| recon | `ReconRepository` | 对账仓储 | interface | 三层对账查询与差异落库 |
+
+---
+
 ## 1. auth（2）
 
-### 1.1 `AuthPort`（interface）
+### 1.1 `AuthPort` · 认证端口（interface）
 
 **功能**：认证端口，只定义"登录 / 换 userId / 登出"，不关心底层是 Redis Session 还是 JWT。
 
@@ -30,7 +72,7 @@
 | `resolve(String token)` | `Optional<Long>` | token → userId；不存在/过期返回 empty |
 | `logout(String token)` | `void` | 删除 token |
 
-### 1.2 `RefreshTokenPort`（interface，继承 AuthPort）
+### 1.2 `RefreshTokenPort` · 刷新令牌端口（interface，继承 AuthPort）
 
 **功能**：在 AuthPort 上加 refresh token 能力，用于 JWT 模式下续期与吊销。
 
@@ -46,7 +88,7 @@
 
 ## 2. credit（5）
 
-### 2.1 `CreditScore`（class，聚合根）
+### 2.1 `CreditScore` · 信用分（class，聚合根）
 
 **功能**：用户信用分快照。分数由事件累加而来，但单独存一份，避免每次查询都 SUM 流水。
 
@@ -74,7 +116,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 **关键点**：上下限都夹住——下限防"一次失误打进负分深渊"，上限防"刷单攒分"。信用分的价值在约束，不在激励。
 
-### 2.2 `CreditEvent`（record，值对象）
+### 2.2 `CreditEvent` · 信用事件（record，值对象）
 
 **功能**：一次加减分的事实记录，只增不改。
 
@@ -89,7 +131,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 | `cancelAfterGrabBizNo(errandId)` | `cancelgrab:{errandId}` |
 | `disputeLoseBizNo(errandId, loserId)` | `disputelose:{errandId}:{loserId}` |
 
-### 2.3 `CreditEventType`（enum）
+### 2.3 `CreditEventType` · 信用事件类型（enum）
 
 **功能**：事件类型 + 分值规则 + 全局常量。
 
@@ -106,7 +148,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 **方法**：`delta()`、`description()`
 **常量**：`WINDOW_DAYS = 30`、`BASE_SCORE = 60`、`MIN_SCORE = 0`、`MAX_SCORE = 100`
 
-### 2.4 `CreditRepository`（interface）
+### 2.4 `CreditRepository` · 信用分仓储（interface）
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
@@ -117,7 +159,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 | `windowDelta(userId, windowDays)` | `int` | 窗口内分值总和（校准用） |
 | `calibrateScores(windowDays, limit)` | `int` | 按窗口重算快照，返回修正人数 |
 
-### 2.5 `CreditRankingPort`（interface）
+### 2.5 `CreditRankingPort` · 信用排行榜端口（interface）
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
@@ -130,7 +172,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 ## 3. errand（10）
 
-### 3.1 `Errand`（class，聚合根）
+### 3.1 `Errand` · 任务（class，聚合根）
 
 **功能**：任务聚合。所有状态变更必须走 `transitTo`，没有 setter。
 
@@ -194,7 +236,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 **嵌套 record**：`ErrandStatusChanged(long errandId, ErrandStatus from, ErrandStatus to, int round)`
 
-### 3.2 `ErrandStatus`（enum）
+### 3.2 `ErrandStatus` · 任务状态机（enum）
 
 **功能**：状态机。11 个状态 + 允许流转集合。
 
@@ -213,11 +255,11 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 **方法**：`allowedTargets()` 返回 `EnumSet`；`canTransitTo(target)`；`grabbable()` 仅 PUBLISHED 为 true。
 
-### 3.3 `ErrandType`（enum）
+### 3.3 `ErrandType` · 任务类型（enum）
 
 `DELIVERY`（代拿）、`BUY`（代买）、`QUEUE`（代排队）、`OTHER`。纯分类，无字段无方法。
 
-### 3.4 `ErrandRepository`（interface，写端口）
+### 3.4 `ErrandRepository` · 任务仓储（写）（interface，写端口）
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
@@ -241,7 +283,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 **关键点**：CAS 方法全部返回 `int`，调用方用 `affectedRows` 判定，不额外查询。
 
-### 3.5 `ErrandQueryPort`（interface，读端口）
+### 3.5 `ErrandQueryPort` · 任务查询端口（读）（interface，读端口）
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
@@ -255,7 +297,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 嵌套 record：`StatusChange(Instant time, String from, String to, int round, long operatorId)`、`CursorItem(Errand errand, Instant createdAt)`。
 
-### 3.6 `ErrandCachePort`（interface）
+### 3.6 `ErrandCachePort` · 任务缓存端口（interface）
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
@@ -270,15 +312,15 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 嵌套 record：`CachedErrand(String payloadJson, long logicalExpireAt, boolean isEmpty)`，方法 `logicallyExpired()`。
 
-### 3.7 `DelayMessagePort`（interface）
+### 3.7 `DelayMessagePort` · 延迟消息端口（interface）
 
 `void send(String topic, String msgKey, String payload, Instant deliverAt)`
 
-### 3.8 `CacheEvictDelayPort`（interface）
+### 3.8 `CacheEvictDelayPort` · 延迟删缓存端口（interface）
 
 常量 `TOPIC_CACHE_EVICT = "errand-cache-evict"`；方法 `void scheduleEvict(long errandId, Instant deliverAt)`。
 
-### 3.9 `LocalMessageRepository`（interface）
+### 3.9 `LocalMessageRepository` · 本地消息表仓储（interface）
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
@@ -289,7 +331,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 嵌套 record：`PendingMessage(long id, String msgKey, String topic, String payload, Instant deliverAt, int retryCount)`。
 
-### 3.10 `SyncDiffRepository`（interface）
+### 3.10 `SyncDiffRepository` · 缓存差异仓储（interface）
 
 `void record(Instant checkTime, long errandId, String field, String dbValue, String cacheValue, boolean fixed)`；`long countSince(Instant since)`。
 
@@ -297,7 +339,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 ## 4. grab（6）
 
-### 4.1 `GrabRecord`（record，值对象）
+### 4.1 `GrabRecord` · 抢单记录（record，值对象）
 
 **组件**：`long id, long campusId, long errandId, long runnerId, int seq, int round, GrabResultType result, Instant createdAt`
 
@@ -312,7 +354,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 **关键点**：两个唯一索引 `(errand_id, round, seq)`、`(errand_id, round, runner_id)`，`round` 必须进索引，否则多轮流转会互相挡住。
 
-### 4.2 `SlotOutcome`（enum）
+### 4.2 `SlotOutcome` · 名额判定结果（enum）
 
 | 常量 | code | 含义 |
 | --- | ---: | --- |
@@ -324,7 +366,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 **字段**：`private final long code`；**方法**：`code()`、`static fromCode(long)`（未知码抛 IllegalArgumentException）。
 
-### 4.3 `GrabSlotPort`（interface）
+### 4.3 `GrabSlotPort` · 抢单名额端口（interface）
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
@@ -333,15 +375,15 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 | `initSlot(errandId, slotTotal, ttlSeconds)` | `void` | 发布时初始化 |
 | `remainingSlot(errandId)` | `long` | 压测校验用 |
 
-### 4.4 `GrabRecordRepository`（interface）
+### 4.4 `GrabRecordRepository` · 抢单记录仓储（interface）
 
 `void insert(GrabRecord record)`（撞唯一索引必须抛异常，禁止 INSERT IGNORE）；`int countGrabbed(long campusId, long errandId)`。
 
-### 4.5 `CandidateQueuePort`（interface）
+### 4.5 `CandidateQueuePort` · 候选队列端口（interface）
 
 `void offer(errandId, runnerId, score)`；`Optional<Long> pollBest(errandId)`；`long size(errandId)`。
 
-### 4.6 `GrabRateLimiterPort`（interface）
+### 4.6 `GrabRateLimiterPort` · 抢单限流端口（interface）
 
 `boolean tryPass(long errandId, long runnerId)`。
 
@@ -349,11 +391,11 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 ## 5. wallet（8）
 
-### 5.1 `AccountType`（enum）
+### 5.1 `AccountType` · 账户类型（enum）
 
 `USER`（用户）、`ESCROW`（平台托管户）、`COMMISSION`（平台佣金户）。三类账户之间搬钱，总额恒定。
 
-### 5.2 `WalletAccount`（class，聚合根）
+### 5.2 `WalletAccount` · 钱包账户（class，聚合根）
 
 **字段**
 
@@ -379,7 +421,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 **关键点**：托管是"转移"不是"冻结"（P3 修正），否则同一笔钱在快照里算两次。
 
-### 5.3 `EscrowOrder`（record，值对象）
+### 5.3 `EscrowOrder` · 托管单（record，值对象）
 
 **组件**：`long id, long campusId, long errandId, long publisherId, Money amount, EscrowStatus status`
 
@@ -394,7 +436,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 **嵌套 enum**：`EscrowStatus { HELD, RELEASED, REFUNDED }`。RELEASED/REFUNDED 是终态，保证一笔钱只有一个去向。
 
-### 5.4 `LedgerEntry`（record，值对象）
+### 5.4 `LedgerEntry` · 资金流水（record，值对象）
 
 **组件**：`long id, String bizNo, long accountId, long userId, Direction direction, Money amount, Money balanceAfter, RefType refType, long refId`
 
@@ -404,7 +446,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 **关键点**：一笔业务一借一贷两条，金额相等 → `SUM(DEBIT) == SUM(CREDIT)` 可验证。
 
-### 5.5 `WalletRepository`（interface，写端口）
+### 5.5 `WalletRepository` · 钱包仓储（写）（interface，写端口）
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
@@ -419,16 +461,16 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 | `casEscrowStatus(campusId, errandId, from, to)` | `int` | 并发结算第一道闸门 |
 | `ledgerExists(bizNo)` | `boolean` | 事务消息回查 |
 
-### 5.6 `WalletQueryPort`（interface，读端口）
+### 5.6 `WalletQueryPort` · 钱包查询端口（读）（interface，读端口）
 
 `Optional<BalanceView> findBalance(long ownerId)`；`List<LedgerView> ledger(long ownerId, int page, int size)`。
 嵌套 record：`BalanceView(long availableCents, long frozenCents)`、`LedgerView(Instant time, String direction, long amountCents, String refType, long refId, String bizNo)`。
 
-### 5.7 `FundAuditPort`（interface）
+### 5.7 `FundAuditPort` · 资金审计端口（interface）
 
 `void record(String bizNo, String action, long errandId, long operatorId, String detailJson, boolean success, String message)`——实现必须 REQUIRES_NEW。
 
-### 5.8 `FundEventPort`（interface）
+### 5.8 `FundEventPort` · 资金事件端口（interface）
 
 `boolean publishInTransaction(FundEvent event, LocalWork localWork)`
 嵌套 record：`FundEvent(String bizNo, String type, long errandId, long publisherId, long runnerId, long amountCents, long commissionCents)`
@@ -438,16 +480,16 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 ## 6. notify（3）
 
-### 6.1 `NotificationRepository`（interface）
+### 6.1 `NotificationRepository` · 站内消息仓储（interface）
 
 `boolean insertIfAbsent(long id, String msgKey, long userId, long errandId, String type, String content)`——`(msg_key, user_id)` 唯一，重复消费返回 false。
 
-### 6.2 `NotificationQueryPort`（interface）
+### 6.2 `NotificationQueryPort` · 站内消息查询端口（interface）
 
 `List<NotificationView> list(long userId, int page, int size)`；`int unreadCount(long userId)`。
 嵌套 record：`NotificationView(long id, long errandId, String type, String content, Instant time)`。
 
-### 6.3 `RealtimeNotifier`（interface）
+### 6.3 `RealtimeNotifier` · 实时推送端口（interface）
 
 | 方法 | 说明 |
 | --- | --- |
@@ -461,7 +503,7 @@ public static CreditScore initial(long userId)   // score = CreditEventType.BASE
 
 ## 7. recon（1）
 
-### 7.1 `ReconRepository`（interface）
+### 7.1 `ReconRepository` · 对账仓储（interface）
 
 | 方法 | 返回 | 说明 |
 | --- | --- | --- |
