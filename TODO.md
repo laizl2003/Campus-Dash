@@ -1,6 +1,7 @@
 # TODO
 
 > 记录项目待办。完成一项就把 `[ ]` 改成 `[x]`，并补一句验证方式（命令 / 截图 / 测试名）。
+> 新增待办按顺序编号（2、3……），沿用第 1 条的结构：目标 / 现状与差距 / 实现步骤 / 验收标准 / 参考文件。
 
 ## 1. 双 token 模式下的自动续期（未完成）
 
@@ -44,6 +45,3 @@
 - `campus-dash-backend/dash-presentation/.../WebConfig.java`：`/api/auth/refresh` 已排除拦截器
 - `campus-dash-frontend/src/api.ts`：`request()` 的 401 分支、`login()` 的存储逻辑
 
-## 2. （待补充）
-
-新增待办从 2 开始编号，保持「目标 / 现状 / 步骤 / 验收 / 参考」的结构。
