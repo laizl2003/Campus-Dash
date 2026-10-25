@@ -10,6 +10,7 @@
 | [day-02.md](Process/day-02.md) | worker 接入 + 后端架构梳理 | worker 进程管理与自动重编；PowerShell 数组展开坑；后端八模块、功能清单、抢单五层防线、资金三闸门、缓存与分片 |
 | [day-03.md](Process/day-03.md) | domain 层详解（35 个文件） | 类名中英对照表；逐类列出字段、构造器/工厂、方法签名与职责；class/record/enum/interface 选型对比；19 个端口一览 |
 | [day-04.md](Process/day-04.md) | application 层详解（26 个文件） | 用例编排、事务边界、提交后副作用；抢单五层、结算三道闸门、超时幂等；关键源码摘录与 6 道自测 |
+| [day-05.md](Process/day-05.md) | infrastructure 层详解（37 个文件） | Lua 原子脚本与回滚、12 个 Jdbc CAS 适配器、定时/事务消息与回查、缓存与布隆、JWT/Session、分片算法 |
 
 ## 新增一天
 
