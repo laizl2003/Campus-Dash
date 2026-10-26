@@ -14,6 +14,12 @@
 | [day-06.md](Process/day-06.md) | presentation 层详解（17 个文件） | 认证三件套、13 个任务端点与 toCard、全局异常映射、Jackson long→string、WebSocket 五件套与推送 |
 | [day-07.md](Process/day-07.md) | worker / bootstrap / shared 详解（19 个文件） | 4 个 MQ 消费者的 ACK 策略、3 个兜底 job、4 个定时维护、进程装配与 workerId、shared 内核回顾 |
 
+## 专题文档
+
+| 文件 | 主题 |
+| --- | --- |
+| [MQandCache-process.md](Process/MQandCache-process.md) | MQ 四类功能（超时/结算/资金事件/延迟双删）+ 抢单 Redis 全流程收口 |
+
 ## 新增一天
 
 1. 新建 `Process/day-0x.md`（序号递增，如 `day-03.md`）；
