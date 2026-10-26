@@ -12,6 +12,7 @@
 | [day-04.md](Process/day-04.md) | application 层详解（26 个文件） | 用例编排、事务边界、提交后副作用；抢单五层、结算三道闸门、超时幂等；关键源码摘录与 6 道自测 |
 | [day-05.md](Process/day-05.md) | infrastructure 层详解（37 个文件） | Lua 原子脚本与回滚、12 个 Jdbc CAS 适配器、定时/事务消息与回查、缓存与布隆、JWT/Session、分片算法 |
 | [day-06.md](Process/day-06.md) | presentation 层详解（17 个文件） | 认证三件套、13 个任务端点与 toCard、全局异常映射、Jackson long→string、WebSocket 五件套与推送 |
+| [day-07.md](Process/day-07.md) | worker / bootstrap / shared 详解（19 个文件） | 4 个 MQ 消费者的 ACK 策略、3 个兜底 job、4 个定时维护、进程装配与 workerId、shared 内核回顾 |
 
 ## 新增一天
 
