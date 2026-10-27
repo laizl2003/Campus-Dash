@@ -458,7 +458,7 @@ export interface StatusChange {
 
 export const api = {
   creditSelf: () => request<{ score: number; windowDays: number; events: { type: string; description: string; delta: number; refId: string; time: string }[] }>('/api/credit/self'),
-  creditRanking: (campusId = 1, limit = 20) => request<{ userId: string; score: number }[]>(`/api/credit/ranking?campusId=${campusId}&limit=${limit}`),
+  creditRanking: (campusId = 1, limit = 20) => request<{ userId: string; username?: string; score: number }[]>(`/api/credit/ranking?campusId=${campusId}&limit=${limit}`),
   health: () => request<{ status: string }>('/api/health'),
   list: (campusId = 1, status?: string) =>
     request<ErrandCard[]>(`/api/errands?campusId=${campusId}${status ? `&status=${status}` : ''}`),

@@ -1,6 +1,8 @@
 package com.campusdash.presentation;
 
 import com.campusdash.application.usecase.query.QueryCreditUseCase;
+import com.campusdash.domain.auth.model.UserAccount;
+import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.presentation.auth.CurrentUser;
 import com.campusdash.shared.Result;
 import org.springframework.web.bind.annotation.*;
@@ -19,9 +21,11 @@ import java.util.Map;
 public class CreditController {
 
     private final QueryCreditUseCase queryUseCase;
+    private final UserRepository users;
 
-    public CreditController(QueryCreditUseCase queryUseCase) {
+    public CreditController(QueryCreditUseCase queryUseCase, UserRepository users) {
         this.queryUseCase = queryUseCase;
+        this.users = users;
     }
 
     @GetMapping("/self")
@@ -48,6 +52,8 @@ public class CreditController {
         return Result.ok(queryUseCase.ranking(campusId, limit).stream()
                 .map(e -> Map.<String, Object>of(
                         "userId", String.valueOf(e.userId()),
+                        "username", users.findById(String.valueOf(e.userId()))
+                                .map(UserAccount::username).orElse(String.valueOf(e.userId())),
                         "score", e.score()))
                 .toList());
     }

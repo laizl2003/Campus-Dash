@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-27 · 信用榜单显示用户名、清理无关用户
+
+- **目标**：榜单不再显示 userId；删掉测试注册的账号与缓存中的演示成员。
+- **改动**：
+  - `CreditController.ranking` 增加 `username`（查 user 表），前端优先显示用户名，找不到才回退到 id。
+  - 删除 student_zhang / student_li / stu_46490 / probe2710 / probe6705 / pwdcheck01 六个测试账号及其钱包、流水、信用、消息、券记录。
+  - `ZREM credit:rank:1` 移除 1001 / 2001 / 2002 演示身份，榜单只保留真实账号。
+- **验证**：`GET /api/credit/ranking` 返回 `username=stukgv3rx`；Redis `TYPE credit:rank:1` 为 zset；用户表剩余 52 个（Admin + laizl + 50 个种子账号），L1 仍为 0。
+
+
 ## 2026-10-27 · 测试任务清理脚本
 
 - **目标**：每次测试/联调结束后，把测试发布的任务清干净，避免广场和“我的任务”被脏数据污染。
