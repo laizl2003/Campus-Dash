@@ -16,11 +16,13 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
   const [balance, setBalance] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [accountMenu, setAccountMenu] = useState(false);
+  const [switchMenu, setSwitchMenu] = useState(false);
   const [accounts, setAccounts] = useState<StoredAccount[]>(() => listAccounts());
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const accountRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
     const timer = window.setInterval(load, 30000);
     return () => { active = false; unsub(); clearInterval(timer); window.removeEventListener('dash:changed', load); };
   }, [userId, route]);
-  useEffect(() => { setOpen(false); setAccountMenu(false); }, [route]);
+  useEffect(() => { setOpen(false); setAccountMenu(false); setSwitchMenu(false); }, [route]);
   useEffect(() => {
     const sync = () => setAccounts(listAccounts());
     window.addEventListener('dash:accounts', sync);
@@ -53,6 +55,14 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [accountMenu]);
+  useEffect(() => {
+    if (!switchMenu) return;
+    const onDown = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) setSwitchMenu(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [switchMenu]);
   const doDelete = async () => {
     if (deleting) return;
     setDeleting(true); setDeleteError('');
@@ -102,7 +112,19 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
       <div className="nav-label">我的工作台</div>
       <nav>{NAV.map(n => <a key={n.path} href={`#${n.path}`} onClick={() => setOpen(false)} className={`nav-item ${route === n.path ? 'active' : ''}`} aria-current={route === n.path ? 'page' : undefined}><Icon name={n.icon} size={18}/>{n.label}{n.path === '/notifications' && unread !== null && unread > 0 && <span className="nav-count">{unread > 99 ? '99+' : unread}</span>}</a>)}</nav>
       <div className="sidebar-guide"><Icon name="spark" size={23}/><strong>顺路，帮个小忙。</strong><p>一份刚好的委托，<br/>连接校园里的你和我。</p><a href="#/square" onClick={() => setOpen(false)}>看看大家需要什么<Icon name="arrow-right" size={13}/></a></div>
-      <div className="sidebar-bottom"><a href="#/wallet" className="sidebar-wallet" onClick={() => setOpen(false)}><span><Icon name="wallet" size={16}/>可用余额</span><strong>{balance === null ? '—' : yuan(balance)}</strong></a><div className="profile"><span className="avatar" title={userName}>{userName.slice(0, 1).toUpperCase()}</span><label className="profile-select"><select aria-label="切换账号" value={userId} disabled={switching} onChange={e => onSwitch(e.target.value)}>{switchableAccounts.length === 0 ? <option value={userId}>用户：{userName}</option> : switchableAccounts.map(a => <option key={a.userId} value={a.userId}>用户：{a.username}</option>)}</select></label><a className="icon-button" href="#/login" title="返回登录页" aria-label="返回登录页"><Icon name="arrow-left" size={16}/></a></div></div>
+      <div className="sidebar-bottom"><a href="#/wallet" className="sidebar-wallet" onClick={() => setOpen(false)}><span><Icon name="wallet" size={16}/>可用余额</span><strong>{balance === null ? '—' : yuan(balance)}</strong></a><div className="profile" ref={profileRef}><span className="avatar" title={userName}>{userName.slice(0, 1).toUpperCase()}</span><button type="button" className="profile-trigger" aria-haspopup="menu" aria-expanded={switchMenu} disabled={switching} onClick={() => setSwitchMenu(v => !v)}><span><strong>{userName}</strong><small>{switchableAccounts.length > 1 ? `${switchableAccounts.length} 个账号` : '当前账号'}</small></span><span className="profile-caret" aria-hidden="true">⌄</span></button><a className="icon-button" href="#/login" title="返回登录页" aria-label="返回登录页"><Icon name="arrow-left" size={16}/></a>{switchMenu && <div className="account-menu profile-menu" role="menu" aria-label="切换账号">
+        <div className="account-menu-head"><small>切换账号</small></div>
+        {switchableAccounts.length === 0
+          ? <button type="button" role="menuitem" className="is-current" onClick={() => setSwitchMenu(false)}><span className="menu-avatar">{userName.slice(0, 1).toUpperCase()}</span><span className="menu-account"><strong>{userName}</strong><small>当前账号</small></span><Icon name="check" size={14}/></button>
+          : switchableAccounts.map(a => <button key={a.userId} type="button" role="menuitem"
+              className={a.userId === userId ? 'is-current' : ''}
+              onClick={() => { setSwitchMenu(false); if (a.userId !== userId) onSwitch(a.userId); }}>
+              <span className="menu-avatar">{a.username.slice(0, 1).toUpperCase()}</span>
+              <span className="menu-account"><strong>{a.username}</strong><small>{a.userId === userId ? '当前账号' : '点击切换'}</small></span>
+              {a.userId === userId && <Icon name="check" size={14}/>}
+            </button>)}
+        <a className="account-menu-link" href="#/login" onClick={() => setSwitchMenu(false)}><Icon name="arrow-left" size={14}/>登录其他账号</a>
+      </div>}</div></div>
     </aside>
     <header className="topbar"><div className="topbar-left"><button ref={menuRef} className="icon-button mobile-menu" aria-expanded={open} aria-label="打开导航" onClick={() => setOpen(true)}><Icon name="menu"/></button><span className="breadcrumb">工作台 <span>/</span> <strong>{title}</strong></span></div><div className="topbar-right"><span className="topbar-campus"><Icon name="pin" size={14}/>校园服务站</span><a className="icon-button notification-button" href="#/notifications" aria-label={`消息中心${unread ? `，${unread}条未读` : ''}`}><Icon name="bell" size={18}/>{!!unread && <i/>}</a><div className="account-menu-wrap" ref={accountRef}>
         <button type="button" className="topbar-avatar" title={userName} aria-label={userName}

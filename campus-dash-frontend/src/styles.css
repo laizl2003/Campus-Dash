@@ -432,3 +432,20 @@ button.topbar-avatar:hover { filter: brightness(0.97); }
   padding: 10px 12px; margin-top: 10px; border: 1px solid #d9e6c8; border-radius: 10px; background: #f4f9ec; font-size: 12px; color: #4a544c; }
 .auth-session strong { color: var(--ink); }
 .auth-session .btn { padding: 6px 10px; font-size: 12px; white-space: nowrap; }
+
+/* ── 侧栏账号切换（与右上角账号菜单同款） ─────────────── */
+.profile { position: relative; }
+.profile-trigger { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.profile-trigger > span:first-child { display: grid; min-width: 0; }
+.profile-trigger strong { font-size: 11px; font-weight: 600; color: #333333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-trigger small { margin-top: 2px; font-size: 9px; color: #8a8f8a; }
+.profile-caret { margin-left: auto; color: #8a8f8a; font-size: 11px; }
+.profile-menu { left: 0; right: auto; top: auto; bottom: calc(100% + 10px); width: 216px; }
+.profile-menu .account-menu-head small { font-size: 10px; color: var(--muted); letter-spacing: .08em; }
+.profile-menu button.is-current { background: #fbf7e8; }
+.menu-avatar { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--primary-soft); color: var(--primary-ink); font-size: 10px; flex-shrink: 0; }
+.menu-account { display: grid; min-width: 0; flex: 1; }
+.menu-account strong { font-size: 11px; font-weight: 600; }
+.menu-account small { font-size: 9px; color: var(--muted); }
+.account-menu-link { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 8px 10px; border-top: 1px solid var(--line); border-radius: 0 0 8px 8px; font-size: 11px; color: #5b635c; }
+.account-menu-link:hover { background: #f7f5ef; }
