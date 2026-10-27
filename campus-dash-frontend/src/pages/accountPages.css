@@ -269,3 +269,6 @@
 }
 
 .wallet-voucher-expire.is-urgent { color: #b4534a; font-weight: 600; }
+
+/* 倒计时等宽，秒位跳动时卡片宽度不抖 */
+.wallet-voucher-expire { font-variant-numeric: tabular-nums; letter-spacing: .2px; }

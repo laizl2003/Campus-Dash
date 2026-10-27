@@ -8,7 +8,10 @@ const VOUCHER_STATUS_TEXT: Record<string, string> = {
   available: '可使用', used: '已使用', expired: '已过期',
 };
 
-/** 毫秒 → "剩 X 天 Y 小时" / "剩 X 分 Y 秒"，到期返回已过期 */
+/**
+ * 毫秒 → 精确到秒的倒计时："剩 1 天 23:59:58" / "剩 00:04:59"。
+ * 每秒刷新时秒位会真实跳动，而不是只在小时/分钟变化时才更新。
+ */
 function formatRemaining(expireTime: string, now: number): string {
   const remain = new Date(expireTime).getTime() - now;
   if (!Number.isFinite(remain) || remain <= 0) return '已过期';
@@ -17,10 +20,9 @@ function formatRemaining(expireTime: string, now: number): string {
   const hours = Math.floor((total % 86400) / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const seconds = total % 60;
-  if (days > 0) return `剩 ${days} 天 ${hours} 小时`;
-  if (hours > 0) return `剩 ${hours} 小时 ${minutes} 分`;
-  if (minutes > 0) return `剩 ${minutes} 分 ${seconds} 秒`;
-  return `剩 ${seconds} 秒`;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const clock = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  return days > 0 ? `剩 ${days} 天 ${clock}` : `剩 ${clock}`;
 }
 interface MyVoucher {
   voucherId: string; type: number; description: string;
