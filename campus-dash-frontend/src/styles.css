@@ -392,9 +392,9 @@ input::placeholder, textarea::placeholder { color: #707070; }
 .admin-boot { min-height: 100vh; display: grid; place-items: center; font-size: 13px; color: #7d857e; background: #f5f2ec; }
 
 /* 验证码下方的「注册账号 / 修改密码」：同一行，只有方框本身可点 */
-.auth-link-row { display: flex; justify-content: center; gap: 28px; margin-top: 2px; }
+.auth-link-row { display: flex; justify-content: flex-start; gap: 28px; margin-top: 2px; }
 .auth-link-box {
-  padding: 4px 2px;
+  padding: 4px 0;
   font-size: 12px;
   color: var(--muted);
   text-decoration: underline;
