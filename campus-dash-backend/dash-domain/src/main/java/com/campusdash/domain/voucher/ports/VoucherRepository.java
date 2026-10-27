@@ -38,6 +38,9 @@ public interface VoucherRepository {
 
     int markUsed(long voucherId);
 
+    /** 兜底扫描：把已过有效期但仍为 available 的券批量置为 expired，返回影响行数 */
+    int expireOverdue(int limit);
+
     /**
      * 发布任务时锁定券：只有"本人 + available + 未过期"才能锁定。
      * 返回 1 表示锁定成功；0 表示已被用掉/过期/不属于本人。

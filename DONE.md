@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-27 · 优惠券过期：确认消费者 + 新增兜底扫描 job
+
+- **目标**：确认延迟消息确实有人消费；补一条不依赖 MQ 的兜底。
+- **现状**：`dash-worker` 里已有 `VoucherExpireConsumer`，订阅 `voucher-expire`（group `dash-voucher-consumer`），收到消息调用 `markExpired(voucherId)`，SQL 只把 `status='available'` 改成 `expired`。
+- **改动**：新增 `VoucherExpireScanJob`，每 60 秒（首轮 15 秒）扫描 `status='available' AND expire_time <= NOW()` 的券批量置 `expired`，每条最多 200 张；`VoucherRepository.expireOverdue`。
+- **验证**：
+  - 插一张已过期券 → 扫描日志「本次作废 1 张」，状态变 `expired`；
+  - 插一张未过期券 + 到期本地消息 → 消费者日志「优惠券到期处理 changed=1」，状态变 `expired`；
+  - 全量 131 个测试通过。
+
+
 ## 2026-10-27 · 登录页：注册/改密入口合并到验证码下方一行
 
 - **目标**：两个入口同一行、放在验证码下方，且只有下划线方框本身可点击。

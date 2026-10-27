@@ -172,6 +172,17 @@ public class JdbcVoucherRepository implements VoucherRepository {
                 """, errandId);
     }
 
+    @Override
+    public int expireOverdue(int limit) {
+        return jdbc.update("""
+                UPDATE voucher_record
+                   SET status = 'expired'
+                 WHERE status = 'available' AND expire_time <= NOW(3)
+                 ORDER BY expire_time
+                 LIMIT ?
+                """, limit);
+    }
+
     private static Timestamp timestamp(Instant instant) {
         return instant == null ? null : Timestamp.from(instant);
     }
