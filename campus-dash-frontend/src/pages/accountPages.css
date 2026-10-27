@@ -267,3 +267,5 @@
   .wallet-voucher-grid { padding: 0 18px 18px; }
   .wallet-voucher { width: 100%; }
 }
+
+.wallet-voucher-expire.is-urgent { color: #b4534a; font-weight: 600; }

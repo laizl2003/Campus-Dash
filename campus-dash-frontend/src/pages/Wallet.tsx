@@ -7,6 +7,21 @@ import './accountPages.css';
 const VOUCHER_STATUS_TEXT: Record<string, string> = {
   available: '可使用', used: '已使用', expired: '已过期',
 };
+
+/** 毫秒 → "剩 X 天 Y 小时" / "剩 X 分 Y 秒"，到期返回已过期 */
+function formatRemaining(expireTime: string, now: number): string {
+  const remain = new Date(expireTime).getTime() - now;
+  if (!Number.isFinite(remain) || remain <= 0) return '已过期';
+  const total = Math.floor(remain / 1000);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (days > 0) return `剩 ${days} 天 ${hours} 小时`;
+  if (hours > 0) return `剩 ${hours} 小时 ${minutes} 分`;
+  if (minutes > 0) return `剩 ${minutes} 分 ${seconds} 秒`;
+  return `剩 ${seconds} 秒`;
+}
 interface MyVoucher {
   voucherId: string; type: number; description: string;
   thresholdCents?: number; discountCents?: number;
@@ -30,7 +45,18 @@ export default function Wallet() {
   const [recharging, setRecharging] = useState(false);
   const [rechargeMessage, setRechargeMessage] = useState('');
   const [vouchers, setVouchers] = useState<MyVoucher[]>([]);
+  // 每秒刷新一次"现在"，用来驱动倒计时；到期的那张会在下一次渲染被过滤掉
+  const [now, setNow] = useState(() => Date.now());
   const requestId = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // 只展示"还没到期"的券：状态已是 expired，或有效期已过（后端延迟消息可能还没到）都不再展示
+  const visibleVouchers = vouchers.filter(voucher =>
+    voucher.status !== 'expired' && new Date(voucher.expireTime).getTime() > now);
 
   /** 演示用固定面额（元） */
   const QUICK_AMOUNTS = [10, 20, 50, 100, 200, 500];
@@ -137,15 +163,18 @@ export default function Wallet() {
       <section className="account-surface wallet-vouchers" aria-label="我的优惠券">
         <div className="account-section-head">
           <div><h2>我的优惠券</h2><p>领取后 2 天内有效，过期自动作废</p></div>
-          <span className="account-count">{vouchers.filter(v => v.status === 'available').length} 张可用</span>
+          <span className="account-count">{visibleVouchers.filter(v => v.status === 'available').length} 张可用</span>
         </div>
-        {vouchers.length === 0
-          ? <p className="wallet-voucher-empty">还没有优惠券，去<a href="#/square">广场的「惊喜优惠」</a>看看。</p>
+        {visibleVouchers.length === 0
+          ? <p className="wallet-voucher-empty">还没有可用的优惠券，去<a href="#/square">广场的「惊喜优惠」</a>看看。</p>
           : <div className="wallet-voucher-grid">
-            {vouchers.map(voucher => <div key={voucher.voucherId} className={`wallet-voucher is-${voucher.status}`}>
+            {visibleVouchers.map(voucher => <div key={voucher.voucherId} className={`wallet-voucher is-${voucher.status}`}>
               <span className="wallet-voucher-amount"><small>¥</small><strong>{Number(voucher.discountCents ?? 0) / 100}</strong></span>
               <span className="wallet-voucher-rule">满{Number(voucher.thresholdCents ?? 0) / 100}元可用</span>
-              <span className="wallet-voucher-expire">{new Date(voucher.expireTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} 到期</span>
+              <span className={`wallet-voucher-expire${voucher.status === 'available' && new Date(voucher.expireTime).getTime() - now < 6 * 3600_000 ? ' is-urgent' : ''}`}
+                    title={`${new Date(voucher.expireTime).toLocaleString('zh-CN')} 到期`}>
+                {voucher.status === 'used' ? '已使用' : formatRemaining(voucher.expireTime, now)}
+              </span>
               <span className={`wallet-voucher-status is-${voucher.status}`}>{VOUCHER_STATUS_TEXT[voucher.status] ?? voucher.status}</span>
             </div>)}
           </div>}
