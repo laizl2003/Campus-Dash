@@ -75,6 +75,7 @@ class GrabErrandUseCaseTest {
         }
 
         @Override public Optional<CreditScore> find(String userId) { return Optional.empty(); }
+        @Override public void ensureScore(String userId, int score) { }
         @Override public boolean applyEvent(CreditEvent event) { return false; }
         @Override public List<CreditEvent> recentEvents(String userId, int days, int limit) { return List.of(); }
         @Override public int windowDelta(String userId, int windowDays) { return 0; }

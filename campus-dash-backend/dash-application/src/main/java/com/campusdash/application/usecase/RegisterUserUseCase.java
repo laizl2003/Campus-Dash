@@ -4,6 +4,9 @@ import com.campusdash.domain.auth.model.UserAccount;
 import com.campusdash.domain.auth.ports.CaptchaPort;
 import com.campusdash.domain.auth.ports.PasswordHasher;
 import com.campusdash.domain.auth.ports.UserRepository;
+import com.campusdash.domain.credit.model.CreditEventType;
+import com.campusdash.domain.credit.ports.CreditRankingPort;
+import com.campusdash.domain.credit.ports.CreditRepository;
 import com.campusdash.domain.wallet.model.AccountType;
 import com.campusdash.domain.wallet.model.WalletAccount;
 import com.campusdash.domain.wallet.ports.WalletRepository;
@@ -47,14 +50,19 @@ public class RegisterUserUseCase {
     private final CaptchaPort captcha;
     private final WalletRepository wallets;
     private final SnowflakeIdGenerator idGenerator;
+    private final CreditRepository credits;
+    private final CreditRankingPort ranking;
 
     public RegisterUserUseCase(UserRepository users, PasswordHasher hasher, CaptchaPort captcha,
-                               WalletRepository wallets, SnowflakeIdGenerator idGenerator) {
+                               WalletRepository wallets, SnowflakeIdGenerator idGenerator,
+                               CreditRepository credits, CreditRankingPort ranking) {
         this.users = users;
         this.hasher = hasher;
         this.captcha = captcha;
         this.wallets = wallets;
         this.idGenerator = idGenerator;
+        this.credits = credits;
+        this.ranking = ranking;
     }
 
     public record Command(String username, String phone, String password,
@@ -128,6 +136,11 @@ public class RegisterUserUseCase {
         wallets.insertAccount(new WalletAccount(
                 idGenerator.nextId(), userId, username, AccountType.USER,
                 Money.ZERO, Money.ZERO, 0L));
+
+        // 信用分建档：注册即写入 credit_score，并同步进 Redis 榜单，
+        // 这样"没发生过结算"的用户也能出现在榜单里（初始 60 分）。
+        credits.ensureScore(userId, CreditEventType.BASE_SCORE);
+        ranking.update(DEFAULT_CAMPUS, userId, CreditEventType.BASE_SCORE);
 
         return new Registered(userId, username, phone, UserAccount.ROLE_USER);
     }

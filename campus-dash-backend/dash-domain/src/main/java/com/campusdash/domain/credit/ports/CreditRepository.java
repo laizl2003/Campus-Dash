@@ -25,6 +25,9 @@ public interface CreditRepository {
      */
     boolean applyEvent(CreditEvent event);
 
+    /** 建档：用户没有 credit_score 记录时插入初始分；已有则不动 */
+    void ensureScore(String userId, int score);
+
     /** 最近 N 天的事件（信用分页展示用） */
     List<CreditEvent> recentEvents(String userId, int days, int limit);
 

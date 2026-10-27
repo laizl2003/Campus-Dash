@@ -183,6 +183,7 @@ class AuthControllerTest {
         @Override public boolean existsByUsername(String username) { return byName.containsKey(username); }
         @Override public boolean existsByPhone(String phone) { return false; }
         @Override public void insert(UserAccount account) { byName.put(account.username(), account); }
+        @Override public java.util.List<UserAccount> findAll() { return new java.util.ArrayList<>(byName.values()); }
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
         @Override public void markLoginFailure(String userId) { loginFailures++; }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
@@ -196,6 +197,7 @@ class AuthControllerTest {
         @Override public boolean existsByUsername(String username) { return false; }
         @Override public boolean existsByPhone(String phone) { return false; }
         @Override public void insert(UserAccount account) { }
+        @Override public java.util.List<UserAccount> findAll() { return java.util.List.of(); }
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
         @Override public void markLoginFailure(String userId) { }
         @Override public void updatePassword(String userId, String hash, Instant at) { }

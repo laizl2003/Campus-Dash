@@ -35,7 +35,11 @@ class RegisterUserUseCaseTest {
         users = new FakeUsers();
         captcha = new FakeCaptcha();
         useCase = new RegisterUserUseCase(users, new FakeHasher(), captcha,
-                new FakeWallets(), new com.campusdash.shared.SnowflakeIdGenerator(1));
+                new FakeWallets(), new com.campusdash.shared.SnowflakeIdGenerator(1),
+                new FakeCredits(), new com.campusdash.domain.credit.ports.CreditRankingPort() {
+                    @Override public void update(long campusId, String userId, int score) { }
+                    @Override public java.util.List<Entry> top(long campusId, int limit) { return java.util.List.of(); }
+                });
     }
 
     @Test
@@ -154,6 +158,16 @@ class RegisterUserUseCaseTest {
         @Override public java.util.List<PlatformLedgerRow> findPlatformLedger(int limit) { return java.util.List.of(); }
     }
 
+    private static final class FakeCredits implements com.campusdash.domain.credit.ports.CreditRepository {
+        @Override public int scoreOf(String userId) { return 60; }
+        @Override public java.util.Optional<com.campusdash.domain.credit.model.CreditScore> find(String userId) { return java.util.Optional.empty(); }
+        @Override public boolean applyEvent(com.campusdash.domain.credit.model.CreditEvent event) { return true; }
+        @Override public void ensureScore(String userId, int score) { }
+        @Override public java.util.List<com.campusdash.domain.credit.model.CreditEvent> recentEvents(String userId, int days, int limit) { return java.util.List.of(); }
+        @Override public int windowDelta(String userId, int windowDays) { return 0; }
+        @Override public int calibrateScores(int windowDays, int limit) { return 0; }
+    }
+
     private static final class FakeUsers implements UserRepository {
         private final Map<String, UserAccount> byName = new LinkedHashMap<>();
         private final Map<String, UserAccount> byPhone = new LinkedHashMap<>();
@@ -169,5 +183,6 @@ class RegisterUserUseCaseTest {
         @Override public void markLoginFailure(String userId) { }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
         @Override public boolean deleteById(String userId) { return byName.remove(byName.entrySet().stream().filter(e -> e.getValue().userId().equals(userId)).map(java.util.Map.Entry::getKey).findFirst().orElse(null)) != null; }
+        @Override public java.util.List<UserAccount> findAll() { return new java.util.ArrayList<>(byName.values()); }
     }
 }

@@ -64,6 +64,11 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
+    public List<UserAccount> findAll() {
+        return jdbc.query("SELECT " + COLUMNS + " FROM `user` ORDER BY created_at", MAPPER);
+    }
+
+    @Override
     public boolean existsByUsername(String username) {
         Integer count = jdbc.queryForObject("SELECT COUNT(1) FROM `user` WHERE username = ?", Integer.class, username);
         return count != null && count > 0;

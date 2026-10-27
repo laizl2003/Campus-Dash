@@ -74,6 +74,15 @@ public class JdbcCreditRepository implements CreditRepository {
     }
 
     @Override
+    public void ensureScore(String userId, int score) {
+        jdbc.update("""
+                INSERT INTO credit_score (user_id, score, version)
+                VALUES (?, ?, 0)
+                ON DUPLICATE KEY UPDATE user_id = user_id
+                """, userId, score);
+    }
+
+    @Override
     public List<CreditEvent> recentEvents(String userId, int days, int limit) {
         return jdbc.query("""
                 SELECT id, biz_no, user_id, type, delta, ref_type, ref_id, created_at

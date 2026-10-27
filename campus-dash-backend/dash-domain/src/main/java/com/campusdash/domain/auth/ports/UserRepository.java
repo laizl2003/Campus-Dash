@@ -3,6 +3,7 @@ package com.campusdash.domain.auth.ports;
 import com.campusdash.domain.auth.model.UserAccount;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -18,6 +19,9 @@ public interface UserRepository {
     Optional<UserAccount> findById(String userId);
 
     Optional<UserAccount> findByPhone(String phone);
+
+    /** 全量账号（启动时补齐信用分快照用） */
+    List<UserAccount> findAll();
 
     boolean existsByUsername(String username);
 

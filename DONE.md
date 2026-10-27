@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-27 · 注册即建信用分并同步 Redis 榜单
+
+- **目标**：所有用户（无论是否发生过结算）都有 credit_score 记录，并出现在 Redis 排行榜。
+- **改动**：
+  - `CreditRepository.ensureScore`：INSERT ... ON DUPLICATE KEY，缺记录时写入初始 60 分。
+  - `RegisterUserUseCase` 在注册事务内建档，并 `ZADD credit:rank:{campusId}` 60 分。
+  - 新增 `CreditScoreInitializer`：启动时遍历所有账号补 credit_score，并按 DB 分数全量同步 ZSET。
+  - `UserRepository.findAll` 支撑初始化。
+- **验证**：启动日志「信用分/榜单已同步 52 个账号」；注册 creditcheck01 后 credit_score=60、ZSCORE=60、ZCARD 52→53；榜单接口返回 53 条且 username 正常。测试账号已清理。
+
+
 ## 2026-10-27 · 信用榜单显示用户名、清理无关用户
 
 - **目标**：榜单不再显示 userId；删掉测试注册的账号与缓存中的演示成员。
