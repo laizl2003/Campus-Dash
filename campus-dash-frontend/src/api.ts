@@ -500,6 +500,18 @@ export const api = {
   }>(`/api/vouchers/${type}/claim`, 'POST'),
   me: () => request<{ userId: string; username: string; role: string }>('/api/auth/me'),
   deleteAccount: () => request<null>('/api/account', 'DELETE'),
+  adminVouchers: () => request<{
+    type: number; stock: number; status: string; thresholdCents: number; discountCents: number;
+    description: string; lastChangeTime: string;
+  }[]>('/api/admin/vouchers'),
+  adminCreateVoucher: (thresholdCents: number, discountCents: number, stock: number) =>
+    request<{ type: number }>('/api/admin/vouchers', 'POST', { thresholdCents, discountCents, stock }),
+  adminUpdateVoucherStock: (type: number, stock: number) =>
+    request<null>(`/api/admin/vouchers/${type}/stock`, 'PUT', { stock }),
+  adminUpdateVoucherStatus: (type: number, status: 'ONLINE' | 'OFFLINE') =>
+    request<null>(`/api/admin/vouchers/${type}/status`, 'POST', { status }),
+  adminDeleteVoucher: (type: number) =>
+    request<null>(`/api/admin/vouchers/${type}`, 'DELETE'),
   adminLedger: (account: 'COMMISSION' | 'MARKETING', period: 'WEEK' | 'MONTH' | 'YEAR' | 'ALL', page = 0, size = 10) =>
     request<{
       account: { type: string; ownerId: string; name: string; balanceCents: number };

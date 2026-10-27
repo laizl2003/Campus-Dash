@@ -128,3 +128,19 @@
 .admin-ledger-summary { padding: 8px 12px; border-top: 1px solid #f0ebdf; border-bottom: 1px solid #f0ebdf; background: #fdfbf6; }
 .admin-ledger-summary > span + span { border-left: 1px solid #ece5d6; padding-left: 14px; }
 .admin-ledger-panel-head { padding-bottom: 10px; border-bottom: 1px solid #f0ebdf; }
+
+/* ── 优惠券管理 ───────────────────────────────────────── */
+.admin-voucher-view { display: grid; gap: 16px; }
+.admin-voucher-create, .admin-voucher-list { background: #fff; border: 1px solid #e7e2d8; border-radius: 14px; padding: 18px; }
+.admin-voucher-form { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 8px; }
+.admin-voucher-form label { display: grid; gap: 4px; font-size: 10px; color: #7d857e; }
+.admin-voucher-form input, .admin-stock-input { width: 120px; height: 34px; border: 1px solid #e2dccd; border-radius: 8px; padding: 0 8px; font-size: 12px; }
+.admin-voucher-stock-cell { display: flex; gap: 6px; align-items: center; }
+.admin-stock-input { width: 90px; }
+.admin-voucher-status { padding: 3px 8px; border-radius: 999px; font-size: 10px; }
+.admin-voucher-status.is-online { background: #e7f3e7; color: #2f6b4a; }
+.admin-voucher-status.is-offline { background: #f3ecec; color: #9c5148; }
+.admin-voucher-actions { display: flex; gap: 6px; }
+.admin-danger { color: #b23b32; }
+
+.admin-voucher-list table { width: 100%; }

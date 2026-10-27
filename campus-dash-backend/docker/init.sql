@@ -301,8 +301,11 @@ CREATE TABLE IF NOT EXISTS `user` (
 
 -- 优惠券库存：type 用整数枚举（见 VoucherType），第一档 100 张、逐档减半
 CREATE TABLE IF NOT EXISTS voucher_stock (
-  type             INT         NOT NULL COMMENT '优惠券类型，见 VoucherType（1..11）',
+  type             INT         NOT NULL COMMENT '优惠券类型，自增',
   stock            INT         NOT NULL COMMENT '剩余库存',
+  status           VARCHAR(16) NOT NULL DEFAULT 'ONLINE' COMMENT 'ONLINE / OFFLINE',
+  threshold_cents  BIGINT      NOT NULL DEFAULT 0 COMMENT '满减门槛（分）',
+  discount_cents   BIGINT      NOT NULL DEFAULT 0 COMMENT '减免金额（分）',
   description      VARCHAR(64) NOT NULL COMMENT '满减规则描述',
   last_change_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (type)
@@ -327,8 +330,9 @@ CREATE TABLE IF NOT EXISTS voucher_record (
 
 -- 描述文案不写在这里：SQL 客户端字符集不一致会把中文写成乱码。
 -- 由启动时的 VoucherStockInitializer 用 Java 常量回填，保证编码正确。
-INSERT IGNORE INTO voucher_stock (type, stock, description) VALUES
-  (1, 50, ''), (2, 25, ''), (3, 12, ''),
-  (4, 50, ''), (5, 25, ''), (6, 12, ''), (7, 6, ''),
-  (8, 50, ''), (9, 25, ''),
-  (10, 50, ''), (11, 25, '');
+INSERT IGNORE INTO voucher_stock (type, stock, status, threshold_cents, discount_cents, description) VALUES
+  (1, 50, 'ONLINE', 1000, 200, ''), (2, 25, 'ONLINE', 1000, 300, ''), (3, 12, 'ONLINE', 1000, 500, ''),
+  (4, 50, 'ONLINE', 1500, 200, ''), (5, 25, 'ONLINE', 1500, 300, ''), (6, 12, 'ONLINE', 1500, 500, ''),
+  (7, 6, 'ONLINE', 1500, 700, ''),
+  (8, 50, 'ONLINE', 2000, 500, ''), (9, 25, 'ONLINE', 2000, 800, ''),
+  (10, 50, 'ONLINE', 2500, 1000, ''), (11, 25, 'ONLINE', 2500, 1500, '');

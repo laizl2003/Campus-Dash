@@ -1,5 +1,6 @@
 package com.campusdash.bootstrap;
 
+import com.campusdash.domain.voucher.model.VoucherStock;
 import com.campusdash.domain.voucher.model.VoucherType;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import org.slf4j.Logger;
@@ -30,11 +31,12 @@ public class VoucherStockInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         int fixed = 0;
         for (VoucherType type : VoucherType.values()) {
-            int updated = vouchers.updateDescription(type.code(), type.description());
-            if (updated == 0) {
-                vouchers.insertStockIfAbsent(type.code(), type.initialStock(), type.description());
-                fixed++;
-                continue;
+            if (vouchers.findStock(type.code()).isEmpty()) {
+                vouchers.insertStock(new VoucherStock(type.code(), type.initialStock(), "ONLINE",
+                        type.thresholdCents(), type.discountCents(), type.description(), null));
+            } else {
+                // 只修文案；库存/状态/门槛以数据库为准，避免启动覆盖管理端修改
+                vouchers.updateDescription(type.code(), type.description());
             }
             fixed++;
         }

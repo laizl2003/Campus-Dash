@@ -8,7 +8,7 @@ import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.domain.grab.ports.GrabSlotPort;
 import com.campusdash.domain.voucher.model.Voucher;
 import com.campusdash.domain.voucher.model.VoucherStatus;
-import com.campusdash.domain.voucher.model.VoucherType;
+import com.campusdash.domain.voucher.model.VoucherStock;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.AccountType;
 import com.campusdash.domain.wallet.model.EscrowOrder;
@@ -91,8 +91,11 @@ public class PublishErrandUseCase {
         if (cmd.voucherId() != null) {
             Voucher voucher = voucherRepository.findById(cmd.voucherId())
                     .orElseThrow(() -> new BizException(ErrorCode.VOUCHER_INVALID, "id=" + cmd.voucherId()));
-            VoucherType type = VoucherType.of(voucher.type())
+            VoucherStock stock = voucherRepository.findStock(voucher.type())
                     .orElseThrow(() -> new BizException(ErrorCode.VOUCHER_INVALID, "type=" + voucher.type()));
+            if (!stock.online()) {
+                throw new BizException(ErrorCode.VOUCHER_NOT_AVAILABLE, "该优惠券已下架");
+            }
             if (!cmd.publisherId().equals(voucher.userId())) {
                 throw new BizException(ErrorCode.VOUCHER_NOT_AVAILABLE, "券不属于当前用户");
             }
@@ -100,11 +103,11 @@ public class PublishErrandUseCase {
                     || voucher.expireTime().isBefore(Instant.now())) {
                 throw new BizException(ErrorCode.VOUCHER_NOT_AVAILABLE, "券不可用或已过期");
             }
-            if (type.thresholdCents() > cmd.rewardCents()) {
+            if (stock.thresholdCents() > cmd.rewardCents()) {
                 throw new BizException(ErrorCode.VOUCHER_NOT_AVAILABLE,
-                        "未达到使用门槛，需满" + type.thresholdCents() / 100 + "元");
+                        "未达到使用门槛，需满" + stock.thresholdCents() / 100 + "元");
             }
-            discountCents = type.discountCents();
+            discountCents = stock.discountCents();
             runnerBearCents = Math.round(discountCents * runnerBearRatio);
             int locked = voucherRepository.lockForErrand(
                     cmd.voucherId(), cmd.publisherId(), errandId, runnerBearCents);

@@ -4,6 +4,7 @@ import com.campusdash.application.usecase.ArbitrateErrandUseCase;
 import com.campusdash.application.usecase.query.QueryErrandListUseCase;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.ports.ErrandRepository;
+import com.campusdash.domain.voucher.model.VoucherStock;
 import com.campusdash.domain.voucher.model.VoucherType;
 import com.campusdash.domain.voucher.model.VoucherUse;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
@@ -14,7 +15,9 @@ import com.campusdash.presentation.auth.CurrentUser;
 import com.campusdash.shared.BizException;
 import com.campusdash.shared.ErrorCode;
 import com.campusdash.shared.Result;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,6 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +62,92 @@ public class AdminController {
     }
 
     public record ArbitrateRequest(String favor) {
+    }
+
+    public record VoucherCreateRequest(Long thresholdCents, Long discountCents, Integer stock) {
+    }
+
+    public record VoucherStockRequest(Integer stock) {
+    }
+
+    public record VoucherStatusRequest(String status) {
+    }
+
+    /** 优惠券管理：列表 */
+    @GetMapping("/vouchers")
+    public Result<List<Map<String, Object>>> vouchers() {
+        return Result.ok(voucherRepository.findAllStocks().stream().map(this::voucherView).toList());
+    }
+
+    /** 优惠券管理：新增（type 自增，描述按“满XX元减XX元”生成） */
+    @PostMapping("/vouchers")
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    public Result<Map<String, Object>> createVoucher(@RequestBody VoucherCreateRequest req) {
+        long threshold = req == null || req.thresholdCents() == null ? 0 : req.thresholdCents();
+        long discount = req == null || req.discountCents() == null ? 0 : req.discountCents();
+        int stock = req == null || req.stock() == null ? 0 : req.stock();
+        if (threshold <= 0 || discount <= 0 || discount >= threshold || stock < 0) {
+            throw new BizException(ErrorCode.INVALID_AMOUNT, "满减金额/优惠价/库存不合法");
+        }
+        int type = voucherRepository.nextType();
+        String description = "满" + moneyText(threshold) + "元减" + moneyText(discount) + "元";
+        voucherRepository.insertStock(new VoucherStock(type, stock, "ONLINE", threshold, discount,
+                description, Instant.now()));
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("type", type);
+        return Result.ok(data);
+    }
+
+    /** 优惠券管理：修改库存 */
+    @PutMapping("/vouchers/{type}/stock")
+    public Result<Void> updateVoucherStock(@PathVariable int type, @RequestBody VoucherStockRequest req) {
+        if (req == null || req.stock() == null || req.stock() < 0) {
+            throw new BizException(ErrorCode.INVALID_AMOUNT, "库存不能为负");
+        }
+        if (voucherRepository.updateStock(type, req.stock()) == 0) {
+            throw new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type);
+        }
+        return Result.ok(null);
+    }
+
+    /** 优惠券管理：上架 / 下架 */
+    @PostMapping("/vouchers/{type}/status")
+    public Result<Void> updateVoucherStatus(@PathVariable int type, @RequestBody VoucherStatusRequest req) {
+        String status = req == null || req.status() == null ? "" : req.status().toUpperCase();
+        if (!"ONLINE".equals(status) && !"OFFLINE".equals(status)) {
+            throw new BizException(ErrorCode.INVALID_AMOUNT, "status 只能是 ONLINE / OFFLINE");
+        }
+        if (voucherRepository.updateStatus(type, status) == 0) {
+            throw new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type);
+        }
+        return Result.ok(null);
+    }
+
+    /** 优惠券管理：删除券类型与全部领取记录 */
+    @DeleteMapping("/vouchers/{type}")
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    public Result<Void> deleteVoucher(@PathVariable int type) {
+        voucherRepository.deleteRecordsByType(type);
+        if (voucherRepository.deleteStock(type) == 0) {
+            throw new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type);
+        }
+        return Result.ok(null);
+    }
+
+    private Map<String, Object> voucherView(VoucherStock stock) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("type", stock.type());
+        item.put("stock", stock.stock());
+        item.put("status", stock.status());
+        item.put("thresholdCents", stock.thresholdCents());
+        item.put("discountCents", stock.discountCents());
+        item.put("description", stock.description());
+        item.put("lastChangeTime", stock.lastChangeTime() == null ? "" : stock.lastChangeTime().toString());
+        return item;
+    }
+
+    private static String moneyText(long cents) {
+        return BigDecimal.valueOf(cents, 2).stripTrailingZeros().toPlainString();
     }
 
     /** 待仲裁列表：默认查 DISPUTED，最多 50 条 */

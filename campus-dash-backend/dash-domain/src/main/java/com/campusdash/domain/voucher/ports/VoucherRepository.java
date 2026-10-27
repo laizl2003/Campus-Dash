@@ -18,8 +18,20 @@ public interface VoucherRepository {
     /** 启动时校准描述文案（SQL 种子容易受客户端字符集影响写成乱码） */
     int updateDescription(int type, String description);
 
-    /** 库存行不存在时补一条（不改已有库存） */
-    void insertStockIfAbsent(int type, int stock, String description);
+    /** 管理端新增一种券：type 由调用方生成（max+1） */
+    void insertStock(VoucherStock stock);
+
+    int updateStock(int type, int stock);
+
+    int updateStatus(int type, String status);
+
+    int deleteStock(int type);
+
+    /** 删除某类型的所有领取记录（管理端删除券时调用） */
+    int deleteRecordsByType(int type);
+
+    /** 当前最大 type + 1 */
+    int nextType();
 
     /** 原子扣减库存，返回影响行数；0 表示已抢光 */
     int decrementStock(int type);

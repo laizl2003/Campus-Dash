@@ -3,7 +3,7 @@ package com.campusdash.application.usecase;
 import com.campusdash.domain.errand.ports.LocalMessageRepository;
 import com.campusdash.domain.voucher.model.Voucher;
 import com.campusdash.domain.voucher.model.VoucherStatus;
-import com.campusdash.domain.voucher.model.VoucherType;
+import com.campusdash.domain.voucher.model.VoucherStock;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.shared.BizException;
 import com.campusdash.shared.ErrorCode;
@@ -52,8 +52,11 @@ public class ClaimVoucherUseCase {
 
     @Transactional(rollbackFor = Exception.class)
     public Claimed claim(String userId, int typeCode) {
-        VoucherType type = VoucherType.of(typeCode)
+        VoucherStock stock = vouchers.findStock(typeCode)
                 .orElseThrow(() -> new BizException(ErrorCode.VOUCHER_INVALID, "type=" + typeCode));
+        if (!stock.online()) {
+            throw new BizException(ErrorCode.VOUCHER_NOT_AVAILABLE, "该优惠券已下架");
+        }
 
         Instant now = Instant.now();
         // 同一类型的券，一个人只能持有一张可用的（否则库存会被单个用户刷光）
@@ -78,6 +81,6 @@ public class ClaimVoucherUseCase {
                 expireAt);
 
         int remaining = vouchers.findStock(typeCode).map(s -> s.stock()).orElse(0);
-        return new Claimed(voucherId, typeCode, type.description(), expireAt, remaining);
+        return new Claimed(voucherId, typeCode, stock.description(), expireAt, remaining);
     }
 }

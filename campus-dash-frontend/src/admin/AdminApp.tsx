@@ -24,7 +24,7 @@ export default function AdminApp() {
   const [busy, setBusy] = useState(false);
   const [pendingFavor, setPendingFavor] = useState<'RUNNER' | 'PUBLISHER' | null>(null);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
-  const [view, setView] = useState<'disputes' | 'ledger'>('disputes');
+  const [view, setView] = useState<'disputes' | 'ledger' | 'vouchers'>('disputes');
   const [netCents, setNetCents] = useState(0);
   const [ledgerAccount, setLedgerAccount] = useState<'COMMISSION' | 'MARKETING'>('COMMISSION');
 
@@ -80,7 +80,7 @@ export default function AdminApp() {
       <nav className="admin-nav" aria-label="管理导航">
         <button type="button" className={view === 'disputes' ? 'is-active' : ''} onClick={() => setView('disputes')}><Icon name="shield" size={16}/>仲裁工作台</button>
         <button type="button" className={view === 'ledger' ? 'is-active' : ''} onClick={() => setView('ledger')}><Icon name="receipt" size={16}/>资金流水</button>
-        <button type="button" disabled title="规划中"><Icon name="ticket" size={16}/>优惠券管理</button>
+        <button type="button" className={view === 'vouchers' ? 'is-active' : ''} onClick={() => setView('vouchers')}><Icon name="ticket" size={16}/>优惠券管理</button>
         <button type="button" disabled title="规划中"><Icon name="wallet" size={16}/>平台配置</button>
       </nav>
       <div className="admin-side-foot">
@@ -91,11 +91,11 @@ export default function AdminApp() {
 
     <div className="admin-main">
       <header className="admin-top">
-        <div><span className="eyebrow">ADMIN CONSOLE</span><h1>{view === 'disputes' ? '仲裁工作台' : '平台资金流水'}<span className="heading-dot">.</span></h1>
-          <p>{view === 'disputes' ? '处理争议任务，决定托管资金流向跑腿或发单人。' : '佣金账户与营销账户的每一笔入账/出账。'}</p></div>
-        <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
+        <div><span className="eyebrow">ADMIN CONSOLE</span><h1>{view === 'disputes' ? '仲裁工作台' : view === 'vouchers' ? '优惠券管理' : '平台资金流水'}<span className="heading-dot">.</span></h1>
+          <p>{view === 'disputes' ? '处理争议任务，决定托管资金流向跑腿或发单人。' : view === 'vouchers' ? '维护满减券的类型、库存与上下架状态。' : '佣金账户与营销账户的每一笔入账/出账。'}</p></div>
+        {view !== 'vouchers' && <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
           <Icon name="refresh" size={15} className={loading ? 'is-spinning' : ''}/>刷新
-        </button>
+        </button>}
       </header>
 
       {message && <div className={`banner ${message.error ? 'warn' : 'ok'}`} role="status">
@@ -167,7 +167,7 @@ export default function AdminApp() {
             <p className="admin-hint">裁决前请核对双方描述与送达凭证；资金动作在同一个事务里完成。</p>
           </>}
         </section>
-      </div> : <div className="admin-ledger-view">
+      </div> : view === 'vouchers' ? <VoucherManager/> : <div className="admin-ledger-view">
         <div className={`admin-net ${netCents >= 0 ? 'in' : 'out'}`}>
           <span>平台净收入</span>
           <strong>{yuan(netCents)}</strong>
@@ -248,4 +248,108 @@ function LedgerPanel({ account, title }: { account: 'COMMISSION' | 'MARKETING'; 
       <button type="button" className="btn btn-ghost" disabled={page + 1 >= totalPages || loading} onClick={() => setPage(p => p + 1)}>下一页</button>
     </div>
   </section>;
+}
+
+function VoucherManager() {
+  const [items, setItems] = useState<Awaited<ReturnType<typeof api.adminVouchers>>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [threshold, setThreshold] = useState('10');
+  const [discount, setDiscount] = useState('2');
+  const [stock, setStock] = useState('100');
+  const [busy, setBusy] = useState(false);
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try { setItems(await api.adminVouchers()); }
+    catch (e) { setError(e instanceof Error ? e.message : '优惠券加载失败'); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const create = async () => {
+    const t = Number(threshold), d = Number(discount), s = Number(stock);
+    if (!Number.isFinite(t) || !Number.isFinite(d) || !Number.isFinite(s) || t <= 0 || d <= 0 || s < 0) {
+      setError('请输入有效的满减金额、优惠金额与库存'); return;
+    }
+    if (d >= t) { setError('优惠金额必须小于满减金额'); return; }
+    setBusy(true); setError(''); setMessage('');
+    try {
+      await api.adminCreateVoucher(Math.round(t * 100), Math.round(d * 100), Math.round(s));
+      setMessage('已新增优惠券');
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : '新增失败'); }
+    finally { setBusy(false); }
+  };
+
+  const toggle = async (type: number, status: string) => {
+    setError('');
+    try {
+      await api.adminUpdateVoucherStatus(type, status === 'ONLINE' ? 'OFFLINE' : 'ONLINE');
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : '状态更新失败'); }
+  };
+
+  const remove = async (type: number, description: string) => {
+    if (!window.confirm(`确认删除「${description}」？该类型的全部领取记录会一并删除。`)) return;
+    setError('');
+    try { await api.adminDeleteVoucher(type); await load(); }
+    catch (e) { setError(e instanceof Error ? e.message : '删除失败'); }
+  };
+
+  const saveStock = async (type: number, fallback: number) => {
+    const value = Number(drafts[type] ?? fallback);
+    if (!Number.isFinite(value) || value < 0) { setError('库存不能为负'); return; }
+    setError('');
+    try {
+      await api.adminUpdateVoucherStock(type, Math.round(value));
+      setDrafts(prev => { const next = { ...prev }; delete next[type]; return next; });
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : '库存更新失败'); }
+  };
+
+  return <div className="admin-voucher-view">
+    <section className="admin-voucher-create">
+      <div className="admin-list-head"><h2>新增优惠券</h2><small>金额单位为元，type 自动递增</small></div>
+      <div className="admin-voucher-form">
+        <label>满减金额<input type="number" min="0" step="0.01" value={threshold} onChange={e => setThreshold(e.target.value)}/></label>
+        <label>优惠金额<input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(e.target.value)}/></label>
+        <label>库存<input type="number" min="0" step="1" value={stock} onChange={e => setStock(e.target.value)}/></label>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>
+          {busy ? '提交中…' : '新增优惠券'}
+        </button>
+      </div>
+      {message && <div className="banner ok" role="status">{message}</div>}
+      {error && <div className="banner warn" role="alert">{error}</div>}
+    </section>
+
+    <section className="admin-voucher-list">
+      <div className="admin-list-head"><h2>优惠券列表 <span>{items.length}</span></h2><small>删除会同时清除该类型的全部领取记录</small></div>
+      {loading ? <div className="admin-empty">正在加载…</div>
+        : items.length === 0 ? <div className="admin-empty">还没有优惠券，先在上方新增一张。</div>
+        : <div className="admin-ledger-scroll"><table>
+          <thead><tr><th>类型</th><th>满减规则</th><th>库存</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>{items.map(item => <tr key={item.type}>
+            <td>#{item.type}</td>
+            <td>{item.description}</td>
+            <td className="admin-voucher-stock-cell">
+              <input className="admin-stock-input" type="number" min="0" step="1"
+                     value={drafts[item.type] ?? String(item.stock)}
+                     onChange={e => setDrafts(prev => ({ ...prev, [item.type]: e.target.value }))}/>
+              <button type="button" className="btn btn-ghost" onClick={() => void saveStock(item.type, item.stock)}>保存</button>
+            </td>
+            <td><span className={`admin-voucher-status ${item.status === 'ONLINE' ? 'is-online' : 'is-offline'}`}>{item.status === 'ONLINE' ? '上架' : '下架'}</span></td>
+            <td className="admin-voucher-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => void toggle(item.type, item.status)}>
+                {item.status === 'ONLINE' ? '下架' : '上架'}
+              </button>
+              <button type="button" className="btn btn-ghost admin-danger" onClick={() => void remove(item.type, item.description)}>删除</button>
+            </td>
+          </tr>)}</tbody>
+        </table></div>}
+    </section>
+  </div>;
 }

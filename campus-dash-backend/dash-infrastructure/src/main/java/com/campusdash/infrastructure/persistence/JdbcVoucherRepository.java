@@ -24,6 +24,9 @@ public class JdbcVoucherRepository implements VoucherRepository {
     private static final RowMapper<VoucherStock> STOCK_MAPPER = (ResultSet rs, int n) -> new VoucherStock(
             rs.getInt("type"),
             rs.getInt("stock"),
+            rs.getString("status"),
+            rs.getLong("threshold_cents"),
+            rs.getLong("discount_cents"),
             rs.getString("description"),
             instant(rs, "last_change_time"));
 
@@ -44,15 +47,15 @@ public class JdbcVoucherRepository implements VoucherRepository {
 
     @Override
     public List<VoucherStock> findAllStocks() {
-        return jdbc.query("SELECT type, stock, description, last_change_time FROM voucher_stock ORDER BY type",
-                STOCK_MAPPER);
+        return jdbc.query("SELECT type, stock, status, threshold_cents, discount_cents, description, last_change_time "
+                + "FROM voucher_stock ORDER BY type", STOCK_MAPPER);
     }
 
     @Override
     public Optional<VoucherStock> findStock(int type) {
         List<VoucherStock> rows = jdbc.query(
-                "SELECT type, stock, description, last_change_time FROM voucher_stock WHERE type = ?",
-                STOCK_MAPPER, type);
+                "SELECT type, stock, status, threshold_cents, discount_cents, description, last_change_time "
+                        + "FROM voucher_stock WHERE type = ?", STOCK_MAPPER, type);
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 
@@ -62,9 +65,40 @@ public class JdbcVoucherRepository implements VoucherRepository {
     }
 
     @Override
-    public void insertStockIfAbsent(int type, int stock, String description) {
-        jdbc.update("INSERT IGNORE INTO voucher_stock (type, stock, description) VALUES (?, ?, ?)",
-                type, stock, description);
+    public void insertStock(VoucherStock stock) {
+        jdbc.update("""
+                INSERT INTO voucher_stock (type, stock, status, threshold_cents, discount_cents, description)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """, stock.type(), stock.stock(), stock.status(), stock.thresholdCents(),
+                stock.discountCents(), stock.description());
+    }
+
+    @Override
+    public int updateStock(int type, int stock) {
+        return jdbc.update("UPDATE voucher_stock SET stock = ?, last_change_time = NOW(3) WHERE type = ?",
+                stock, type);
+    }
+
+    @Override
+    public int updateStatus(int type, String status) {
+        return jdbc.update("UPDATE voucher_stock SET status = ?, last_change_time = NOW(3) WHERE type = ?",
+                status, type);
+    }
+
+    @Override
+    public int deleteStock(int type) {
+        return jdbc.update("DELETE FROM voucher_stock WHERE type = ?", type);
+    }
+
+    @Override
+    public int deleteRecordsByType(int type) {
+        return jdbc.update("DELETE FROM voucher_record WHERE voucher_type = ?", type);
+    }
+
+    @Override
+    public int nextType() {
+        Integer max = jdbc.queryForObject("SELECT COALESCE(MAX(type), 0) FROM voucher_stock", Integer.class);
+        return (max == null ? 0 : max) + 1;
     }
 
     /**
@@ -76,7 +110,7 @@ public class JdbcVoucherRepository implements VoucherRepository {
         return jdbc.update("""
                 UPDATE voucher_stock
                    SET stock = stock - 1, last_change_time = NOW(3)
-                 WHERE type = ? AND stock > 0
+                 WHERE type = ? AND status = 'ONLINE' AND stock > 0
                 """, type);
     }
 
@@ -141,14 +175,16 @@ public class JdbcVoucherRepository implements VoucherRepository {
     @Override
     public Optional<VoucherUse> findUseByErrand(long errandId) {
         List<VoucherUse> rows = jdbc.query("""
-                SELECT voucher_id, voucher_type, runner_bear_cents
-                  FROM voucher_record
-                 WHERE used_errand_id = ? AND status IN ('locked', 'used')
+                SELECT vr.voucher_id, vr.voucher_type, vr.runner_bear_cents,
+                       COALESCE(vs.discount_cents, 0) AS discount_cents
+                  FROM voucher_record vr
+                  LEFT JOIN voucher_stock vs ON vs.type = vr.voucher_type
+                 WHERE vr.used_errand_id = ? AND vr.status IN ('locked', 'used')
                  LIMIT 1
                 """, (rs, n) -> new VoucherUse(
                         rs.getLong("voucher_id"),
                         rs.getInt("voucher_type"),
-                        VoucherType.of(rs.getInt("voucher_type")).map(VoucherType::discountCents).orElse(0L),
+                        rs.getLong("discount_cents"),
                         rs.getLong("runner_bear_cents")), errandId);
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }

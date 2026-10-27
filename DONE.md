@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-27 · 管理端优惠券管理
+
+- **目标**：Admin 可查看/新增/改库存/上下架/删除优惠券。
+- **改动**：
+  - voucher_stock 新增 status(ONLINE/OFFLINE)、threshold_cents、discount_cents；迁移脚本 + init.sql 同步。
+  - 券的规则改为读数据库（type 不再受 VoucherType 枚举限制）：领取与发布校验 threshold/discount、上下架状态；删除同时清理 voucher_record。
+  - 管理接口：GET/POST /api/admin/vouchers、PUT /{type}/stock、POST /{type}/status、DELETE /{type}。
+  - 管理台新增「优惠券管理」页：新增表单（满减/优惠/库存）、列表展示类型/规则/库存/状态，行内保存库存、上下架、删除。
+- **验证**：新增 type=12（满12元减3元、库存5）→ 用户端可见并可领取；改库存 8；下架后用户端不可见且领取返回 VOUCHER_NOT_AVAILABLE；删除后 stock 记录与该类型 voucher_record 全部清除，列表回到 11 条。
+
+
 ## 2026-10-27 · 优惠券使用时间改为左对齐末行
 
 - **目标**：使用时间放在卡片最后一行，与金额/规则左对齐。

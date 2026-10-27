@@ -3,7 +3,8 @@ package com.campusdash.presentation;
 import com.campusdash.application.usecase.ClaimVoucherUseCase;
 import com.campusdash.application.usecase.query.QueryVoucherUseCase;
 import com.campusdash.domain.voucher.model.Voucher;
-import com.campusdash.domain.voucher.model.VoucherType;
+import com.campusdash.domain.voucher.model.VoucherStock;
+import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.presentation.auth.CurrentUser;
 import com.campusdash.shared.Result;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,24 +24,26 @@ public class VoucherController {
 
     private final QueryVoucherUseCase queryUseCase;
     private final ClaimVoucherUseCase claimUseCase;
+    private final VoucherRepository vouchers;
 
-    public VoucherController(QueryVoucherUseCase queryUseCase, ClaimVoucherUseCase claimUseCase) {
+    public VoucherController(QueryVoucherUseCase queryUseCase, ClaimVoucherUseCase claimUseCase,
+                             VoucherRepository vouchers) {
         this.queryUseCase = queryUseCase;
         this.claimUseCase = claimUseCase;
+        this.vouchers = vouchers;
     }
 
     @GetMapping
     public Result<Map<String, Object>> stocks() {
         List<Map<String, Object>> items = queryUseCase.stocks().stream()
+                .filter(VoucherStock::online)
                 .map(stock -> {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("type", stock.type());
                     item.put("stock", stock.stock());
                     item.put("description", stock.description());
-                    VoucherType.of(stock.type()).ifPresent(type -> {
-                        item.put("thresholdCents", type.thresholdCents());
-                        item.put("discountCents", type.discountCents());
-                    });
+                    item.put("thresholdCents", stock.thresholdCents());
+                    item.put("discountCents", stock.discountCents());
                     item.put("lastChangeTime", stock.lastChangeTime() == null ? "" : stock.lastChangeTime().toString());
                     return item;
                 })
@@ -73,11 +76,11 @@ public class VoucherController {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("voucherId", String.valueOf(voucher.voucherId()));
         item.put("type", voucher.type());
-        item.put("description", VoucherType.of(voucher.type()).map(VoucherType::description).orElse(""));
-        VoucherType.of(voucher.type()).ifPresent(type -> {
-            item.put("thresholdCents", type.thresholdCents());
-            item.put("discountCents", type.discountCents());
-        });
+        vouchers.findStock(voucher.type()).ifPresentOrElse(stock -> {
+            item.put("description", stock.description());
+            item.put("thresholdCents", stock.thresholdCents());
+            item.put("discountCents", stock.discountCents());
+        }, () -> item.put("description", ""));
         item.put("expireTime", voucher.expireTime().toString());
         item.put("finishAt", voucher.finishAt() == null ? "" : voucher.finishAt().toString());
         item.put("status", voucher.status().dbValue());
