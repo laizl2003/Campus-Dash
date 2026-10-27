@@ -241,7 +241,7 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
         </div>}
       </div>}
     </div></section>
-    {(disabledNotice || error) && <div className="floating-notice" role="alertdialog" aria-live="assertive"
+    {(disabledNotice || error) && <div className="floating-notice is-error" role="alertdialog" aria-live="assertive"
          aria-label={disabledNotice ? '账户已被禁用' : '操作失败'}>
       <div className="floating-notice-card">
         <span className="floating-notice-icon">!</span>

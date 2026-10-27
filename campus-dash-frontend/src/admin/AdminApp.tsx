@@ -400,7 +400,13 @@ function VoucherManager() {
 
     <section className="admin-voucher-list">
       <div className="admin-list-head"><h2>优惠券列表 <span>{items.length}</span></h2><small>删除会同时清除该类型的全部领取记录</small></div>
-      {toast && <div className={`admin-voucher-toast is-${toast.kind}`} role="status">{toast.text}</div>}
+      {toast && <div className={`floating-notice ${toast.kind === 'ok' ? 'is-success' : 'is-error'}`} role="status">
+        <div className="floating-notice-card">
+          <span className="floating-notice-icon">{toast.kind === 'ok' ? '✓' : '!'}</span>
+          <div className="floating-notice-body"><strong>{toast.text}</strong></div>
+          <button type="button" className="floating-notice-close" aria-label="关闭提示" onClick={() => setToast(null)}>×</button>
+        </div>
+      </div>}
       {pendingDelete && <div className="admin-voucher-confirm" role="alertdialog">
         <span>确认删除「{pendingDelete.description}」？该类型全部领取记录会一并删除。</span>
         <button type="button" className="btn btn-danger" onClick={() => void confirmDelete()}>确认删除</button>
@@ -558,7 +564,13 @@ function SettingsPanel() {
             </td>
           </tr>)}</tbody>
         </table></div>}
-      {toast && <div className="admin-voucher-toast is-ok" role="status">{toast}</div>}
+      {toast && <div className="floating-notice is-success" role="status">
+        <div className="floating-notice-card">
+          <span className="floating-notice-icon">✓</span>
+          <div className="floating-notice-body"><strong>{toast}</strong></div>
+          <button type="button" className="floating-notice-close" aria-label="关闭提示" onClick={() => setToast('')}>×</button>
+        </div>
+      </div>}
       <div className="admin-pager">
         <button type="button" className="btn btn-ghost" disabled={page <= 0 || loadingUsers} onClick={() => setPage(p => Math.max(0, p - 1))}>上一页</button>
         <span>第 {page + 1} / {totalPages} 页</span>

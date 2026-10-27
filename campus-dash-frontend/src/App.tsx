@@ -130,6 +130,6 @@ export default function App() {
       {page}
       <footer className="workspace-footer"><span>CampusDash</span><span>每一份托付，都认真送达。</span><span>校园互助工作台</span></footer>
     </div></main>
-    {toast && <div className="toast" role="status"><Icon name={toast.error ? 'info' : 'check'} size={17}/>{toast.text}<button aria-label="关闭操作提示" onClick={() => setToast(null)}><Icon name="close" size={15}/></button></div>}
+    {toast && <div className={`toast ${toast.error ? 'is-error' : 'is-success'}`} role="status"><Icon name={toast.error ? 'info' : 'check'} size={17}/>{toast.text}<button aria-label="关闭操作提示" onClick={() => setToast(null)}><Icon name="close" size={15}/></button></div>}
   </div>;
 }
