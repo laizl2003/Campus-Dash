@@ -350,3 +350,16 @@ input::placeholder, textarea::placeholder { color: #707070; }
 .auth-demo > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .auth-demo button { padding: 5px 10px; font-size: 11px; color: #555; border: 1px solid var(--line); border-radius: 999px; background: #fff; }
 .auth-demo button:hover:not(:disabled) { border-color: var(--primary-dark); background: var(--primary-soft); color: var(--primary-ink); }
+
+/* 登录页标题：去掉多余文案后把主标题放大，页面更聚焦 */
+.login-card .auth-title { font-size: 42px; line-height: 1.28; letter-spacing: -.8px; margin: 2px 0 4px; }
+.auth-form { margin-top: 26px; }
+
+/* 侧边栏底部：直接展示"用户：昵称"，头像取昵称首字 */
+.profile-name { display: block; font-size: 12px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-select { display: grid; gap: 2px; }
+.profile-select select { margin-top: 1px; }
+
+@media(max-width: 530px) {
+  .login-card .auth-title { font-size: 34px; }
+}

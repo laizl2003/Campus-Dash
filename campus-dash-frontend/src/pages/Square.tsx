@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, issueToken, TYPE_TEXT, TYPE_ICON, yuan } from '../api';
+import { api, TYPE_TEXT, TYPE_ICON, yuan } from '../api';
 import type { ErrandCard } from '../api';
 import { subscribeWs } from '../ws';
 import ErrandCardView from '../components/ErrandCard';
 import Icon from '../components/Icon';
 import CampusArt from '../components/CampusArt';
-interface GrabRow { label: string; ok: boolean; code: string; ms: number }
 const STARTERS = [
   { type: 'DELIVERY', icon: 'package', title: '快递帮我取', text: '把等待，变成顺路送达', template: '帮我从快递站取一个包裹送到宿舍' },
   { type: 'BUY', icon: 'bag', title: '好吃的帮我带', text: '食堂带饭，日常代买', template: '帮我从食堂带一份午餐到宿舍' },
@@ -19,13 +18,6 @@ export default function Square() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('ALL');
   const [sort, setSort] = useState('default');
-  const [labOpen, setLabOpen] = useState(false);
-  const [target, setTarget] = useState('');
-  const [count, setCount] = useState(6);
-  const [grabbing, setGrabbing] = useState(false);
-  const grabLock = useRef(false);
-  const [grabLog, setGrabLog] = useState<GrabRow[]>([]);
-  const [grabMessage, setGrabMessage] = useState('');
   const requestId = useRef(0);
   const load = useCallback(async () => {
     const id = ++requestId.current;
@@ -47,27 +39,6 @@ export default function Square() {
   }, [cards, category, query, sort]);
   const available = cards.filter(c => c.status === 'PUBLISHED');
   const totalReward = cards.reduce((sum, c) => sum + c.rewardCents, 0);
-  const eligible = available.filter(c => c.slotTotal === 1 && c.slotTaken === 0);
-  const spikeGrab = async () => {
-    if (!target || grabLock.current) return;
-    grabLock.current = true; setGrabbing(true); setGrabLog([]); setGrabMessage('');
-    try {
-      // 获取临时身份令牌不触碰当前登录会话，避免并发请求串号。
-      const tokens = await Promise.all(Array.from({ length: count }, (_, i) => issueToken(30000 + i)));
-      const results = await Promise.all(tokens.map(async (tok, i) => {
-        const start = performance.now();
-        try {
-          const resp = await fetch(`/api/errands/${target}/grab`, { method: 'POST', headers: { Authorization: `Bearer ${tok}` } });
-          const body = await resp.json();
-          return { label: `同学 ${30000 + i}`, ok: body.code === 'OK', code: body.code, ms: Math.round(performance.now() - start) };
-        } catch { return { label: `同学 ${30000 + i}`, ok: false, code: 'NETWORK', ms: Math.round(performance.now() - start) }; }
-      }));
-      setGrabLog(results.sort((a, b) => Number(b.ok) - Number(a.ok)));
-      setGrabMessage(`${count} 个请求已结束，${results.filter(r => r.ok).length} 人抢单成功。`);
-      void load();
-    } catch (e) { setGrabMessage(e instanceof Error ? e.message : '演示执行失败，请重试'); }
-    finally { setGrabbing(false); grabLock.current = false; }
-  };
   return <div className="square-page">
     <div className="page-head"><div><span className="eyebrow">CAMPUS LIFE, MADE EASIER</span><h1>任务广场<span className="heading-dot">.</span></h1><p>发现校园里的小委托，让每一段顺路都有价值。</p></div><button className="btn btn-ghost" onClick={() => void load()} disabled={loading}><Icon name="refresh" size={15} className={loading ? 'is-spinning' : ''}/>刷新任务</button></div>
     <section className="square-hero"><div className="hero-copy"><span className="soft-label"><Icon name="spark" size={13}/>把小事托付，把时间留给自己</span><h2>刚好顺路，<br/><em>刚好帮你。</em></h2><p>一份热饭、一个包裹、一件小事。<br/>在校园，让互相帮助变得简单。</p><a href="#/publish" className="btn btn-primary">发布我的委托<Icon name="arrow-right" size={15}/></a></div><CampusArt/><span className="hero-caption">THE LITTLE THINGS MATTER</span></section>
@@ -81,8 +52,6 @@ export default function Square() {
     </section><aside className="market-aside">
       <section className="overview-panel"><div className="section-title"><h3>广场一览</h3><Icon name="grid" size={16}/></div><p>当前已加载任务</p><div className="overview-numbers"><div><strong>{updatedAt ? available.length : '—'}</strong><span>等待接单</span></div><div><strong>{updatedAt ? yuan(totalReward) : '—'}</strong><span>悬赏合计</span></div></div><div className="overview-types">{Object.entries(TYPE_TEXT).map(([type, label]) => <div key={type}><span><Icon name={TYPE_ICON[type]} size={14}/>{label}</span><strong>{updatedAt ? cards.filter(c => c.type === type).length : '—'}</strong></div>)}</div></section>
       <section className="how-it-works"><span className="soft-label"><Icon name="shield" size={14}/>安心托付</span><h3>每一份委托，<br/>都有清晰的下一步。</h3><ol><li><span>01</span><div><strong>发布与托管</strong><p>说清需求，悬赏由平台托管。</p></div></li><li><span>02</span><div><strong>接单与送达</strong><p>及时确认，任务进度随时可查。</p></div></li><li><span>03</span><div><strong>确认与结算</strong><p>完成后确认，悬赏结算给同学。</p></div></li></ol><a href="#/mine">查看我的任务<Icon name="arrow-right" size={14}/></a></section>
-      <div className="lab-entry"><Icon name="lab" size={17}/><span><strong>并发抢单演示</strong><small>探索多人同时接单的结果</small></span><button className="icon-button" aria-label={labOpen ? '收起并发演示' : '打开并发演示'} aria-expanded={labOpen} onClick={() => setLabOpen(!labOpen)}><Icon name={labOpen ? 'close' : 'plus'} size={16}/></button></div>
     </aside></div>
-    {labOpen && <section className="lab-panel"><div className="section-title"><h2><Icon name="lab" size={20}/>并发抢单演示</h2><span className="soft-label">教学工具</span></div><p>选择一个单名额任务，让多个演示身份同时抢单。执行会真实占用任务名额；浏览器的少量并发仅用于观察结果。</p><div className="lab-controls"><select aria-label="演示目标任务" value={target} onChange={e => setTarget(e.target.value)} disabled={grabbing}><option value="">请选择待抢任务</option>{eligible.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select><select aria-label="并发人数" value={count} onChange={e => setCount(Number(e.target.value))} disabled={grabbing}><option value={6}>6 人同时抢</option><option value={12}>12 人同时抢</option></select><button className="btn btn-primary" disabled={grabbing || !eligible.some(c => c.id === target)} onClick={() => void spikeGrab()}>{grabbing ? '正在执行…' : '开始演示'}</button></div>{grabMessage && <p className="banner info" role="status">{grabMessage}</p>}{grabLog.length > 0 && <div className="grab-log">{grabLog.map(r => <div key={r.label} className={`grab-row ${r.ok ? 'win' : ''}`}><Icon name={r.ok ? 'check' : 'close'} size={14}/><span>{r.label}</span><strong>{r.ok ? '抢单成功' : r.code}</strong><span>{r.ms} ms</span></div>)}</div>}</section>}
   </div>;
 }

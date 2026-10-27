@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { captchaImage, login, loginAs, registerAccount, type Profile } from '../api';
-import { IDENTITIES } from '../identities';
+import { captchaImage, login, registerAccount, type Profile } from '../api';
 import Icon from '../components/Icon';
 import CampusArt from '../components/CampusArt';
 
@@ -82,19 +81,6 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
     }
   };
 
-  const quickEnter = async (userId: number) => {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      onAuthed(await loginAs(String(userId)));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '演示身份登录失败');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return <div className="login-page">
     <section className="login-story">
       <a className="brand" href="#/square"><span className="brand-mark"><Icon name="package" size={24}/></span><span>CampusDash<small>校园里的顺路好帮手</small></span></a>
@@ -103,9 +89,7 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
     </section>
 
     <section className="login-side"><div className="login-card">
-      <span className="soft-label">{mode === 'login' ? '体验工作台' : '创建账号'}</span>
-      <h2>{mode === 'login' ? '从一个身份开始' : '加入 CampusDash'}</h2>
-      <p className="login-description">{mode === 'login' ? '用用户名与密码登录，验证码每次都不一样。' : '用户名与手机号各只能注册一次，注册后即可登录。'}</p>
+      <h2 className="auth-title">{mode === 'login' ? '从一个身份开始' : '创建你的账号'}</h2>
 
       <form className="auth-form" onSubmit={submit}>
         <label className="auth-field">
@@ -160,12 +144,6 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
           已有账号？<strong>返回登录</strong>
         </button>}
       </form>
-
-      {mode === 'login' && <div className="auth-demo">
-        <span>演示身份</span>
-        <div>{IDENTITIES.map(it => <button key={it.userId} type="button" disabled={busy}
-              onClick={() => void quickEnter(it.userId)}>{it.name}</button>)}</div>
-      </div>}
     </div></section>
   </div>;
 }

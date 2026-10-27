@@ -13,11 +13,13 @@ export interface ApiResult<T> {
 const ACCESS_KEY = 'dash_token';
 const REFRESH_KEY = 'dash_refresh';
 const USER_KEY = 'dash_user';
+const NAME_KEY = 'dash_username';
 
 let token: string | null = localStorage.getItem(ACCESS_KEY);
 let refreshToken: string | null = localStorage.getItem(REFRESH_KEY);
 // 用户 id 现在是字符串：注册用户是 UUID，仲裁账号是 001，演示账号是 "1001"
 let currentUserId: string | null = null;
+let currentUsername: string | null = localStorage.getItem(NAME_KEY);
 try { currentUserId = token ? JSON.parse(localStorage.getItem(USER_KEY) || 'null') : null; } catch { /* 无效本地身份按未登录处理。 */ }
 
 // 会话代号：登录、登出、切换身份都 +1。请求发出时记下代号，
@@ -27,6 +29,8 @@ let sessionEpoch = 0;
 
 export function getToken() { return token; }
 export function getUserId() { return currentUserId; }
+/** 展示用昵称：注册用户是用户名，演示账号退回身份名或 id */
+export function getUsername() { return currentUsername ?? currentUserId; }
 
 interface TokenPair { accessToken: string; refreshToken: string | null; }
 
@@ -121,18 +125,20 @@ export async function login(input: LoginInput): Promise<Profile> {
   const previousRefresh = refreshToken;
   applyTokens({ accessToken, refreshToken: data.refreshToken ?? null });
   currentUserId = String(data.userId);
+  currentUsername = data.username ?? input.username;
   sessionEpoch++;
   localStorage.setItem(USER_KEY, JSON.stringify(currentUserId));
+  localStorage.setItem(NAME_KEY, currentUsername);
   if (previousRefresh && previousRefresh !== (data.refreshToken ?? null)) revokeQuietly(previousRefresh, null);
   return {
     userId: currentUserId,
-    username: data.username ?? input.username,
+    username: currentUsername,
     role: data.role ?? 'user',
   };
 }
 
 /** 演示身份直登：调用后门的 userId 分支，只给本地演示/压测用 */
-export async function loginAs(userId: string): Promise<Profile> {
+export async function loginAs(userId: string, displayName?: string): Promise<Profile> {
   const data = await postJson<{ token?: string; accessToken?: string; refreshToken?: string; userId?: string }>(
     '/api/auth/login',
     { userId },
@@ -141,9 +147,11 @@ export async function loginAs(userId: string): Promise<Profile> {
   if (!accessToken) throw new Error('登录响应缺少 access token');
   applyTokens({ accessToken, refreshToken: data.refreshToken ?? null });
   currentUserId = String(data.userId ?? userId);
+  currentUsername = displayName ?? currentUserId;
   sessionEpoch++;
   localStorage.setItem(USER_KEY, JSON.stringify(currentUserId));
-  return { userId: currentUserId, username: currentUserId, role: 'user' };
+  localStorage.setItem(NAME_KEY, currentUsername);
+  return { userId: currentUserId, username: currentUsername, role: 'user' };
 }
 
 async function requestTokens(userId: string | number): Promise<TokenPair> {
@@ -181,9 +189,11 @@ export function logout() {
   refreshToken = null;
   currentUserId = null;
   sessionEpoch++;
+  currentUsername = null;
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(NAME_KEY);
   window.dispatchEvent(new Event('dash:logout'));
   // 只清本地等于把 refresh 留在服务端：登出必须让服务端也撤销，否则 7 天内仍可换新 access
   revokeQuietly(refresh, access);

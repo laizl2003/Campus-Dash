@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router';
 import { getUserId, loginAs, logout } from './api';
+import { IDENTITIES } from './identities';
 import TopBar from './components/TopBar';
 import Icon from './components/Icon';
 import Square from './pages/Square';
@@ -31,7 +32,11 @@ export default function App() {
     if (loginLock.current) return;
     loginLock.current = true;
     setLoginBusy(id); setError('');
-    try { const profile = await loginAs(id); setUserId(profile.userId); }
+    try {
+      const displayName = IDENTITIES.find(i => String(i.userId) === id)?.name;
+      const profile = await loginAs(id, displayName);
+      setUserId(profile.userId);
+    }
     catch (e) { setError(e instanceof Error ? e.message : '切换身份失败，请重试'); }
     finally { setLoginBusy(null); loginLock.current = false; }
   };
