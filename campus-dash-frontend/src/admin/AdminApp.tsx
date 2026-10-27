@@ -22,6 +22,7 @@ export default function AdminApp() {
   const [selected, setSelected] = useState<Dispute | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pendingFavor, setPendingFavor] = useState<'RUNNER' | 'PUBLISHER' | null>(null);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
 
   const load = useCallback(async () => {
@@ -40,6 +41,7 @@ export default function AdminApp() {
 
   const open = async (id: string) => {
     try {
+      setPendingFavor(null);
       setSelected(await api.adminDispute(id));
     } catch (e) {
       setMessage({ text: e instanceof Error ? e.message : '详情加载失败', error: true });
@@ -48,9 +50,8 @@ export default function AdminApp() {
 
   const arbitrate = async (favor: 'RUNNER' | 'PUBLISHER') => {
     if (!selected || busy) return;
-    const label = favor === 'RUNNER' ? '支持跑腿（正常结算）' : '支持发单人（全额退款）';
-    if (!window.confirm(`确认裁决：${label}？\n任务：${selected.title}`)) return;
     setBusy(true);
+    setPendingFavor(null);
     try {
       const result = await api.adminArbitrate(selected.errandId, favor);
       setMessage({ text: `裁决完成：${result.result === 'SETTLED' ? '已结算给跑腿' : '已退款给发单人'}`, error: false });
@@ -128,13 +129,30 @@ export default function AdminApp() {
               <Icon name="ticket" size={15}/><span>本单使用 {selected.voucherDescription}，平台补贴 {yuan((selected.voucherDiscountCents ?? 0) - (selected.runnerBearCents ?? 0))}</span>
             </div>}
             <div className="admin-actions">
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void arbitrate('RUNNER')}>
+              <button type="button" className="btn btn-primary" disabled={busy}
+                      onClick={() => setPendingFavor('RUNNER')}>
                 <Icon name="check" size={16}/>支持跑腿 · 正常结算
               </button>
-              <button type="button" className="btn" disabled={busy} onClick={() => void arbitrate('PUBLISHER')}>
+              <button type="button" className="btn" disabled={busy}
+                      onClick={() => setPendingFavor('PUBLISHER')}>
                 <Icon name="arrow-left" size={16}/>支持发单人 · 全额退款
               </button>
             </div>
+            {pendingFavor && <div className="admin-confirm" role="alertdialog" aria-label="确认裁决">
+              <p>
+                {pendingFavor === 'RUNNER'
+                  ? `确认支持跑腿？托管资金将按 8% 佣金结算给跑腿，任务变为 SETTLED。`
+                  : `确认支持发单人？托管金额将全额退回，优惠券恢复可用（已过期则置为失效）。`}
+              </p>
+              <div>
+                <button type="button" className="btn btn-primary" disabled={busy}
+                        onClick={() => void arbitrate(pendingFavor)}>
+                  {busy ? '处理中…' : '确认裁决'}
+                </button>
+                <button type="button" className="btn" disabled={busy}
+                        onClick={() => setPendingFavor(null)}>取消</button>
+              </div>
+            </div>}
             <p className="admin-hint">裁决前请核对双方描述与送达凭证；资金动作在同一个事务里完成。</p>
           </>}
         </section>

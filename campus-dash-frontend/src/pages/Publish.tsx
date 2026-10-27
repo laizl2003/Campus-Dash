@@ -36,7 +36,8 @@ export default function Publish() {
   const [error, setError] = useState<string | null>(null);
   const [published, setPublished] = useState<{ id: string; title: string; rewardCents: number; paidCents: number; discountCents: number } | null>(null);
   const [vouchers, setVouchers] = useState<{ voucherId: string; type: number; thresholdCents?: number; discountCents?: number; status: string }[]>([]);
-  const [voucherId, setVoucherId] = useState<number | null>(null);
+  // 雪花 ID 超过 2^53，必须用字符串保存和提交，转 number 会丢精度
+  const [voucherId, setVoucherId] = useState<string | null>(null);
   const submitting = useRef(false);
   const rewardCents = parseReward(reward);
   const category = CATEGORIES.find((item) => item.type === type)!;
@@ -52,11 +53,11 @@ export default function Publish() {
 
   // 只有达到门槛的券可选；改小悬赏后要自动取消已选但不达标的券
   const eligibleVouchers = vouchers.filter((v) => Number(v.thresholdCents ?? 0) <= (rewardCents ?? 0));
-  const selectedVoucher = eligibleVouchers.find((v) => v.type === voucherId) ?? null;
+  const selectedVoucher = eligibleVouchers.find((v) => v.voucherId === voucherId) ?? null;
   const discountCents = selectedVoucher ? Number(selectedVoucher.discountCents ?? 0) : 0;
   const paidCents = rewardCents === null ? null : Math.max(0, rewardCents - discountCents);
   useEffect(() => {
-    if (voucherId !== null && !eligibleVouchers.some((v) => v.type === voucherId)) setVoucherId(null);
+    if (voucherId !== null && !eligibleVouchers.some((v) => v.voucherId === voucherId)) setVoucherId(null);
   }, [voucherId, eligibleVouchers]);
 
   const submit = async (event: FormEvent) => {
@@ -130,9 +131,9 @@ export default function Publish() {
               <div className="task-balance-line" id="task-reward-hint"><span><Icon name="wallet" size={15} /> {balance === null ? '发布时将校验钱包余额' : `钱包可用 ${yuan(balance)}`}</span><a href="#/wallet">查看钱包 <Icon name="arrow-right" size={13} /></a></div>
               <div className="task-voucher-picker">
                 <label htmlFor="task-voucher"><Icon name="ticket" size={15} /> 优惠券</label>
-                <select id="task-voucher" value={voucherId ?? ''} onChange={(event) => setVoucherId(event.target.value ? Number(event.target.value) : null)}>
+                <select id="task-voucher" value={voucherId ?? ''} onChange={(event) => setVoucherId(event.target.value || null)}>
                   <option value="">不使用优惠券</option>
-                  {eligibleVouchers.map((voucher) => <option key={voucher.voucherId} value={voucher.type}>
+                  {eligibleVouchers.map((voucher) => <option key={voucher.voucherId} value={voucher.voucherId}>
                     满{Number(voucher.thresholdCents ?? 0) / 100}减{Number(voucher.discountCents ?? 0) / 100}（减 {yuan(Number(voucher.discountCents ?? 0))}）
                   </option>)}
                 </select>

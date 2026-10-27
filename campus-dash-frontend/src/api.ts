@@ -374,7 +374,7 @@ export const api = {
     request<ErrandCard[]>(`/api/errands/mine?role=${role}`),
   detail: (id: string) => request<ErrandCard>(`/api/errands/${id}`),
   timeline: (id: string) => request<StatusChange[]>(`/api/errands/${id}/timeline`),
-  publish: (req: { title: string; rewardCents: number; slotTotal: number; type?: string; voucherId?: number | null }) =>
+  publish: (req: { title: string; rewardCents: number; slotTotal: number; type?: string; voucherId?: string | null }) =>
     request<{
       errandId: string; status: string; frozenCents: number; discountCents: number; paidCents: number;
     }>('/api/errands', 'POST', req),

@@ -153,9 +153,13 @@ public class JdbcVoucherRepository implements VoucherRepository {
 
     @Override
     public int restoreByErrand(long errandId) {
+        // 券退回时区分是否已过期：没过期恢复可用，已过期直接置 expired，
+        // 不能把过期券重新变成可用券。
         return jdbc.update("""
                 UPDATE voucher_record
-                   SET status = 'available', used_errand_id = NULL, runner_bear_cents = 0
+                   SET status = IF(expire_time > NOW(3), 'available', 'expired'),
+                       used_errand_id = NULL,
+                       runner_bear_cents = 0
                  WHERE used_errand_id = ? AND status IN ('locked', 'used')
                 """, errandId);
     }

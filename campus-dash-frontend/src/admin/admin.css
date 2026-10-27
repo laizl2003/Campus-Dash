@@ -52,3 +52,7 @@
   .admin-body { grid-template-columns: 1fr; }
   .admin-main { padding: 18px 16px 30px; }
 }
+
+.admin-confirm { margin-top: 12px; padding: 12px 14px; border: 1px solid #e8cf7a; background: #fffbea; border-radius: 10px; }
+.admin-confirm p { margin: 0 0 10px; font-size: 11px; line-height: 1.7; color: #6b5a2a; }
+.admin-confirm div { display: flex; gap: 8px; flex-wrap: wrap; }
