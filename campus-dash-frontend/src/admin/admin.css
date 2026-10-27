@@ -268,3 +268,9 @@
 .admin-user-actions .btn-danger:hover { background: #9c322a; }
 .admin-user-actions .btn-success { background: #2f6b4a; color: #fff; }
 .admin-user-actions .btn-success:hover { background: #25573c; }
+
+/* 红绿按钮 hover 保持本色，只加深，不变白 */
+.admin-user-actions .btn.btn-danger:hover:not(:disabled) { background: #9c322a; border-color: #9c322a; color: #fff; }
+.admin-user-actions .btn.btn-danger:focus-visible { border-color: #9c322a; color: #fff; }
+.admin-user-actions .btn.btn-success:hover:not(:disabled) { background: #25573c; border-color: #25573c; color: #fff; }
+.admin-user-actions .btn.btn-success:focus-visible { border-color: #25573c; color: #fff; }

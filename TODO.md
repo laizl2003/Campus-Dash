@@ -272,3 +272,39 @@
 - `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/realtime/WsSessionRegistry.java`
 - `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/realtime/WebSocketConfig.java`
 - `campus-dash-frontend/src/ws.ts`、`campus-dash-frontend/src/components/TopBar.tsx`
+
+## 6. Admin 仲裁功能验收与补强（未完成）
+
+**目标**：用可重复的测试覆盖“发起争议 → Admin 查看详情 → 裁决给跑腿/发单人”的完整链路，修复验收中发现的问题。
+
+### 现状与差距
+
+- 已有：`AdminController` 的 `GET /api/admin/disputes`、`GET /api/admin/disputes/{id}`、`POST /api/admin/disputes/{id}/arbitrate`；`ArbitrateErrandUseCase` / `ArbitrateSettleStep` 处理资金与券；管理台 `AdminApp` 有争议列表、详情与裁决按钮。
+- 缺口：现有自动化主要覆盖权限（`ApiEndpointIT`），缺少两种裁决方向的资金、券、信用、通知断言；没有重复裁决/并发裁决测试；管理台详情字段、异常态和裁决后的列表刷新缺少系统验收。
+
+### 实现步骤
+
+1. 用种子账号构造 DISPUTED 订单（送达后发单人发起争议），记录 escrow、wallet_ledger、voucher_record、credit_score 基线。
+2. 覆盖「判给跑腿」：断言 escrow RELEASED、佣金/营销/跑腿分录正确、券 used、双方信用 +2、双方收到通知。
+3. 覆盖「判给发单人」：断言退款金额、券恢复 available、信用规则、通知内容。
+4. 覆盖重复/并发裁决：同一订单只允许成功一次，第二次返回幂等或非法状态，不重复记账。
+5. 覆盖权限与异常：非 Admin 调用 403；不存在的 id、非 DISPUTED 订单返回可读错误。
+6. 管理台走查：列表→详情→选择方向→二次确认→成功提示→列表刷新；检查金额/券信息展示是否完整。
+7. 把上述用例沉淀为 IT 测试类并纳入回归，修复验收中发现的 UI/接口问题。
+
+### 验收标准
+
+- [ ] 判给跑腿后，跑腿实收、佣金、营销补贴与 L1 借贷差均符合预期
+- [ ] 判给发单人后，退款到账、券状态恢复、流水可追溯
+- [ ] 同一订单重复/并发裁决只产生一次资金变动
+- [ ] 非 Admin 调用仲裁接口返回 403/401
+- [ ] 管理台可完成列表→详情→裁决→刷新，错误场景有明确提示
+- [ ] 新增仲裁 IT 测试全部通过，并回归现有资金测试
+
+### 参考文件
+
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/AdminController.java`
+- `campus-dash-backend/dash-application/src/main/java/com/campusdash/application/usecase/ArbitrateErrandUseCase.java`
+- `campus-dash-backend/dash-application/src/main/java/com/campusdash/application/usecase/ArbitrateSettleStep.java`
+- `campus-dash-backend/dash-bootstrap/src/test/java/com/campusdash/it/ApiEndpointIT.java`
+- `campus-dash-frontend/src/admin/AdminApp.tsx`
