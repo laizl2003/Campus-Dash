@@ -117,8 +117,11 @@ public class AdminController {
                                              @RequestParam(defaultValue = "20") int size) {
         int safeSize = Math.max(1, Math.min(size, 20));
         int safePage = Math.max(0, page);
-        var result = adminUserQuery.page(safePage * safeSize, safeSize);
-        List<Map<String, Object>> items = result.items().stream()
+
+        // 在线用户优先：先取全量（普通用户规模很小），按在线状态排序后再分页。
+        // 若数据量变大，应改为维护 Redis 在线集合，再用 SQL CASE 排序 + LIMIT。
+        var all = adminUserQuery.page(0, 10_000);
+        List<Map<String, Object>> mapped = new java.util.ArrayList<>(all.items().stream()
                 .map(row -> {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("userId", row.userId());
@@ -128,10 +131,16 @@ public class AdminController {
                     item.put("balanceCents", row.balanceCents());
                     return item;
                 })
-                .toList();
+                .toList());
+        mapped.sort(java.util.Comparator.comparing((Map<String, Object> m) -> Boolean.TRUE.equals(m.get("online")))
+                .reversed());
+        int from = Math.min(safePage * safeSize, mapped.size());
+        int to = Math.min(from + safeSize, mapped.size());
+        List<Map<String, Object>> items = mapped.subList(from, to);
+
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("items", items);
-        data.put("total", result.total());
+        data.put("total", all.total());
         data.put("page", safePage);
         data.put("size", safeSize);
         return Result.ok(data);

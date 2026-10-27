@@ -352,26 +352,32 @@ function VoucherManager() {
       </div>}
       {loading ? <div className="admin-empty">正在加载…</div>
         : items.length === 0 ? <div className="admin-empty">还没有优惠券，先在上方新增一张。</div>
-        : <div className="admin-ledger-scroll"><table>
-          <thead><tr><th>编号</th><th>满减规则</th><th>库存</th><th>状态</th><th>操作</th></tr></thead>
-          <tbody>{items.map(item => <tr key={item.type}>
-            <td>{item.type}</td>
-            <td>{item.description}</td>
-            <td className="admin-voucher-stock-cell">
-              <input className="admin-stock-input" type="number" min="0" step="1"
-                     value={drafts[item.type] ?? String(item.stock)}
-                     onChange={e => setDrafts(prev => ({ ...prev, [item.type]: e.target.value }))}/>
-              <button type="button" className="btn btn-ghost" onClick={() => void saveStock(item.type, item.stock)}>保存</button>
-            </td>
-            <td><span className={`admin-voucher-status ${item.status === 'ONLINE' ? 'is-online' : 'is-offline'}`}>{item.status === 'ONLINE' ? '上架' : '下架'}</span></td>
-            <td className="admin-voucher-actions">
-              <button type="button" className="btn btn-ghost" onClick={() => void toggle(item.type, item.status)}>
-                {item.status === 'ONLINE' ? '下架' : '上架'}
-              </button>
-              <button type="button" className="btn btn-ghost admin-danger" onClick={() => setPendingDelete({ type: item.type, description: item.description })}>删除</button>
-            </td>
-          </tr>)}</tbody>
-        </table></div>}
+        : <div className="admin-voucher-grid">
+          {items.map(item => {
+            const online = item.status === 'ONLINE';
+            return <div key={item.type} className={`admin-voucher-card${online ? '' : ' is-offline'}`}>
+              <div className="admin-voucher-card-top">
+                <span className="admin-voucher-type">编号 {item.type}</span>
+                <span className={`admin-voucher-status ${online ? 'is-online' : 'is-offline'}`}>{online ? '上架' : '下架'}</span>
+              </div>
+              <strong className="admin-voucher-rule">{item.description}</strong>
+              <div className="admin-voucher-stock-cell">
+                <span>库存</span>
+                <input className="admin-stock-input" type="number" min="0" step="1"
+                       value={drafts[item.type] ?? String(item.stock)}
+                       onChange={e => setDrafts(prev => ({ ...prev, [item.type]: e.target.value }))}/>
+                <button type="button" className="btn btn-ghost" onClick={() => void saveStock(item.type, item.stock)}>保存</button>
+              </div>
+              <div className="admin-voucher-card-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => void toggle(item.type, item.status)}>
+                  {online ? '下架' : '上架'}
+                </button>
+                <button type="button" className="btn btn-ghost admin-danger"
+                        onClick={() => setPendingDelete({ type: item.type, description: item.description })}>删除</button>
+              </div>
+            </div>;
+          })}
+        </div>}
     </section>
   </div>;
 }
@@ -440,7 +446,7 @@ function SettingsPanel() {
     </section>
 
     <section className="admin-users-card">
-      <div className="admin-list-head"><h2>平台用户 <span>{users?.total ?? '—'}</span></h2><small>仅 role=user，每页 20 人</small></div>
+      <div className="admin-list-head"><h2>平台用户 <span>{users?.total ?? '—'}</span></h2></div>
       {loadingUsers && !users ? <div className="admin-empty">正在加载…</div>
         : !users || users.items.length === 0 ? <div className="admin-empty">暂无普通用户</div>
         : <div className="admin-ledger-scroll"><table>

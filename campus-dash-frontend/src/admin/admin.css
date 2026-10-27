@@ -198,3 +198,16 @@
 .admin-online-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; vertical-align: middle; }
 .admin-online-dot.is-online { background: #2fa060; box-shadow: 0 0 0 3px #2fa06022; }
 .admin-online-dot.is-offline { background: #c9c3b8; }
+
+/* 优惠券卡片（每行最多 3 个） */
+.admin-voucher-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+.admin-voucher-card { display: grid; gap: 8px; padding: 14px 16px; background: #fff; border: 1px solid #e7e2d8; border-radius: 12px; box-shadow: 0 2px 10px #00000006; }
+.admin-voucher-card.is-offline { opacity: .72; }
+.admin-voucher-card-top { display: flex; align-items: center; justify-content: space-between; }
+.admin-voucher-type { font-size: 11px; color: #8a938b; }
+.admin-voucher-rule { font-size: 16px; color: #1f2421; }
+.admin-voucher-stock-cell { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #7d857e; }
+.admin-voucher-stock-cell .admin-stock-input { width: 84px; height: 30px; }
+.admin-voucher-card-actions { display: flex; justify-content: flex-end; gap: 6px; padding-top: 8px; border-top: 1px dashed #efe9dc; }
+@media (max-width: 1100px) { .admin-voucher-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .admin-voucher-grid { grid-template-columns: 1fr; } }
