@@ -14,6 +14,12 @@ public interface VoucherRepository {
 
     Optional<VoucherStock> findStock(int type);
 
+    /** 启动时校准描述文案（SQL 种子容易受客户端字符集影响写成乱码） */
+    int updateDescription(int type, String description);
+
+    /** 库存行不存在时补一条（不改已有库存） */
+    void insertStockIfAbsent(int type, int stock, String description);
+
     /** 原子扣减库存，返回影响行数；0 表示已抢光 */
     int decrementStock(int type);
 

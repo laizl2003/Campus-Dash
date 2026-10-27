@@ -84,8 +84,8 @@ export default function Square() {
         </div>
         <div className="voucher-list">
           {vouchers.map(voucher => <div key={voucher.type} className={`voucher-card${voucher.stock === 0 ? ' is-empty' : ''}`}>
-            <span className="voucher-amount"><strong>{voucher.discountCents / 100}</strong>元</span>
-            <span className="voucher-rule">{voucher.description}</span>
+            <span className="voucher-amount"><strong>{Number(voucher.discountCents) / 100}</strong>元</span>
+            <span className="voucher-rule">满{Number(voucher.thresholdCents) / 100}元可用</span>
             <span className="voucher-stock">{voucher.stock === 0 ? '已领完' : `剩 ${voucher.stock} 张`}</span>
             <button type="button" className="voucher-claim" disabled={voucher.stock === 0 || claiming !== null}
                     onClick={() => void claimVoucher(voucher)}>

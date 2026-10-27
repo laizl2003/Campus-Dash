@@ -74,6 +74,10 @@ public class VoucherController {
         item.put("voucherId", String.valueOf(voucher.voucherId()));
         item.put("type", voucher.type());
         item.put("description", VoucherType.of(voucher.type()).map(VoucherType::description).orElse(""));
+        VoucherType.of(voucher.type()).ifPresent(type -> {
+            item.put("thresholdCents", type.thresholdCents());
+            item.put("discountCents", type.discountCents());
+        });
         item.put("expireTime", voucher.expireTime().toString());
         item.put("status", voucher.status().dbValue());
         return item;

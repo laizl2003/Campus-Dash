@@ -389,6 +389,10 @@ export const api = {
   vouchers: () => request<{
     items: { type: number; stock: number; description: string; thresholdCents: number; discountCents: number }[];
   }>('/api/vouchers'),
+  myVouchers: () => request<{
+    voucherId: string; type: number; description: string; thresholdCents?: number; discountCents?: number;
+    expireTime: string; status: string;
+  }[]>('/api/vouchers/mine'),
   claimVoucher: (type: number) => request<{
     voucherId: string; type: number; description: string; expireTime: string; remainingStock: number;
   }>(`/api/vouchers/${type}/claim`, 'POST'),

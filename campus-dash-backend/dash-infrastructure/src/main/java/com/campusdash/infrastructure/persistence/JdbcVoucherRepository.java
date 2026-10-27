@@ -53,6 +53,17 @@ public class JdbcVoucherRepository implements VoucherRepository {
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 
+    @Override
+    public int updateDescription(int type, String description) {
+        return jdbc.update("UPDATE voucher_stock SET description = ? WHERE type = ?", description, type);
+    }
+
+    @Override
+    public void insertStockIfAbsent(int type, int stock, String description) {
+        jdbc.update("INSERT IGNORE INTO voucher_stock (type, stock, description) VALUES (?, ?, ?)",
+                type, stock, description);
+    }
+
     /**
      * 单条带条件的 UPDATE：并发下只有一个请求能把 stock 从 1 减到 0，
      * 其余请求影响行数为 0，直接判定"已抢光"。

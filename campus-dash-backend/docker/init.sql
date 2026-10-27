@@ -320,8 +320,10 @@ CREATE TABLE IF NOT EXISTS voucher_record (
   KEY idx_voucher_expire (expire_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券领取记录';
 
+-- 描述文案不写在这里：SQL 客户端字符集不一致会把中文写成乱码。
+-- 由启动时的 VoucherStockInitializer 用 Java 常量回填，保证编码正确。
 INSERT IGNORE INTO voucher_stock (type, stock, description) VALUES
-  (1, 100, '满10元减2元'), (2, 50, '满10元减3元'), (3, 25, '满10元减5元'),
-  (4, 100, '满15元减2元'), (5, 50, '满15元减3元'), (6, 25, '满15元减5元'), (7, 12, '满15元减7元'),
-  (8, 100, '满20元减5元'), (9, 50, '满20元减8元'),
-  (10, 100, '满25元减10元'), (11, 50, '满25元减15元');
+  (1, 100, ''), (2, 50, ''), (3, 25, ''),
+  (4, 100, ''), (5, 50, ''), (6, 25, ''), (7, 12, ''),
+  (8, 100, ''), (9, 50, ''),
+  (10, 100, ''), (11, 50, '');

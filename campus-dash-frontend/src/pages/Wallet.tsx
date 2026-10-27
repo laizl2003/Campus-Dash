@@ -4,6 +4,14 @@ import Icon from '../components/Icon';
 import { subscribeWs } from '../ws';
 import './accountPages.css';
 
+const VOUCHER_STATUS_TEXT: Record<string, string> = {
+  available: '可使用', used: '已使用', expired: '已过期',
+};
+interface MyVoucher {
+  voucherId: string; type: number; description: string;
+  thresholdCents?: number; discountCents?: number;
+  expireTime: string; status: string;
+}
 const REF_TYPE_TEXT: Record<string, string> = {
   ESCROW: '任务托管', SETTLE: '任务结算', REFUND: '退款到账',
   RECHARGE: '余额充值', WITHDRAW: '余额提现',
@@ -21,6 +29,7 @@ export default function Wallet() {
   const [amountYuan, setAmountYuan] = useState('10');
   const [recharging, setRecharging] = useState(false);
   const [rechargeMessage, setRechargeMessage] = useState('');
+  const [vouchers, setVouchers] = useState<MyVoucher[]>([]);
   const requestId = useRef(0);
 
   /** 演示用固定面额（元） */
@@ -52,13 +61,16 @@ export default function Wallet() {
     const id = ++requestId.current;
     setLoading(true);
     setError('');
-    const [walletResult, ledgerResult] = await Promise.allSettled([api.wallet(), api.ledger()]);
+    const [walletResult, ledgerResult, voucherResult] = await Promise.allSettled([
+      api.wallet(), api.ledger(), api.myVouchers(),
+    ]);
     if (id !== requestId.current) return;
     const errors: string[] = [];
     if (walletResult.status === 'fulfilled') setBalance(walletResult.value);
     else errors.push(`余额加载失败：${walletResult.reason instanceof Error ? walletResult.reason.message : '请稍后重试'}`);
     if (ledgerResult.status === 'fulfilled') setLedger(ledgerResult.value);
     else errors.push(`流水加载失败：${ledgerResult.reason instanceof Error ? ledgerResult.reason.message : '请稍后重试'}`);
+    if (voucherResult.status === 'fulfilled') setVouchers(voucherResult.value);
     setError(errors.join('；'));
     setLoading(false);
   }, []);
@@ -121,6 +133,22 @@ export default function Wallet() {
           <div className="account-stat-symbol account-stat-symbol-blue"><Icon name="clock" size={20} /></div>
           <span>已加载记录</span><strong>{ledger === null ? '—' : ledger.length}<small> 笔</small></strong><p>当前返回的最近记账记录</p>
         </div>
+      </section>
+      <section className="account-surface wallet-vouchers" aria-label="我的优惠券">
+        <div className="account-section-head">
+          <div><h2>我的优惠券</h2><p>领取后 2 天内有效，过期自动作废</p></div>
+          <span className="account-count">{vouchers.filter(v => v.status === 'available').length} 张可用</span>
+        </div>
+        {vouchers.length === 0
+          ? <p className="wallet-voucher-empty">还没有优惠券，去<a href="#/square">广场的「惊喜优惠」</a>看看。</p>
+          : <div className="wallet-voucher-grid">
+            {vouchers.map(voucher => <div key={voucher.voucherId} className={`wallet-voucher is-${voucher.status}`}>
+              <span className="wallet-voucher-amount"><small>¥</small><strong>{Number(voucher.discountCents ?? 0) / 100}</strong></span>
+              <span className="wallet-voucher-rule">满{Number(voucher.thresholdCents ?? 0) / 100}元可用</span>
+              <span className="wallet-voucher-expire">{new Date(voucher.expireTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} 到期</span>
+              <span className={`wallet-voucher-status is-${voucher.status}`}>{VOUCHER_STATUS_TEXT[voucher.status] ?? voucher.status}</span>
+            </div>)}
+          </div>}
       </section>
       <section className="account-surface">
         <div className="account-section-head"><div><h2>记账流水</h2><p>默认加载最近 20 条记录，同一业务可能包含多条记账</p></div><span className="account-count">{ledger === null ? '等待加载' : `${filtered.length} 笔记录`}</span></div>

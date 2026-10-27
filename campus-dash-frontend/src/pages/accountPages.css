@@ -247,3 +247,23 @@
   .recharge-quick button { min-width: 56px; padding: 6px 9px; font-size: 11px; }
   .recharge-panel .banner { width: 100%; max-width: 100%; }
 }
+
+/* ── 钱包：我的优惠券 ───────────────────────────────────── */
+.wallet-vouchers { margin-bottom: 18px; }
+.wallet-voucher-grid { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 23px 20px; }
+.wallet-voucher { position: relative; width: 176px; display: grid; gap: 3px; padding: 12px 14px; border: 1px dashed #e8cf7a; border-radius: 12px; background: linear-gradient(180deg, #fffdf3, #fff8e0); }
+.wallet-voucher.is-used, .wallet-voucher.is-expired { filter: grayscale(1); opacity: .6; }
+.wallet-voucher-amount { font-size: 12px; color: var(--accent); }
+.wallet-voucher-amount small { font-size: 12px; margin-right: 1px; }
+.wallet-voucher-amount strong { font-size: 24px; font-weight: 700; }
+.wallet-voucher-rule { font-size: 11px; color: #8a6d1f; }
+.wallet-voucher-expire { font-size: 10px; color: var(--muted); }
+.wallet-voucher-status { position: absolute; top: 10px; right: 10px; padding: 2px 7px; border-radius: 999px; font-size: 10px; background: #eef7f1; color: #2f6b4a; }
+.wallet-voucher-status.is-used { background: #f1f1f1; color: #777; }
+.wallet-voucher-status.is-expired { background: #f6f1f1; color: #a06a6a; }
+.wallet-voucher-empty { padding: 0 23px 22px; font-size: 12px; color: var(--muted); }
+.wallet-voucher-empty a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+@media(max-width: 530px) {
+  .wallet-voucher-grid { padding: 0 18px 18px; }
+  .wallet-voucher { width: 100%; }
+}
