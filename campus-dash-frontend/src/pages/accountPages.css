@@ -303,3 +303,5 @@
 .wallet-voucher-used-at { font-size: 9px; letter-spacing: 0; white-space: nowrap; }
 
 .wallet-voucher-used-at { justify-self: end; width: max-content; margin-left: auto; }
+
+.wallet-voucher-used-at { justify-self: start; width: auto; margin-left: 0; text-align: left; }
