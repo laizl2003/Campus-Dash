@@ -366,8 +366,6 @@ function VoucherManager() {
                 <input className="admin-stock-input" type="number" min="0" step="1"
                        value={drafts[item.type] ?? String(item.stock)}
                        onChange={e => setDrafts(prev => ({ ...prev, [item.type]: e.target.value }))}/>
-              </div>
-              <div className="admin-voucher-card-actions">
                 <button type="button" className="btn btn-ghost" onClick={() => void saveStock(item.type, item.stock)}>保存</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void toggle(item.type, item.status)}>
                   {online ? '下架' : '上架'}
@@ -392,6 +390,13 @@ function SettingsPanel() {
   const [users, setUsers] = useState<Awaited<ReturnType<typeof api.adminUsers>> | null>(null);
   const [page, setPage] = useState(0);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [toast, setToast] = useState<string>('');
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(''), 2600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     api.adminConfig().then(data => {
@@ -425,6 +430,16 @@ function SettingsPanel() {
     finally { setSaving(false); }
   };
 
+  const forceLogout = async (userId: string, username: string) => {
+    setError('');
+    try {
+      await api.adminForceLogout(userId);
+      setToast(`用户${username}已下线`);
+      // 立即回查，及时反映在线状态
+      setUsers(await api.adminUsers(page, 20));
+    } catch (e) { setError(e instanceof Error ? e.message : '强制下线失败'); }
+  };
+
   const totalPages = users ? Math.max(1, Math.ceil(users.total / Math.max(users.size, 1))) : 1;
 
   return <div className="admin-settings-view">
@@ -450,14 +465,20 @@ function SettingsPanel() {
       {loadingUsers && !users ? <div className="admin-empty">正在加载…</div>
         : !users || users.items.length === 0 ? <div className="admin-empty">暂无普通用户</div>
         : <div className="admin-ledger-scroll"><table>
-          <thead><tr><th>用户名</th><th>在线状态</th><th>上次登录</th><th>余额</th></tr></thead>
+          <thead><tr><th>用户名</th><th>在线状态</th><th>上次登录</th><th>余额</th><th>操作</th></tr></thead>
           <tbody>{users.items.map(user => <tr key={user.userId}>
             <td>{user.username}</td>
             <td><span className={`admin-online-dot ${user.online ? 'is-online' : 'is-offline'}`}/>{user.online ? '在线' : '离线'}</td>
             <td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</td>
             <td>{yuan(user.balanceCents)}</td>
+            <td>
+              <button type="button" className="btn btn-ghost admin-danger" disabled={!user.online}
+                      title={user.online ? '强制该用户下线' : '用户已离线'}
+                      onClick={() => void forceLogout(user.userId, user.username)}>强制下线</button>
+            </td>
           </tr>)}</tbody>
         </table></div>}
+      {toast && <div className="admin-voucher-toast is-ok" role="status">{toast}</div>}
       <div className="admin-pager">
         <button type="button" className="btn btn-ghost" disabled={page <= 0 || loadingUsers} onClick={() => setPage(p => Math.max(0, p - 1))}>上一页</button>
         <span>第 {page + 1} / {totalPages} 页</span>

@@ -1,6 +1,7 @@
 package com.campusdash.presentation.auth;
 
 import com.campusdash.domain.auth.ports.AuthPort;
+import com.campusdash.domain.auth.ports.ForceLogoutPort;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,11 +20,13 @@ import java.util.Optional;
 public class AuthInterceptor implements HandlerInterceptor {
 
     private final AuthPort authPort;
+    private final ForceLogoutPort forceLogoutPort;
     private final boolean allowHeaderIdentity;
 
-    public AuthInterceptor(AuthPort authPort,
+    public AuthInterceptor(AuthPort authPort, ForceLogoutPort forceLogoutPort,
                            @Value("${dash.auth.allow-header-identity:false}") boolean allowHeaderIdentity) {
         this.authPort = authPort;
+        this.forceLogoutPort = forceLogoutPort;
         this.allowHeaderIdentity = allowHeaderIdentity;
     }
 
@@ -49,6 +52,11 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         if (userId == null) {
+            resp.setStatus(401);
+            return false;
+        }
+        // 被 Admin 强制下线的用户：重新登录前一律 401
+        if (forceLogoutPort.isForced(userId)) {
             resp.setStatus(401);
             return false;
         }

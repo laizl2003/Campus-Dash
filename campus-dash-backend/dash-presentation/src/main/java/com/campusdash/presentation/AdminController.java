@@ -12,6 +12,7 @@ import com.campusdash.domain.wallet.model.AccountType;
 import com.campusdash.domain.wallet.model.EscrowOrder;
 import com.campusdash.domain.wallet.ports.WalletRepository;
 import com.campusdash.domain.admin.ports.AdminUserQueryPort;
+import com.campusdash.domain.auth.ports.ForceLogoutPort;
 import com.campusdash.domain.config.ports.PlatformConfigPort;
 import com.campusdash.presentation.realtime.WsSessionRegistry;
 import com.campusdash.presentation.auth.CurrentUser;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.socket.CloseStatus;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -54,6 +56,7 @@ public class AdminController {
     private final PlatformConfigPort platformConfig;
     private final AdminUserQueryPort adminUserQuery;
     private final WsSessionRegistry wsSessionRegistry;
+    private final ForceLogoutPort forceLogoutPort;
 
     public AdminController(QueryErrandListUseCase queryUseCase,
                            ErrandRepository errandRepository,
@@ -62,7 +65,8 @@ public class AdminController {
                            ArbitrateErrandUseCase arbitrateUseCase,
                            PlatformConfigPort platformConfig,
                            AdminUserQueryPort adminUserQuery,
-                           WsSessionRegistry wsSessionRegistry) {
+                           WsSessionRegistry wsSessionRegistry,
+                           ForceLogoutPort forceLogoutPort) {
         this.queryUseCase = queryUseCase;
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
@@ -71,6 +75,7 @@ public class AdminController {
         this.platformConfig = platformConfig;
         this.adminUserQuery = adminUserQuery;
         this.wsSessionRegistry = wsSessionRegistry;
+        this.forceLogoutPort = forceLogoutPort;
     }
 
     public record ArbitrateRequest(String favor) {
@@ -109,6 +114,20 @@ public class AdminController {
         data.put("commissionRate", commission);
         data.put("voucherRunnerBearRatio", voucher);
         return Result.ok(data);
+    }
+
+    /** 强制下线：关闭该用户全部 WS 连接，并打上标记，重新登录前拒绝请求 */
+    @PostMapping("/users/{userId}/force-logout")
+    public Result<Void> forceLogout(@PathVariable String userId) {
+        for (var session : wsSessionRegistry.of(userId)) {
+            try {
+                session.close(CloseStatus.POLICY_VIOLATION);
+            } catch (Exception ignored) {
+                // 连接可能已断，忽略
+            }
+        }
+        forceLogoutPort.force(userId);
+        return Result.ok(null);
     }
 
     /** 用户列表：role=user，分页 20，带在线状态与余额 */

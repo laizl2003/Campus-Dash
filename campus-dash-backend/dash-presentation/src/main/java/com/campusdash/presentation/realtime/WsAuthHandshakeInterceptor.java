@@ -1,6 +1,7 @@
 package com.campusdash.presentation.realtime;
 
 import com.campusdash.domain.auth.ports.AuthPort;
+import com.campusdash.domain.auth.ports.ForceLogoutPort;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
@@ -24,9 +25,11 @@ import java.util.Optional;
 public class WsAuthHandshakeInterceptor implements HandshakeInterceptor {
 
     private final AuthPort authPort;
+    private final ForceLogoutPort forceLogoutPort;
 
-    public WsAuthHandshakeInterceptor(AuthPort authPort) {
+    public WsAuthHandshakeInterceptor(AuthPort authPort, ForceLogoutPort forceLogoutPort) {
         this.authPort = authPort;
+        this.forceLogoutPort = forceLogoutPort;
     }
 
     @Override
@@ -35,7 +38,7 @@ public class WsAuthHandshakeInterceptor implements HandshakeInterceptor {
         if (request instanceof ServletServerHttpRequest servletRequest) {
             String token = servletRequest.getServletRequest().getParameter("token");
             Optional<String> userId = authPort.resolve(token);
-            if (userId.isPresent()) {
+            if (userId.isPresent() && !forceLogoutPort.isForced(userId.get())) {
                 attributes.put(WsHandler.ATTR_USER_ID, userId.get());
                 return true;
             }

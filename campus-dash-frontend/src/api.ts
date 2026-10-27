@@ -509,6 +509,8 @@ export const api = {
     items: { userId: string; username: string; online: boolean; lastLoginAt: string; balanceCents: number }[];
     total: number; page: number; size: number;
   }>(`/api/admin/users?page=${page}&size=${size}`),
+  adminForceLogout: (userId: string) =>
+    request<null>(`/api/admin/users/${userId}/force-logout`, 'POST'),
   adminVouchers: () => request<{
     type: number; stock: number; status: string; thresholdCents: number; discountCents: number;
     description: string; lastChangeTime: string;

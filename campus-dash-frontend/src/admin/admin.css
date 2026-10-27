@@ -215,3 +215,14 @@
 /* 优惠券操作按钮同一行；提示居中偏下 */
 .admin-voucher-card-actions { align-items: center; }
 .admin-voucher-toast { top: auto; bottom: 52px; left: 50%; right: auto; transform: translateX(-50%); min-width: 120px; }
+
+/* 库存与三个操作按钮同一行 */
+.admin-voucher-stock-cell { flex-wrap: nowrap; gap: 6px; }
+.admin-voucher-stock-cell .admin-stock-input { width: 64px; }
+.admin-voucher-stock-cell .btn { height: 30px; padding: 0 8px; font-size: 11px; }
+.admin-users-card thead th:nth-child(1) { width: 26%; }
+.admin-users-card thead th:nth-child(2) { width: 15%; }
+.admin-users-card thead th:nth-child(3) { width: 24%; }
+.admin-users-card thead th:nth-child(4) { width: 20%; }
+.admin-users-card thead th:nth-child(5) { width: 15%; }
+.admin-users-card tbody td:last-child .btn { height: 30px; padding: 0 10px; font-size: 11px; }

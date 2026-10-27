@@ -112,10 +112,17 @@ class AuthControllerTest {
                 new AuthController.RefreshRequest(refreshToken)).code());
     }
 
+    private static final com.campusdash.domain.auth.ports.ForceLogoutPort NO_FORCE =
+            new com.campusdash.domain.auth.ports.ForceLogoutPort() {
+                @Override public void force(String userId) { }
+                @Override public boolean isForced(String userId) { return false; }
+                @Override public void clear(String userId) { }
+            };
+
     private static AuthController controller(AuthPort auth, boolean demo) {
         return new AuthController(auth, new LoginUserUseCase(
                 new EmptyUsers(), new FakeHasher(),
-                new FakeCaptcha(), auth), new EmptyUsers(), demo);
+                new FakeCaptcha(), auth), new EmptyUsers(), NO_FORCE, demo);
     }
 
     /** 带一个学生账号的完整夹具 */
@@ -131,7 +138,7 @@ class AuthControllerTest {
                     UserAccount.ROLE_USER, "", 1L, 60, true, null, "", 0, "");
             users.byName.put("student", student);
             controller = new AuthController(auth,
-                    new LoginUserUseCase(users, new FakeHasher(), captcha, auth), users, true);
+                    new LoginUserUseCase(users, new FakeHasher(), captcha, auth), users, NO_FORCE, true);
         }
     }
 

@@ -3,6 +3,7 @@ package com.campusdash.presentation.auth;
 import com.campusdash.application.usecase.LoginUserUseCase;
 import com.campusdash.domain.auth.model.UserAccount;
 import com.campusdash.domain.auth.ports.AuthPort;
+import com.campusdash.domain.auth.ports.ForceLogoutPort;
 import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.auth.ports.RefreshTokenPort;
 import com.campusdash.shared.ErrorCode;
@@ -32,15 +33,18 @@ public class AuthController {
     private final AuthPort authPort;
     private final LoginUserUseCase loginUseCase;
     private final UserRepository users;
+    private final ForceLogoutPort forceLogoutPort;
     private final boolean demoLoginEnabled;
 
     public AuthController(AuthPort authPort,
                           LoginUserUseCase loginUseCase,
                           UserRepository users,
+                          ForceLogoutPort forceLogoutPort,
                           @Value("${dash.auth.demo-login:true}") boolean demoLoginEnabled) {
         this.authPort = authPort;
         this.loginUseCase = loginUseCase;
         this.users = users;
+        this.forceLogoutPort = forceLogoutPort;
         this.demoLoginEnabled = demoLoginEnabled;
     }
 
@@ -61,6 +65,7 @@ public class AuthController {
         if (req.username() != null && !req.username().isBlank()) {
             LoginUserUseCase.LoggedIn logged = loginUseCase.login(new LoginUserUseCase.Command(
                     req.username(), req.password(), req.captchaId(), req.captchaCode(), clientIp(http)));
+            forceLogoutPort.clear(logged.userId());
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("token", logged.accessToken());          // 兼容旧前端
             data.put("accessToken", logged.accessToken());
@@ -80,6 +85,7 @@ public class AuthController {
             return Result.fail(ErrorCode.UNAUTHORIZED);
         }
         userId = userId.trim();
+        forceLogoutPort.clear(userId);
         if (authPort instanceof RefreshTokenPort refreshTokenPort) {
             var pair = refreshTokenPort.loginWithRefresh(userId);
             Map<String, Object> data = new LinkedHashMap<>();
