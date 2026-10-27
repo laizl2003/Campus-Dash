@@ -7,6 +7,7 @@ import com.campusdash.application.usecase.query.QueryErrandListUseCase;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.model.ErrandType;
 import com.campusdash.domain.auth.model.UserAccount;
+import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.presentation.auth.CurrentUser;
@@ -44,6 +45,8 @@ public class ErrandController {
     private final ErrandActionResolver actionResolver;
     private final ErrandRepository errandRepository;
     private final UserRepository users;
+    private final VoucherRepository vouchers;
+    private final double commissionRate;
 
     public ErrandController(PublishErrandUseCase publishUseCase,
                             GrabErrandUseCase grabUseCase,
@@ -58,7 +61,10 @@ public class ErrandController {
                             GetErrandDetailUseCase detailUseCase,
                             ErrandActionResolver actionResolver,
                             ErrandRepository errandRepository,
-                            UserRepository users) {
+                            UserRepository users,
+                            VoucherRepository vouchers,
+                            @org.springframework.beans.factory.annotation.Value("${dash.settle.commission-rate:0.08}")
+                            double commissionRate) {
         this.publishUseCase = publishUseCase;
         this.grabUseCase = grabUseCase;
         this.confirmUseCase = confirmUseCase;
@@ -73,6 +79,8 @@ public class ErrandController {
         this.actionResolver = actionResolver;
         this.errandRepository = errandRepository;
         this.users = users;
+        this.vouchers = vouchers;
+        this.commissionRate = commissionRate;
     }
 
     public record PublishRequest(Long campusId, ErrandType type, String title,
@@ -228,6 +236,14 @@ public class ErrandController {
         card.put("status", e.status().name());
         card.put("type", e.type().name());
         card.put("rewardCents", e.reward().cents());
+        // 广场展示"跑腿实际到手"：悬赏 - 平台佣金 - 跑腿承担的券面（0.35D）
+        long commissionCents = (long) Math.floor(e.reward().cents() * commissionRate);
+        long runnerBearCents = vouchers.findUseByErrand(e.id())
+                .map(v -> v.runnerBearCents()).orElse(0L);
+        card.put("commissionCents", commissionCents);
+        card.put("runnerBearCents", runnerBearCents);
+        card.put("netRewardCents", Math.max(0L,
+                e.reward().cents() - commissionCents - runnerBearCents));
         card.put("slotTotal", e.slotTotal());
         card.put("slotTaken", e.slotTaken());
         card.put("publisherId", e.publisherId());

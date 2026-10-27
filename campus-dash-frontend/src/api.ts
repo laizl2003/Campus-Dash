@@ -437,6 +437,10 @@ export interface ErrandCard {
   status: string;
   type: string;
   rewardCents: number;
+  /** 跑腿实际到手：悬赏 - 佣金 - 跑腿承担的券面 */
+  netRewardCents?: number;
+  commissionCents?: number;
+  runnerBearCents?: number;
   slotTotal: number;
   slotTaken: number;
   publisherId: string;
