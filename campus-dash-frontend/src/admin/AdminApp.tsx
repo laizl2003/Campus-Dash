@@ -548,7 +548,7 @@ function SettingsPanel() {
             <td>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : ''}</td>
             <td>{yuan(user.balanceCents)}</td>
             <td className="admin-user-actions">
-              <button type="button" className={`btn btn-ghost ${user.enabled === false ? 'admin-success' : 'admin-danger'}`}
+              <button type="button" className={`btn ${user.enabled === false ? 'btn-success' : 'btn-danger'}`}
                       onClick={() => void toggleUser(user.userId, user.enabled !== false, user.username)}>
                 {user.enabled === false ? '启用' : '禁用'}
               </button>

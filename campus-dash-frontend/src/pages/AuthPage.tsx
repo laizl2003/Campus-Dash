@@ -242,13 +242,14 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
         </div>}
       </div>}
     </div></section>
-    {disabledNotice && <div className="modal-scrim" role="dialog" aria-modal="true" aria-label="账户已被禁用">
-      <div className="confirm-card">
-        <h3>该账户已被禁用</h3>
-        <p>{disabledNotice}，请联系平台管理员启用后再登录。</p>
-        <div className="confirm-actions">
-          <button type="button" className="btn btn-primary" onClick={() => setDisabledNotice('')}>知道了</button>
+    {disabledNotice && <div className="floating-notice" role="alertdialog" aria-live="assertive" aria-label="账户已被禁用">
+      <div className="floating-notice-card">
+        <span className="floating-notice-icon">!</span>
+        <div className="floating-notice-body">
+          <strong>该账户已被禁用</strong>
+          <p>{disabledNotice}，请联系平台管理员启用后再登录。</p>
         </div>
+        <button type="button" className="floating-notice-close" aria-label="关闭提示" onClick={() => setDisabledNotice('')}>×</button>
       </div>
     </div>}
   </div>;

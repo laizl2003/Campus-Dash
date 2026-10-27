@@ -263,3 +263,8 @@
 .admin-users-card thead th:nth-child(4) { width: 28%; }
 .admin-users-card thead th:nth-child(5) { width: 12%; }
 .admin-users-card thead th:nth-child(6) { width: 18%; }
+
+.admin-user-actions .btn-danger { background: #b23b32; color: #fff; }
+.admin-user-actions .btn-danger:hover { background: #9c322a; }
+.admin-user-actions .btn-success { background: #2f6b4a; color: #fff; }
+.admin-user-actions .btn-success:hover { background: #25573c; }
