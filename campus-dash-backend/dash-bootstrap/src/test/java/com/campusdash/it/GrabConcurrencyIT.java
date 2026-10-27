@@ -58,7 +58,7 @@ class GrabConcurrencyIT {
     @BeforeEach
     void resetPublisherBalance() {
         // 每个用例前把发单人余额恢复到 1000 元，避免用例间相互影响
-        jdbc.update("UPDATE wallet_account SET available = 100000, frozen = 0 WHERE owner_id = 1001 AND owner_type = 'USER'");
+        jdbc.update("UPDATE wallet_account SET available = 100000, frozen = 0 WHERE owner_id = '1001' AND owner_type = 'USER'");
         jdbc.update("DELETE FROM credit_event WHERE user_id BETWEEN 2001 AND 6000");
         jdbc.update("DELETE FROM credit_score WHERE user_id BETWEEN 2001 AND 6000");
     }

@@ -41,6 +41,9 @@ dash:
   settle:
     commission-rate: 0.05
     auto-settle-seconds: 86400
+  voucher:
+    # 领取后统一 2 天过期，由本地消息表在到期时刻投递到 voucher-expire
+    expire-hours: 48
   mq:
     enabled: true                 # 关掉则退化为纯兜底扫描，应用仍可用
     endpoints: 127.0.0.1:8081     # RocketMQ 5.x gRPC proxy

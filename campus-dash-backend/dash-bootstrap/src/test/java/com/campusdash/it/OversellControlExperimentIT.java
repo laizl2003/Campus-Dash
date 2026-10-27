@@ -54,7 +54,7 @@ class OversellControlExperimentIT {
 
     @BeforeEach
     void reset() {
-        jdbc.update("UPDATE wallet_account SET available = 100000, frozen = 0 WHERE owner_id = 1001 AND owner_type = 'USER'");
+        jdbc.update("UPDATE wallet_account SET available = 100000, frozen = 0 WHERE owner_id = '1001' AND owner_type = 'USER'");
     }
 
     private long publishErrand(String title) {

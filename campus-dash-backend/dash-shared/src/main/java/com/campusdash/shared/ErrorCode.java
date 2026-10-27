@@ -52,6 +52,12 @@ public enum ErrorCode {
     BAD_CREDENTIALS("用户名或密码错误"),
     ACCOUNT_DISABLED("账号已被禁用"),
 
+    // 优惠券
+    VOUCHER_SOLD_OUT("该优惠券已被领完"),
+    VOUCHER_ALREADY_CLAIMED("你已持有该优惠券"),
+    VOUCHER_INVALID("优惠券类型不存在"),
+    VOUCHER_NOT_AVAILABLE("优惠券不可用"),
+
     // 通用
     UNAUTHORIZED("未登录或会话已过期"),
     ERRAND_NOT_FOUND("任务不存在"),

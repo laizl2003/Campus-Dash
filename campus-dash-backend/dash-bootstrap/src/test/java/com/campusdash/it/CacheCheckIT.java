@@ -44,7 +44,7 @@ class CacheCheckIT {
 
     @BeforeEach
     void reset() {
-        jdbc.update("UPDATE wallet_account SET available = 100000, frozen = 0 WHERE owner_id = 1001 AND owner_type = 'USER'");
+        jdbc.update("UPDATE wallet_account SET available = 100000, frozen = 0 WHERE owner_id = '1001' AND owner_type = 'USER'");
         jdbc.update("DELETE FROM sync_diff");
         // 清掉对照实验故意残留的脏缓存（BEFORE_COMMIT / 慢读窗口用例按设计不纠正旧值），
         // 否则全覆盖校验会检出它们——哨兵没错，是测试间的状态污染

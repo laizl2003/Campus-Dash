@@ -15,6 +15,8 @@ TOPIC_AUTO_SETTLE="${TOPIC_AUTO_SETTLE:-errand-auto-settle}"
 TOPIC_FUND_EVENT="${TOPIC_FUND_EVENT:-errand-fund-event}"
 # P5：延迟双删（DELAY 类型）
 TOPIC_CACHE_EVICT="${TOPIC_CACHE_EVICT:-errand-cache-evict}"
+# 优惠券到期（DELAY 类型，领取时按 48 小时后的时刻投递）
+TOPIC_VOUCHER_EXPIRE="${TOPIC_VOUCHER_EXPIRE:-voucher-expire}"
 GROUP="${GROUP:-dash-timeout-consumer}"
 
 admin() {
@@ -36,11 +38,15 @@ admin "updateTopic -n $NAMESRV -c $CLUSTER -t $TOPIC_FUND_EVENT -a +message.type
 echo "创建 DELAY topic（延迟双删）: $TOPIC_CACHE_EVICT"
 admin "updateTopic -n $NAMESRV -c $CLUSTER -t $TOPIC_CACHE_EVICT -a +message.type=DELAY" | tail -1
 
+echo "创建 DELAY topic（优惠券到期）: $TOPIC_VOUCHER_EXPIRE"
+admin "updateTopic -n $NAMESRV -c $CLUSTER -t $TOPIC_VOUCHER_EXPIRE -a +message.type=DELAY" | tail -1
+
 echo "创建消费组: $GROUP"
 admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g $GROUP" | tail -1
 admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g dash-autosettle-consumer" | tail -1
 admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g dash-fund-event-consumer" | tail -1
 admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g dash-cache-evict-consumer" | tail -1
+admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g dash-voucher-consumer" | tail -1
 
 echo "集群状态:"
 admin "clusterList -n $NAMESRV" | tail -3

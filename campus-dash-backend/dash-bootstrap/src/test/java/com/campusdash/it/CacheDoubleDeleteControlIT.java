@@ -72,8 +72,8 @@ class CacheDoubleDeleteControlIT {
 
     @BeforeEach
     void reset() {
-        jdbc.update("UPDATE wallet_account SET available = 100000, frozen = 0 WHERE owner_id = 1001 AND owner_type = 'USER'");
-        jdbc.update("UPDATE wallet_account SET available = 5000, frozen = 0 WHERE owner_id = 2001 AND owner_type = 'USER'");
+        jdbc.update("UPDATE wallet_account SET available = 100000, frozen = 0 WHERE owner_id = '1001' AND owner_type = 'USER'");
+        jdbc.update("UPDATE wallet_account SET available = 5000, frozen = 0 WHERE owner_id = '2001' AND owner_type = 'USER'");
         detailUseCase.resetStats();
         ((RecordingCacheEvictDelayPort) unwrap(delayPort)).records.clear();
     }

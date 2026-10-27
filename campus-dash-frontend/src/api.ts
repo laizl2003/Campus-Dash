@@ -386,6 +386,12 @@ export const api = {
   notifications: () => request<{
     id: string; errandId: string; type: string; content: string; time: string;
   }[]>('/api/notifications'),
+  vouchers: () => request<{
+    items: { type: number; stock: number; description: string; thresholdCents: number; discountCents: number }[];
+  }>('/api/vouchers'),
+  claimVoucher: (type: number) => request<{
+    voucherId: string; type: number; description: string; expireTime: string; remainingStock: number;
+  }>(`/api/vouchers/${type}/claim`, 'POST'),
   unread: async () => {
     const result = await request<{ count: number | string }>('/api/notifications/unread');
     return { count: Number(result.count) };

@@ -363,3 +363,24 @@ input::placeholder, textarea::placeholder { color: #707070; }
 @media(max-width: 530px) {
   .login-card .auth-title { font-size: 34px; }
 }
+
+/* ── 惊喜优惠（广场左侧） ───────────────────────────────── */
+.voucher-strip { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; box-shadow: 0 4px 16px #00000005; }
+.voucher-strip-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.voucher-strip-title { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; color: var(--ink); }
+.voucher-strip-head small { font-size: 10px; color: var(--muted); }
+.voucher-list { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
+.voucher-card { flex: 0 0 auto; width: 150px; display: grid; gap: 2px; padding: 10px 12px; border: 1px dashed #e8cf7a; border-radius: 10px; background: linear-gradient(180deg, #fffdf3, #fff8e0); }
+.voucher-card.is-empty { filter: grayscale(1); opacity: .55; }
+.voucher-amount { font-size: 11px; color: var(--accent); }
+.voucher-amount strong { font-size: 22px; font-weight: 700; margin-right: 1px; }
+.voucher-rule { font-size: 10px; color: #8a6d1f; }
+.voucher-stock { font-size: 10px; color: var(--muted); }
+.voucher-claim { justify-self: start; margin-top: 4px; padding: 4px 10px; border-radius: 999px; background: var(--primary); color: var(--primary-ink); font-size: 11px; font-weight: 650; }
+.voucher-claim:hover:not(:disabled) { background: var(--primary-dark); }
+.voucher-claim:disabled { background: #ededed; color: #9a9a9a; }
+@media(max-width: 530px) {
+  .voucher-strip { padding: 12px; }
+  .voucher-card { width: 132px; padding: 9px 10px; }
+  .voucher-amount strong { font-size: 19px; }
+}

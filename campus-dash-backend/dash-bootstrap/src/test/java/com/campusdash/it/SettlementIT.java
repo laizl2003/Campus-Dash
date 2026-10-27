@@ -51,8 +51,8 @@ class SettlementIT {
         // 完全重置资金状态（包括流水与托管单），让本测试可独立验证 L2/L3
         jdbc.update("DELETE FROM wallet_ledger");
         jdbc.update("DELETE FROM escrow_order");
-        jdbc.update("UPDATE wallet_account SET available = 100000, frozen = 0 WHERE owner_id = 1001 AND owner_type = 'USER'");
-        jdbc.update("UPDATE wallet_account SET available = 5000, frozen = 0 WHERE owner_id = 2001 AND owner_type = 'USER'");
+        jdbc.update("UPDATE wallet_account SET available = 100000, frozen = 0 WHERE owner_id = '1001' AND owner_type = 'USER'");
+        jdbc.update("UPDATE wallet_account SET available = 5000, frozen = 0 WHERE owner_id = '2001' AND owner_type = 'USER'");
         jdbc.update("UPDATE wallet_account SET available = 0, frozen = 0 WHERE owner_type = 'ESCROW'");
         jdbc.update("UPDATE wallet_account SET available = 0, frozen = 0 WHERE owner_type = 'COMMISSION'");
         jdbc.update("DELETE FROM recon_diff");

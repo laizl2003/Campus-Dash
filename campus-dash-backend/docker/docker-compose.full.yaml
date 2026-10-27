@@ -41,8 +41,12 @@ services:
           sleep 3
         done
 
-        # 2. 快路径：broker 没重建时 topic 还在，直接退出（每次 up 少等十几秒）
-        if sh mqadmin topicList -n rmqnamesrv:9876 2>/dev/null | grep -qx 'errand-fund-event'; then
+        # 2. 快路径：所有 topic 都在才跳过（不能只看一个——新增 topic 时会被误跳过）
+        need_init=0
+        for t in errand-confirm-timeout errand-auto-settle errand-cache-evict errand-fund-event voucher-expire; do
+          sh mqadmin topicList -n rmqnamesrv:9876 2>/dev/null | grep -qx "$$t" || need_init=1
+        done
+        if [ "$$need_init" = "0" ]; then
           echo "topics already exist, skip init"
           exit 0
         fi
@@ -52,11 +56,11 @@ services:
         #    想交给容器内 shell 展开必须写成两个美元符号。
         #    mqadmin 失败时退出码也可能是 0，所以下面还要用 topicList 校验。
         create_all() {
-          for t in errand-confirm-timeout errand-auto-settle errand-cache-evict; do
+          for t in errand-confirm-timeout errand-auto-settle errand-cache-evict voucher-expire; do
             sh mqadmin updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t "$$t" -a +message.type=DELAY >/dev/null 2>&1 || true
           done
           sh mqadmin updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t errand-fund-event -a +message.type=TRANSACTION >/dev/null 2>&1 || true
-          for g in dash-timeout-consumer dash-autosettle-consumer dash-fund-event-consumer dash-fund-event-push dash-cache-evict-consumer; do
+          for g in dash-timeout-consumer dash-autosettle-consumer dash-fund-event-consumer dash-fund-event-push dash-cache-evict-consumer dash-voucher-consumer; do
             sh mqadmin updateSubGroup -n rmqnamesrv:9876 -c DefaultCluster -g "$$g" >/dev/null 2>&1 || true
           done
         }

@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * P6：信用分每日校准。
@@ -49,7 +50,9 @@ class CreditCalibrationIT {
 
         int changed = calibrationUseCase.calibrate(CreditEventType.WINDOW_DAYS, 100);
 
-        assertEquals(1, changed, "应修正一条快照");
+        // 校准是全库操作：共享开发库里其他用户的脏快照也会被修正，
+        // 所以这里只断言"至少包含我们这一条"，避免测试依赖数据库里没有别的脏数据
+        assertTrue(changed >= 1, "至少应修正当前用户这条快照，实际=" + changed);
         assertEquals(62, creditRepository.scoreOf(USER), "校准后只保留 30 天窗口内的 +2");
     }
 }

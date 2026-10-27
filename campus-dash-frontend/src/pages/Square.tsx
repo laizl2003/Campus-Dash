@@ -5,6 +5,9 @@ import { subscribeWs } from '../ws';
 import ErrandCardView from '../components/ErrandCard';
 import Icon from '../components/Icon';
 import CampusArt from '../components/CampusArt';
+interface VoucherItem {
+  type: number; stock: number; description: string; thresholdCents: number; discountCents: number;
+}
 const STARTERS = [
   { type: 'DELIVERY', icon: 'package', title: '快递帮我取', text: '把等待，变成顺路送达', template: '帮我从快递站取一个包裹送到宿舍' },
   { type: 'BUY', icon: 'bag', title: '好吃的帮我带', text: '食堂带饭，日常代买', template: '帮我从食堂带一份午餐到宿舍' },
@@ -18,6 +21,8 @@ export default function Square() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('ALL');
   const [sort, setSort] = useState('default');
+  const [vouchers, setVouchers] = useState<VoucherItem[]>([]);
+  const [claiming, setClaiming] = useState<number | null>(null);
   const requestId = useRef(0);
   const load = useCallback(async () => {
     const id = ++requestId.current;
@@ -26,12 +31,40 @@ export default function Square() {
     catch (e) { if (id === requestId.current) setError(e instanceof Error ? e.message : '任务加载失败'); }
     finally { if (id === requestId.current) setLoading(false); }
   }, []);
+
+  const loadVouchers = useCallback(async () => {
+    try {
+      const data = await api.vouchers();
+      setVouchers(data.items);
+    } catch { /* 优惠券加载失败不影响任务列表 */ }
+  }, []);
+
+  const claimVoucher = async (voucher: VoucherItem) => {
+    if (claiming !== null) return;
+    setClaiming(voucher.type);
+    try {
+      const claimed = await api.claimVoucher(voucher.type);
+      setVouchers(list => list.map(item =>
+        item.type === voucher.type ? { ...item, stock: claimed.remainingStock } : item));
+      window.dispatchEvent(new CustomEvent('dash:notice', {
+        detail: { text: `已领取「${claimed.description}」，领取后 2 天内有效`, error: false },
+      }));
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('dash:notice', {
+        detail: { text: e instanceof Error ? e.message : '领取失败，请稍后再试', error: true },
+      }));
+    } finally {
+      setClaiming(null);
+    }
+  };
+
   useEffect(() => {
     void load();
+    void loadVouchers();
     const unsub = subscribeWs(event => { if (event.type === 'errand.status') void load(); });
     const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 30000);
     return () => { requestId.current++; unsub(); clearInterval(timer); };
-  }, [load]);
+  }, [load, loadVouchers]);
   const filtered = useMemo(() => {
     const result = cards.filter(c => (category === 'ALL' || c.type === category) && `${c.title} ${c.id}`.toLowerCase().includes(query.trim().toLowerCase()));
     if (sort === 'reward') result.sort((a, b) => b.rewardCents - a.rewardCents);
@@ -44,6 +77,23 @@ export default function Square() {
     <section className="square-hero"><div className="hero-copy"><span className="soft-label"><Icon name="spark" size={13}/>把小事托付，把时间留给自己</span><h2>刚好顺路，<br/><em>刚好帮你。</em></h2><p>一份热饭、一个包裹、一件小事。<br/>在校园，让互相帮助变得简单。</p><a href="#/publish" className="btn btn-primary">发布我的委托<Icon name="arrow-right" size={15}/></a></div><CampusArt/><span className="hero-caption">THE LITTLE THINGS MATTER</span></section>
     <div className="service-shortcuts">{STARTERS.map(s => <a key={s.type} href={`#/publish?type=${s.type}&template=${encodeURIComponent(s.template)}`}><span className={`shortcut-icon type-${s.type}`}><Icon name={s.icon} size={20}/></span><span><strong>{s.title}</strong><small>{s.text}</small></span><Icon name="arrow-right" size={16}/></a>)}</div>
     <div className="square-workspace"><section className="task-market" aria-label="任务列表">
+      {vouchers.length > 0 && <section className="voucher-strip" aria-label="惊喜优惠">
+        <div className="voucher-strip-head">
+          <span className="voucher-strip-title"><Icon name="ticket" size={16}/>惊喜优惠</span>
+          <small>满减券 · 领取后 2 天内有效</small>
+        </div>
+        <div className="voucher-list">
+          {vouchers.map(voucher => <div key={voucher.type} className={`voucher-card${voucher.stock === 0 ? ' is-empty' : ''}`}>
+            <span className="voucher-amount"><strong>{voucher.discountCents / 100}</strong>元</span>
+            <span className="voucher-rule">{voucher.description}</span>
+            <span className="voucher-stock">{voucher.stock === 0 ? '已领完' : `剩 ${voucher.stock} 张`}</span>
+            <button type="button" className="voucher-claim" disabled={voucher.stock === 0 || claiming !== null}
+                    onClick={() => void claimVoucher(voucher)}>
+              {claiming === voucher.type ? '领取中' : '领取'}
+            </button>
+          </div>)}
+        </div>
+      </section>}
       <div className="section-title"><h2>发现任务 <span>{loading && !updatedAt ? '—' : cards.length}</span></h2><span className="update-time">{updatedAt ? `${updatedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 更新` : '等待加载'}</span></div>
       <div className="market-toolbar"><div className="category-tabs" aria-label="任务分类">{[['ALL', '全部任务'], ...Object.entries(TYPE_TEXT)].map(([key, label]) => <button key={key} className={category === key ? 'active' : ''} aria-pressed={category === key} onClick={() => setCategory(key)}>{label}</button>)}</div><div className="market-search-row"><label className="search-field"><Icon name="search" size={16}/><input aria-label="搜索任务" placeholder="搜索任务名称或编号" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button aria-label="清除搜索" onClick={() => setQuery('')}><Icon name="close" size={14}/></button>}</label><select aria-label="任务排序" value={sort} onChange={e => setSort(e.target.value)}><option value="default">默认排序</option><option value="reward">悬赏从高到低</option></select></div></div>
       {error && <div className="banner warn" role="alert"><Icon name="info" size={17}/><span>{error}{updatedAt && '。下方保留上次加载的任务。'}</span><button className="text-button" onClick={() => void load()}>重试</button></div>}
