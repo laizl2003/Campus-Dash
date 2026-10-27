@@ -137,6 +137,10 @@ public class ArbitrateSettleStep {
                 idGenerator.nextId(), CreditEvent.settleBizNo(errandId), errand.grabberId(),
                 CreditEventType.SETTLE, CreditEventType.SETTLE.delta(), "ERRAND", errandId,
                 java.time.Instant.now()));
+        creditRepository.applyEvent(new CreditEvent(
+                idGenerator.nextId(), CreditEvent.settlePublisherBizNo(errandId), errand.publisherId(),
+                CreditEventType.SETTLE, CreditEventType.SETTLE.delta(), "ERRAND", errandId,
+                java.time.Instant.now()));
         voucherRepository.markUsedByErrand(errandId);
         return true;
     }

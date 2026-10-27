@@ -277,3 +277,19 @@
 .account-message.is-unread { background: #fff9e4; border-radius: 9px; padding-left: 12px; padding-right: 12px; margin-left: -12px; margin-right: -12px; }
 .account-message.is-unread .account-message-title { color: var(--primary-ink); }
 .account-message.is-unread:hover { background: #fff5cf; }
+
+/* 信用页两栏等高：左右卡片同高，超出部分各自内部滚动 */
+.account-credit-layout { align-items: stretch; }
+.account-credit-layout > .account-surface { display: flex; flex-direction: column; max-height: 620px; min-height: 0; }
+.account-credit-layout .account-credit-events { flex: 1; min-height: 0; overflow-y: auto; }
+.account-credit-layout .account-rank-list { flex: 1; min-height: 0; overflow-y: auto; }
+.account-ranking .account-footnote { margin-top: auto; }
+.account-rank-list::-webkit-scrollbar { width: 6px; }
+.account-rank-list::-webkit-scrollbar-thumb { background: #e3ddcf; border-radius: 999px; }
+.account-credit-events::-webkit-scrollbar { width: 6px; }
+.account-credit-events::-webkit-scrollbar-thumb { background: #e3ddcf; border-radius: 999px; }
+@media (max-width: 800px) {
+  .account-credit-layout > .account-surface { max-height: none; }
+  .account-credit-layout .account-credit-events,
+  .account-credit-layout .account-rank-list { overflow: visible; }
+}

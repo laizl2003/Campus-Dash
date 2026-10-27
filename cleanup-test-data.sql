@@ -24,7 +24,6 @@ DELETE FROM wallet_ledger WHERE biz_no IN (SELECT CONCAT('escrow:', id) FROM cle
 DELETE FROM escrow_order WHERE errand_id IN (SELECT id FROM cleanup_ids);
 DELETE FROM grab_record WHERE errand_id IN (SELECT id FROM cleanup_ids);
 DELETE FROM errand_status_log WHERE errand_id IN (SELECT id FROM cleanup_ids);
-DELETE FROM credit_event WHERE ref_type = 'ERRAND' AND ref_id IN (SELECT id FROM cleanup_ids);
 DELETE FROM notification WHERE errand_id IN (SELECT id FROM cleanup_ids);
 DELETE FROM errand WHERE id IN (SELECT id FROM cleanup_ids);
 

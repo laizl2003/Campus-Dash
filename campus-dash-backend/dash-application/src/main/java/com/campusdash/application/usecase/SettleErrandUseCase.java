@@ -155,6 +155,9 @@ public class SettleErrandUseCase {
                 creditRankingPort.update(errand.campusId(), errand.grabberId(),
                         creditRepository.scoreOf(errand.grabberId()));
             }
+            // 发单人也 +2：结算完成后分数变化同样要反映到榜单
+            creditRankingPort.update(errand.campusId(), errand.publisherId(),
+                    creditRepository.scoreOf(errand.publisherId()));
             auditPort.record(bizNo, "SETTLE", errandId, operatorId,
                     String.format("{\"runner\":%d,\"commission\":%d}", runnerCents, commissionCents),
                     true, null);
@@ -167,6 +170,10 @@ public class SettleErrandUseCase {
                         com.campusdash.domain.credit.model.CreditEventType.SETTLE.delta(),
                         "完成结算");
             }
+            notifier.creditChanged(errand.publisherId(),
+                    creditRepository.scoreOf(errand.publisherId()),
+                    com.campusdash.domain.credit.model.CreditEventType.SETTLE.delta(),
+                    "完成结算");
             return Result.SETTLED;
         }
         return Result.CONFLICT;
@@ -253,6 +260,11 @@ public class SettleErrandUseCase {
         // biz_no 唯一索引保证重复结算不重复计分
         creditRepository.applyEvent(new CreditEvent(
                 idGenerator.nextId(), CreditEvent.settleBizNo(errandId), errand.grabberId(),
+                CreditEventType.SETTLE, CreditEventType.SETTLE.delta(), "ERRAND", errandId,
+                java.time.Instant.now()));
+        // 发单人也 +2：双方都因"完成一次履约"被记录，bizNo 独立保证幂等
+        creditRepository.applyEvent(new CreditEvent(
+                idGenerator.nextId(), CreditEvent.settlePublisherBizNo(errandId), errand.publisherId(),
                 CreditEventType.SETTLE, CreditEventType.SETTLE.delta(), "ERRAND", errandId,
                 java.time.Instant.now()));
         // 券从 locked 变 used；没有券时是 no-op
