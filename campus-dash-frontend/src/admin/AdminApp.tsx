@@ -3,6 +3,15 @@ import { api, logout, yuan, getUsername, getUserId, listAccounts, switchAccount,
 import Icon from '../components/Icon';
 import './admin.css';
 
+/** 管理台时间格式：YYYY-MM-DD HH:mm:ss */
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 interface Dispute {
   errandId: string; title: string; status: string; rewardCents: number;
   publisherId: string; grabberId: string; round: number;
@@ -531,14 +540,16 @@ function SettingsPanel() {
       {loadingUsers && !users ? <div className="admin-empty">正在加载…</div>
         : !users || users.items.length === 0 ? <div className="admin-empty">暂无普通用户</div>
         : <div className="admin-ledger-scroll"><table>
-          <thead><tr><th>用户名</th><th>在线状态</th><th>上次登录</th><th>余额</th><th>操作</th></tr></thead>
+          <thead><tr><th>用户名</th><th>在线状态</th><th>启用状态</th><th>上次登录</th><th>余额</th><th>操作</th></tr></thead>
           <tbody>{users.items.map(user => <tr key={user.userId}>
             <td>{user.username}</td>
             <td><span className={`admin-online-dot ${user.online ? 'is-online' : 'is-offline'}`}/>{user.online ? '在线' : '离线'}</td>
-            <td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</td>
+            <td><span className={`admin-enabled-dot ${user.enabled === false ? 'is-disabled' : 'is-enabled'}`}/>{user.enabled === false ? '禁用' : '启用'}</td>
+            <td>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : ''}</td>
             <td>{yuan(user.balanceCents)}</td>
             <td className="admin-user-actions">
-              <button type="button" className="btn btn-ghost" onClick={() => void toggleUser(user.userId, user.enabled !== false, user.username)}>
+              <button type="button" className={`btn btn-ghost ${user.enabled === false ? 'admin-success' : 'admin-danger'}`}
+                      onClick={() => void toggleUser(user.userId, user.enabled !== false, user.username)}>
                 {user.enabled === false ? '启用' : '禁用'}
               </button>
               <button type="button" className="btn btn-ghost admin-danger" disabled={!user.online}

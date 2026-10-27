@@ -252,3 +252,14 @@
 .admin-side .admin-account-menu .account-menu-link:hover { background: #313d35; }
 
 .admin-user-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.admin-enabled-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; vertical-align: middle; }
+.admin-enabled-dot.is-enabled { background: #2fa060; box-shadow: 0 0 0 3px #2fa06022; }
+.admin-enabled-dot.is-disabled { background: #c0392b; box-shadow: 0 0 0 3px #c0392b22; }
+.admin-success { color: #2f6b4a; }
+.admin-users-card thead th:nth-child(1) { width: 18%; }
+.admin-users-card thead th:nth-child(2) { width: 12%; }
+.admin-users-card thead th:nth-child(3) { width: 12%; }
+.admin-users-card thead th:nth-child(4) { width: 28%; }
+.admin-users-card thead th:nth-child(5) { width: 12%; }
+.admin-users-card thead th:nth-child(6) { width: 18%; }
