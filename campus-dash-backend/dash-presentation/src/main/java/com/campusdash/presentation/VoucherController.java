@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,9 @@ public class VoucherController {
     public Result<Map<String, Object>> stocks() {
         List<Map<String, Object>> items = queryUseCase.stocks().stream()
                 .filter(VoucherStock::online)
+                // 满减金额从大到小；相同时优惠金额从大到小
+                .sorted(Comparator.comparingLong(VoucherStock::thresholdCents).reversed()
+                        .thenComparing(Comparator.comparingLong(VoucherStock::discountCents).reversed()))
                 .map(stock -> {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("type", stock.type());

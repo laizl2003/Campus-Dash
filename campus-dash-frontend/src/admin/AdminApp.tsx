@@ -366,9 +366,9 @@ function VoucherManager() {
                 <input className="admin-stock-input" type="number" min="0" step="1"
                        value={drafts[item.type] ?? String(item.stock)}
                        onChange={e => setDrafts(prev => ({ ...prev, [item.type]: e.target.value }))}/>
-                <button type="button" className="btn btn-ghost" onClick={() => void saveStock(item.type, item.stock)}>保存</button>
               </div>
               <div className="admin-voucher-card-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => void saveStock(item.type, item.stock)}>保存</button>
                 <button type="button" className="btn btn-ghost" onClick={() => void toggle(item.type, item.status)}>
                   {online ? '下架' : '上架'}
                 </button>
