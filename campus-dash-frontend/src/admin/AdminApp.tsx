@@ -460,7 +460,11 @@ function SettingsPanel() {
       .then(data => { if (active) setUsers(data); })
       .catch(e => { if (active) setError(e instanceof Error ? e.message : '用户加载失败'); })
       .finally(() => { if (active) setLoadingUsers(false); });
-    return () => { active = false; };
+    // 跨浏览器在线状态：静默轮询，别人登录/下线/心跳超时能及时反映
+    const timer = window.setInterval(() => {
+      api.adminUsers(page, 20).then(data => { if (active) setUsers(data); }).catch(() => {});
+    }, 10000);
+    return () => { active = false; window.clearInterval(timer); };
   }, [page]);
 
   const save = async () => {

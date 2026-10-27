@@ -475,3 +475,8 @@ button.topbar-avatar:hover { filter: brightness(0.97); }
 
 /* 展开后就地撑开在登录按钮下方，不再浮层遮挡表单 */
 .auth-quick-menu { position: static; bottom: auto; margin-top: 8px; box-shadow: 0 6px 18px #1f24210f; }
+
+/* 登录页账号菜单改为绝对定位向下悬浮：展开不改变卡片高度，避免页面跳动 */
+.auth-quick-menu { position: absolute; top: calc(100% + 8px); bottom: auto; left: 0; right: 0; margin-top: 0; z-index: 40; max-height: 248px; overflow-y: auto; }
+
+.auth-quick-menu.is-up { top: auto; bottom: calc(100% + 8px); }

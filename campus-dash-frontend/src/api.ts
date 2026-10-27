@@ -507,7 +507,7 @@ export const api = {
       commissionRate, voucherRunnerBearRatio,
     }),
   adminUsers: (page = 0, size = 20) => request<{
-    items: { userId: string; username: string; online: boolean; lastLoginAt: string; balanceCents: number }[];
+    items: { userId: string; username: string; online: boolean; loginStatus?: boolean; lastSeenAt?: string; lastLoginAt: string; balanceCents: number }[];
     total: number; page: number; size: number;
   }>(`/api/admin/users?page=${page}&size=${size}`),
   adminForceLogout: (userId: string) =>

@@ -153,6 +153,8 @@ public class AdminController {
                     boolean online = row.loginStatus() && row.lastSeenAt() != null
                             && row.lastSeenAt().isAfter(java.time.Instant.now().minusSeconds(90));
                     item.put("online", online);
+                    item.put("loginStatus", row.loginStatus());
+                    item.put("lastSeenAt", row.lastSeenAt() == null ? "" : row.lastSeenAt().toString());
                     item.put("lastLoginAt", row.lastLoginAt() == null ? "" : row.lastLoginAt().toString());
                     item.put("balanceCents", row.balanceCents());
                     return item;

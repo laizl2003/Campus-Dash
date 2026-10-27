@@ -31,6 +31,7 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
   const [notice, setNotice] = useState('');
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [quickUp, setQuickUp] = useState(false);
   const quickRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -208,11 +209,15 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
 
       {mode === 'login' && accounts.length > 0 && <div className="auth-quick" ref={quickRef}>
         <button type="button" className="auth-quick-toggle" aria-haspopup="menu" aria-expanded={quickOpen}
-                onClick={() => setQuickOpen(v => !v)}>
+                onClick={() => {
+                  const rect = quickRef.current?.getBoundingClientRect();
+                  setQuickUp(rect ? window.innerHeight - rect.bottom < 280 : false);
+                  setQuickOpen(v => !v);
+                }}>
           <span><strong>本机账号</strong><small>{accounts.length} 个已登录账号 · 点击快速进入</small></span>
           <span className="auth-quick-caret" aria-hidden="true">⌄</span>
         </button>
-        {quickOpen && <div className="auth-quick-menu" role="menu" aria-label="本机账号">
+        {quickOpen && <div className={`auth-quick-menu${quickUp ? ' is-up' : ''}`} role="menu" aria-label="本机账号">
           <div className="auth-quick-list">
             {accounts.map(a => <button key={a.userId} type="button" role="menuitem"
                     className={`auth-account-item${a.userId === currentUserId ? ' is-current' : ''}`}

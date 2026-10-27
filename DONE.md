@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 登录账号下拉不跳动；管理端在线状态查库
+
+- **目标**：登录页展开本机账号时不顶动页面；Admin 在线状态完全以 user 表为准并跨浏览器及时刷新。
+- **改动**：
+  - 登录账号菜单改绝对定位浮层，展开不改变登录卡片高度；下方空间不足时自动向上展开（is-up）。
+  - /api/admin/users 返回 login_status、last_seen_at，online = login_status=1 且心跳在 90 秒内。
+  - 平台配置用户表每 10 秒静默轮询，跨浏览器登录/下线/心跳超时能及时反映。
+  - 强制下线跨浏览器：Redis auth:forced:{userId} 由所有实例的 HTTP/WS 拦截器共享，关闭本实例 WS 并 markOffline。
+- **验证**：展开前后 login-card 高度均 487px、scrollY=0；菜单 is-up 且 top=381 < toggle=637；Admin 接口 laizl online=true、loginStatus=true、lastSeenAt 有值。
+
+
 ## 2026-10-28 · 登录状态入库与心跳兜底
 
 - **目标**：把在线状态从“单浏览器 WebSocket”升级为数据库全局状态，Admin 在另一浏览器也能看到；解决直接关页面的离线判定。
