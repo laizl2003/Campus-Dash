@@ -235,3 +235,40 @@
 - `campus-dash-backend/dash-presentation/.../ErrandController.java`
 - `campus-dash-frontend/src/pages/Detail.tsx`、`components/ErrandCard.tsx`
 
+
+## 5. 广场 WebSocket 聊天室（未完成）
+
+**目标**：在广场左侧边栏下半部分新增公共聊天室，登录用户可实时收发消息，刷新后能加载最近历史消息。
+
+### 现状与差距
+
+- 已有：`/ws` 的 token 握手鉴权（`WsAuthHandshakeInterceptor`）、在线连接表 `WsSessionRegistry`、前端 `ws.ts` 的心跳/退避重连、按 userId 推送的 `RealtimePushService`。
+- 缺口：`WsHandler.handleTextMessage` 只处理 `ping`，其他客户端消息一律忽略；注册表没有广播原语；没有 `chat_message` 表与历史接口；前端只有 `subscribeWs`，没有发送方法，也没有聊天组件。
+- 设计已提前写好：`campus-dash-backend/docs/广场聊天室.md`（复用 `/ws`、MySQL 单表、`beforeId/afterId` 游标、先落库后广播）。
+
+### 实现步骤
+
+1. 建表 `chat_message`：雪花 id、campus_id、sender_id、content、created_at，索引 `(campus_id, id)`；不要复用 `notification` 或 `local_message`。
+2. domain/application 层增加 `ChatMessage`、`ChatRepository`、`SendChatMessageUseCase`（空消息/超长/频率校验），历史查询按 `beforeId` 游标取最近 50 条。
+3. 广播：给 `WsSessionRegistry` 增加 `broadcast(campusId, json)`（或抽 `ChatBroadcaster` 端口），处理慢消费者；`WsHandler` 增加入站 `chat` 分支，先落库再广播，保留 `ping` 兼容。
+4. 历史接口：`GET /api/chat/messages?campusId=1&beforeId=&limit=50`，返回 senderName/avatarUrl/createdAt。
+5. 前端：`ws.ts` 增加 `sendWs` 与发送队列；新增 `ChatPanel` 挂到 `TopBar` 侧栏 `.sidebar-guide` 位置，包含消息列表、上翻加载、输入框、发送失败重试。
+6. 安全与限流：Redis 令牌桶（如 2 秒 1 条）、纯文本渲染防 XSS；单实例内存广播，多实例预留 Redis Pub/Sub 开关。
+7. 测试：单元测试覆盖校验/限流；WS 集成测试覆盖两个客户端互收、刷新后历史、未登录拒绝、超长/刷屏拒绝，并回归现有 ping 与任务推送。
+
+### 验收标准
+
+- [ ] 两个浏览器分别登录 A/B，A 发送后 B 在 1 秒内收到
+- [ ] 刷新页面能看到最近 50 条历史，上翻 `beforeId` 能继续加载更早消息
+- [ ] WS 未连接/发送失败时前端有明确提示与重试，不静默丢消息
+- [ ] 空消息、超长消息、高频刷屏被后端拒绝并返回可读错误
+- [ ] 消息按纯文本渲染，不执行 HTML/脚本
+- [ ] 现有 `ping/pong` 心跳与任务状态推送不受影响
+
+### 参考文件
+
+- `campus-dash-backend/docs/广场聊天室.md`：完整技术方案与协议设计
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/realtime/WsHandler.java`
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/realtime/WsSessionRegistry.java`
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/realtime/WebSocketConfig.java`
+- `campus-dash-frontend/src/ws.ts`、`campus-dash-frontend/src/components/TopBar.tsx`
