@@ -123,8 +123,8 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
   }, [open]);
   // 展示真实用户名；演示账号没有昵称时退回 id
   const userName = getUsername() ?? userId;
-  // 账号切换下拉不列管理员账号：管理台走独立入口，避免把 001 混进普通用户切换列表
-  const switchableAccounts = accounts.filter(a => a.role !== 'Admin');
+  // 本机登录过的账号都列出；切到 Admin 时 App 会按角色落到管理台
+  const switchableAccounts = accounts;
   const title = NAV.find(n => n.path === route)?.label ?? (route === '/publish' ? '发布任务' : '任务详情');
   return <>
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); const main = document.getElementById('main-content'); main?.focus(); main?.scrollIntoView({ block: 'start' }); }}>跳到主要内容</a>
@@ -147,7 +147,7 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
               className={a.userId === userId ? 'is-current' : ''}
               onClick={() => { setSwitchMenu(false); if (a.userId !== userId) onSwitch(a.userId); }}>
               <span className="menu-avatar">{a.username.slice(0, 1).toUpperCase()}</span>
-              <span className="menu-account"><strong>{a.username}</strong><small>{a.userId === userId ? '当前账号' : '点击切换'}</small></span>
+              <span className="menu-account"><strong>{a.username}</strong><small>{a.role === 'Admin' ? '管理员' : '普通用户'}{a.userId === userId ? ' · 当前账号' : ''}</small></span>
               {a.userId === userId && <Icon name="check" size={14}/>}
             </button>)}
         <a className="account-menu-link" href="#/login" onClick={() => setSwitchMenu(false)}><Icon name="arrow-left" size={14}/>登录其他账号</a>

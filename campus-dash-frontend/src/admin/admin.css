@@ -226,3 +226,16 @@
 .admin-users-card thead th:nth-child(4) { width: 20%; }
 .admin-users-card thead th:nth-child(5) { width: 15%; }
 .admin-users-card tbody td:last-child .btn { height: 30px; padding: 0 10px; font-size: 11px; }
+
+/* ── 管理台左下角账号切换 ─────────────────────────────── */
+.admin-account { position: relative; flex: 1; min-width: 0; }
+.admin-account-trigger { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; border: 1px solid #2c332e; border-radius: 9px; background: #202623; color: #e9ede7; cursor: pointer; }
+.admin-account-trigger .menu-account strong { color: #e9ede7; font-size: 11px; }
+.admin-account-trigger .menu-account small { color: #9da79f; }
+.admin-account-trigger .profile-caret { color: #9da79f; }
+.admin-account-menu { left: 0; right: auto; top: auto; bottom: calc(100% + 10px); width: 224px; }
+.admin-account-menu button.is-current { background: #fbf7e8; }
+.admin-switch-error { display: block; margin-top: 6px; font-size: 9px; color: #ffb4ab; }
+
+/* 提高优先级，确保管理台菜单向上展开（避免被全局 .account-menu 的 top 覆盖） */
+.admin-side .admin-account-menu { top: auto; right: auto; left: 0; bottom: calc(100% + 10px); width: 224px; }

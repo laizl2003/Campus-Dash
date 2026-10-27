@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { captchaImage, changePassword, login, registerAccount, type Profile } from '../api';
+import { captchaImage, changePassword, login, registerAccount, type Profile, type StoredAccount } from '../api';
 import Icon from '../components/Icon';
 import CampusArt from '../components/CampusArt';
 
@@ -9,11 +9,15 @@ import CampusArt from '../components/CampusArt';
  * 默认是登录表单；"注册新账号"就在密码栏下面，点进去同一个卡片切成注册表单，
  * 注册成功后回到登录并预填用户名——不做"注册即登录"，避免验证码被复用。
  */
-export default function AuthPage({ onAuthed, current, onResume }: {
+export default function AuthPage({ onAuthed, current, onResume, accounts = [], currentUserId, onQuickLogin }: {
   onAuthed: (profile: Profile) => void;
   /** 已登录时从 #/login 进来：展示"继续以该身份进入"，不需要重新输密码 */
   current?: { username: string; role: string } | null;
   onResume?: () => void;
+  /** 本机已登录过的账号，用于快速切换（不需要重新输密码） */
+  accounts?: StoredAccount[];
+  currentUserId?: string | null;
+  onQuickLogin?: (userId: string) => Promise<void> | void;
 }) {
   const [mode, setMode] = useState<'login' | 'register' | 'change'>('login');
   const [username, setUsername] = useState('');
@@ -26,6 +30,17 @@ export default function AuthPage({ onAuthed, current, onResume }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [quickBusy, setQuickBusy] = useState<string | null>(null);
+
+  const quickLogin = async (id: string) => {
+    if (!onQuickLogin || quickBusy) return;
+    if (id === currentUserId) { onResume?.(); return; }
+    setQuickBusy(id);
+    setError('');
+    try { await onQuickLogin(id); }
+    catch (e) { setError(e instanceof Error ? e.message : '快速登录失败，请重新输入密码'); }
+    finally { setQuickBusy(null); }
+  };
 
   const reloadCaptcha = useCallback(async () => {
     try {
@@ -109,6 +124,17 @@ export default function AuthPage({ onAuthed, current, onResume }: {
 
     <section className="login-side"><div className="login-card">
       <h2 className="auth-title">{mode === 'login' ? '从一个身份开始' : mode === 'register' ? '创建你的账号' : '修改登录密码'}</h2>
+
+      {mode === 'login' && accounts.length > 0 && <div className="auth-accounts">
+        <span className="auth-accounts-label">本机账号 · 点击直接进入</span>
+        {accounts.map(a => <button key={a.userId} type="button" className={`auth-account-item${a.userId === currentUserId ? ' is-current' : ''}`}
+                disabled={quickBusy !== null} onClick={() => void quickLogin(a.userId)}>
+          <span className="menu-avatar">{a.username.slice(0, 1).toUpperCase()}</span>
+          <span className="menu-account"><strong>{a.username}</strong><small>{a.role === 'Admin' ? '管理员' : '普通用户'}{a.userId === currentUserId ? ' · 当前账号' : ''}</small></span>
+          {a.userId === currentUserId ? <Icon name="check" size={14}/> : <Icon name="arrow-right" size={14}/>}
+        </button>)}
+        <span className="auth-accounts-hint">切换不会退出原账号；只有右上角「退出登录」才会撤销令牌。</span>
+      </div>}
 
 
       <form className="auth-form" onSubmit={submit}>

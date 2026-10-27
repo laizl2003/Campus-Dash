@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api, logout, yuan, getUsername } from '../api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api, logout, yuan, getUsername, getUserId, listAccounts, switchAccount, type StoredAccount } from '../api';
 import Icon from '../components/Icon';
 import './admin.css';
 
@@ -18,6 +18,11 @@ interface Dispute {
  * 页面只会显示错误，拿不到任何数据。
  */
 export default function AdminApp() {
+  const [accounts, setAccounts] = useState<StoredAccount[]>(() => listAccounts());
+  const [switchOpen, setSwitchOpen] = useState(false);
+  const [switchBusy, setSwitchBusy] = useState(false);
+  const [switchError, setSwitchError] = useState('');
+  const switchRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<Dispute[]>([]);
   const [selected, setSelected] = useState<Dispute | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +63,29 @@ export default function AdminApp() {
     }
   };
 
+  useEffect(() => {
+    const sync = () => setAccounts(listAccounts());
+    window.addEventListener('dash:accounts', sync);
+    window.addEventListener('storage', sync);
+    return () => { window.removeEventListener('dash:accounts', sync); window.removeEventListener('storage', sync); };
+  }, []);
+  useEffect(() => {
+    if (!switchOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (switchRef.current && !switchRef.current.contains(event.target as Node)) setSwitchOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [switchOpen]);
+  const switchTo = async (id: string) => {
+    if (switchBusy || id === getUserId()) { setSwitchOpen(false); return; }
+    setSwitchBusy(true);
+    setSwitchError('');
+    try { await switchAccount(id); }
+    catch (e) { setSwitchError(e instanceof Error ? e.message : '切换失败'); setSwitchOpen(false); }
+    finally { setSwitchBusy(false); }
+  };
+
   const arbitrate = async (favor: 'RUNNER' | 'PUBLISHER') => {
     if (!selected || busy) return;
     setBusy(true);
@@ -84,7 +112,26 @@ export default function AdminApp() {
         <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}><Icon name="wallet" size={16}/>平台配置</button>
       </nav>
       <div className="admin-side-foot">
-        <span><Icon name="user" size={14}/>{getUsername()} · 001</span>
+        <div className="admin-account" ref={switchRef}>
+          <button type="button" className="admin-account-trigger" disabled={switchBusy}
+                  aria-haspopup="menu" aria-expanded={switchOpen} onClick={() => setSwitchOpen(v => !v)}>
+            <span className="menu-avatar">{(getUsername() ?? 'Admin').slice(0, 1).toUpperCase()}</span>
+            <span className="menu-account"><strong>{getUsername() ?? 'Admin'}</strong><small>管理员</small></span>
+            <span className="profile-caret">⌄</span>
+          </button>
+          {switchOpen && <div className="account-menu admin-account-menu" role="menu" aria-label="切换账号">
+            <div className="account-menu-head"><small>切换账号</small></div>
+            {accounts.map(a => <button key={a.userId} type="button" role="menuitem"
+                    className={a.userId === getUserId() ? 'is-current' : ''}
+                    onClick={() => void switchTo(a.userId)}>
+              <span className="menu-avatar">{a.username.slice(0, 1).toUpperCase()}</span>
+              <span className="menu-account"><strong>{a.username}</strong><small>{a.role === 'Admin' ? '管理员' : '普通用户'}{a.userId === getUserId() ? ' · 当前账号' : ''}</small></span>
+              {a.userId === getUserId() && <Icon name="check" size={14}/>}
+            </button>)}
+            <a className="account-menu-link" href="#/login" onClick={() => setSwitchOpen(false)}><Icon name="arrow-left" size={14}/>登录其他账号</a>
+          </div>}
+          {switchError && <span className="admin-switch-error">{switchError}</span>}
+        </div>
         <button type="button" className="admin-logout" onClick={logout}><Icon name="logout" size={14}/>退出</button>
       </div>
     </aside>

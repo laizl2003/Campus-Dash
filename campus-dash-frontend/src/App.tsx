@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router';
-import { api, getRole, getUserId, getUsername, logout, switchAccount } from './api';
+import { api, getRole, getUserId, getUsername, listAccounts, logout, switchAccount } from './api';
 import TopBar from './components/TopBar';
 import Icon from './components/Icon';
 import Square from './pages/Square';
@@ -72,8 +72,13 @@ export default function App() {
     if (userId !== null) { connectWs(); return disconnectWs; }
   }, [userId]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [route]);
+  // 切换/登录到 Admin 后统一落到管理台；普通用户被管理台守卫送回广场
+  useEffect(() => {
+    if (!roleReady || route === '/login') return;
+    if (role === 'Admin' && !route.startsWith('/admin')) window.location.hash = '#/admin';
+  }, [role, roleReady, route]);
 
-  if (userId === null) return <AuthPage onAuthed={profile => {
+  if (userId === null) return <AuthPage accounts={listAccounts()} onQuickLogin={switchAccount} onAuthed={profile => {
     setUserId(profile.userId);
     setRole(profile.role);
     // 同一张登录表单，按角色决定落地页：Admin -> 管理台，其余 -> 任务广场
@@ -84,6 +89,9 @@ export default function App() {
   const path = route.split('?')[0];
   // #/login：已登录也能回到登录页（不退出当前会话），用于切换账号或登录其他账号
   if (path === '/login') return <AuthPage
+    accounts={listAccounts()}
+    currentUserId={userId}
+    onQuickLogin={switchAccount}
     current={userId !== null ? { username: getUsername() ?? userId, role } : null}
     onResume={() => { window.location.hash = role === 'Admin' ? '#/admin' : '#/square'; }}
     onAuthed={profile => {
