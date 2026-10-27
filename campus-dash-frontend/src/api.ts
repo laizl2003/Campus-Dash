@@ -34,6 +34,65 @@ export function getUsername() { return currentUsername ?? currentUserId; }
 /** 登录身份角色：Admin 进管理台，其余进任务广场 */
 export function getRole() { return localStorage.getItem('dash_role') || 'user'; }
 
+/**
+ * 本机登录过的账号（未主动退出）。
+ *
+ * 不遍历 Redis：token 是按会话存的，没有"按用户列会话"的索引，SCAN 全库既慢又会碰到别人的会话。
+ * 账号切换本质是"本浏览器手里有哪些账号的凭证"，所以凭证只存本地，由前端维护这份账号簿。
+ */
+const ACCOUNTS_KEY = 'dash_accounts';
+export interface StoredAccount {
+  userId: string; username: string; role: string;
+  accessToken: string; refreshToken: string | null;
+}
+
+export function listAccounts(): StoredAccount[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter(a => a && a.userId && a.accessToken) : [];
+  } catch { return []; }
+}
+
+function writeAccounts(list: StoredAccount[]) {
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list));
+  window.dispatchEvent(new Event('dash:accounts'));
+}
+
+function upsertAccount(account: StoredAccount) {
+  const rest = listAccounts().filter(a => a.userId !== account.userId);
+  writeAccounts([account, ...rest].slice(0, 5));
+}
+
+/** 切换账号：先用 refresh 换新 access，再整体替换本地会话并重载页面 */
+export async function switchAccount(userId: string): Promise<void> {
+  const account = listAccounts().find(a => a.userId === userId);
+  if (!account) throw new Error('该账号不在本机登录记录中');
+  let access = account.accessToken;
+  let refresh = account.refreshToken;
+  if (refresh) {
+    try {
+      const resp = await fetch('/api/auth/refresh', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: refresh }),
+      });
+      if (resp.ok) {
+        const body = await resp.json();
+        if (body.code === 'OK') {
+          access = body.data.accessToken;
+          refresh = body.data.refreshToken ?? refresh;
+        }
+      }
+    } catch { /* 刷新失败就沿用旧 access，过期后由 401 流程处理 */ }
+  }
+  restoreIdentity(access, account.userId, refresh);
+  currentUsername = account.username;
+  localStorage.setItem(NAME_KEY, account.username);
+  localStorage.setItem('dash_role', account.role);
+  upsertAccount({ ...account, accessToken: access, refreshToken: refresh });
+  window.location.hash = '#/square';
+  window.location.reload();
+}
+
 interface TokenPair { accessToken: string; refreshToken: string | null; }
 
 /** 只改凭证，不动 epoch：刷新是同一会话内的轮换，不是换人 */
@@ -145,6 +204,13 @@ export async function login(input: LoginInput): Promise<Profile> {
   localStorage.setItem(USER_KEY, JSON.stringify(currentUserId));
   localStorage.setItem(NAME_KEY, currentUsername);
   localStorage.setItem('dash_role', data.role ?? 'user');
+  upsertAccount({
+    userId: currentUserId,
+    username: currentUsername,
+    role: data.role ?? 'user',
+    accessToken,
+    refreshToken: data.refreshToken ?? null,
+  });
   if (previousRefresh && previousRefresh !== (data.refreshToken ?? null)) revokeQuietly(previousRefresh, null);
   return {
     userId: currentUserId,
@@ -168,6 +234,10 @@ export async function loginAs(userId: string, displayName?: string): Promise<Pro
   localStorage.setItem(USER_KEY, JSON.stringify(currentUserId));
   localStorage.setItem(NAME_KEY, currentUsername);
   localStorage.setItem('dash_role', 'user');
+  upsertAccount({
+    userId: currentUserId, username: currentUsername, role: 'user',
+    accessToken, refreshToken: data.refreshToken ?? null,
+  });
   return { userId: currentUserId, username: currentUsername, role: 'user' };
 }
 
@@ -202,6 +272,9 @@ export function restoreIdentity(access: string | null, userId: string | null, re
 export function logout() {
   const access = token;
   const refresh = refreshToken;
+  // 主动退出 = 从"本机账号簿"移除，之后下拉框不再列出这个账号
+  const uid = currentUserId;
+  if (uid) writeAccounts(listAccounts().filter(a => a.userId !== uid));
   token = null;
   refreshToken = null;
   currentUserId = null;

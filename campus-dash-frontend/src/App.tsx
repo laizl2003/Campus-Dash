@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router';
-import { api, getRole, getUserId, loginAs, logout } from './api';
-import { IDENTITIES } from './identities';
+import { api, getRole, getUserId, logout, switchAccount } from './api';
 import TopBar from './components/TopBar';
 import Icon from './components/Icon';
 import Square from './pages/Square';
@@ -45,10 +44,8 @@ export default function App() {
     loginLock.current = true;
     setLoginBusy(id); setError('');
     try {
-      const displayName = IDENTITIES.find(i => String(i.userId) === id)?.name;
-      const profile = await loginAs(id, displayName);
-      setUserId(profile.userId);
-      setRole(profile.role);
+      // 账号切换：用本机保存的凭证换新 access，然后整页重载
+      await switchAccount(id);
     }
     catch (e) { setError(e instanceof Error ? e.message : '切换身份失败，请重试'); }
     finally { setLoginBusy(null); loginLock.current = false; }
@@ -85,6 +82,12 @@ export default function App() {
 
   let page;
   const path = route.split('?')[0];
+  // #/login：已登录也能回到登录页（不退出当前会话），用于切换账号或登录其他账号
+  if (path === '/login') return <AuthPage onAuthed={profile => {
+    setUserId(profile.userId);
+    setRole(profile.role);
+    window.location.hash = profile.role === 'Admin' ? '#/admin' : '#/square';
+  }} />;
   if (path.startsWith('/admin')) {
     // 路由守卫：先等服务端确认角色，再决定放行还是弹回，避免刷新瞬间误判
     if (!roleReady) return <div className="admin-boot">正在校验管理员身份…</div>;

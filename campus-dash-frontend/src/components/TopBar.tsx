@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, getUsername, yuan } from '../api';
+import { api, getUsername, listAccounts, type StoredAccount, yuan } from '../api';
 import { subscribeWs } from '../ws';
-import { IDENTITIES } from '../identities';
 import Icon from './Icon';
 
 const NAV = [
@@ -17,6 +16,7 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
   const [balance, setBalance] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [accountMenu, setAccountMenu] = useState(false);
+  const [accounts, setAccounts] = useState<StoredAccount[]>(() => listAccounts());
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -39,6 +39,12 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
     return () => { active = false; unsub(); clearInterval(timer); window.removeEventListener('dash:changed', load); };
   }, [userId, route]);
   useEffect(() => { setOpen(false); setAccountMenu(false); }, [route]);
+  useEffect(() => {
+    const sync = () => setAccounts(listAccounts());
+    window.addEventListener('dash:accounts', sync);
+    window.addEventListener('storage', sync);
+    return () => { window.removeEventListener('dash:accounts', sync); window.removeEventListener('storage', sync); };
+  }, []);
   useEffect(() => {
     if (!accountMenu) return;
     const onDown = (event: MouseEvent) => {
@@ -94,14 +100,14 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
       <div className="nav-label">我的工作台</div>
       <nav>{NAV.map(n => <a key={n.path} href={`#${n.path}`} onClick={() => setOpen(false)} className={`nav-item ${route === n.path ? 'active' : ''}`} aria-current={route === n.path ? 'page' : undefined}><Icon name={n.icon} size={18}/>{n.label}{n.path === '/notifications' && unread !== null && unread > 0 && <span className="nav-count">{unread > 99 ? '99+' : unread}</span>}</a>)}</nav>
       <div className="sidebar-guide"><Icon name="spark" size={23}/><strong>顺路，帮个小忙。</strong><p>一份刚好的委托，<br/>连接校园里的你和我。</p><a href="#/square" onClick={() => setOpen(false)}>看看大家需要什么<Icon name="arrow-right" size={13}/></a></div>
-      <div className="sidebar-bottom"><a href="#/wallet" className="sidebar-wallet" onClick={() => setOpen(false)}><span><Icon name="wallet" size={16}/>可用余额</span><strong>{balance === null ? '—' : yuan(balance)}</strong></a><div className="profile"><span className="avatar" title={userName}>{userName.slice(0, 1).toUpperCase()}</span><label className="profile-select"><span className="profile-name">用户：{userName}</span><select aria-label="切换身份" value={userId} disabled={switching} onChange={e => onSwitch(e.target.value)}>{IDENTITIES.map(i => <option key={i.userId} value={i.userId}>{i.name} · {i.userId}</option>)}</select></label><button className="icon-button logout-button" title="退出登录" aria-label="退出登录" onClick={onLogout} disabled={switching}><Icon name="logout" size={16}/></button></div></div>
+      <div className="sidebar-bottom"><a href="#/wallet" className="sidebar-wallet" onClick={() => setOpen(false)}><span><Icon name="wallet" size={16}/>可用余额</span><strong>{balance === null ? '—' : yuan(balance)}</strong></a><div className="profile"><span className="avatar" title={userName}>{userName.slice(0, 1).toUpperCase()}</span><label className="profile-select"><span className="profile-name">用户：{userName}</span><select aria-label="切换账号" value={userId} disabled={switching} onChange={e => onSwitch(e.target.value)}>{accounts.length === 0 ? <option value={userId}>{userName}</option> : accounts.map(a => <option key={a.userId} value={a.userId}>{a.username}{a.userId === userId ? '（当前）' : ''}</option>)}</select></label><a className="icon-button" href="#/login" title="返回登录页" aria-label="返回登录页"><Icon name="arrow-left" size={16}/></a></div></div>
     </aside>
     <header className="topbar"><div className="topbar-left"><button ref={menuRef} className="icon-button mobile-menu" aria-expanded={open} aria-label="打开导航" onClick={() => setOpen(true)}><Icon name="menu"/></button><span className="breadcrumb">工作台 <span>/</span> <strong>{title}</strong></span></div><div className="topbar-right"><span className="topbar-campus"><Icon name="pin" size={14}/>校园服务站</span><a className="icon-button notification-button" href="#/notifications" aria-label={`消息中心${unread ? `，${unread}条未读` : ''}`}><Icon name="bell" size={18}/>{!!unread && <i/>}</a><div className="account-menu-wrap" ref={accountRef}>
         <button type="button" className="topbar-avatar" title={userName} aria-label={userName}
                 aria-haspopup="menu" aria-expanded={accountMenu}
                 onClick={() => setAccountMenu(v => !v)}>{userName.slice(0, 1).toUpperCase()}</button>
         {accountMenu && <div className="account-menu" role="menu" aria-label="账号菜单">
-          <div className="account-menu-head"><strong>{userName}</strong><small>{userId}</small></div>
+          <div className="account-menu-head"><strong>{userName}</strong></div>
           <button type="button" role="menuitem" onClick={() => { setAccountMenu(false); onLogout(); }}>
             <Icon name="logout" size={15}/>退出登录
           </button>
