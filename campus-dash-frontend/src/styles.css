@@ -357,8 +357,8 @@ input::placeholder, textarea::placeholder { color: #707070; }
 
 /* 侧边栏底部：直接展示"用户：昵称"，头像取昵称首字 */
 .profile-name { display: block; font-size: 12px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.profile-select { display: grid; gap: 2px; }
-.profile-select select { margin-top: 1px; }
+.profile-select { display: block; }
+.profile-select select { width: 100%; font-size: 12px; font-weight: 600; color: var(--ink); border: 0; background: transparent; padding: 0; }
 
 @media(max-width: 530px) {
   .login-card .auth-title { font-size: 34px; }
