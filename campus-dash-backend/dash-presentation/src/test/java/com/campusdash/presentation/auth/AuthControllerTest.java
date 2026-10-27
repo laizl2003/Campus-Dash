@@ -186,6 +186,7 @@ class AuthControllerTest {
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
         @Override public void markLoginFailure(String userId) { loginFailures++; }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
+        @Override public boolean deleteById(String userId) { return byName.values().removeIf(u -> u.userId().equals(userId)); }
     }
 
     private static final class EmptyUsers implements UserRepository {
@@ -198,5 +199,6 @@ class AuthControllerTest {
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
         @Override public void markLoginFailure(String userId) { }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
+        @Override public boolean deleteById(String userId) { return false; }
     }
 }

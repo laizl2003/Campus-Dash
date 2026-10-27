@@ -25,6 +25,7 @@ public class JdbcWalletRepository implements WalletRepository {
     private static final RowMapper<WalletAccount> MAPPER = (rs, n) -> new WalletAccount(
             rs.getLong("id"),
             rs.getString("owner_id"),
+            rs.getString("user_name"),
             AccountType.valueOf(rs.getString("owner_type")),
             Money.ofCents(rs.getLong("available")),
             Money.ofCents(rs.getLong("frozen")),
@@ -39,11 +40,16 @@ public class JdbcWalletRepository implements WalletRepository {
     }
 
     @Override
+    public void deleteAccount(long accountId) {
+        jdbc.update("DELETE FROM wallet_account WHERE id = ?", accountId);
+    }
+
+    @Override
     public void insertAccount(WalletAccount account) {
         jdbc.update("""
-                INSERT INTO wallet_account (id, owner_id, owner_type, available, frozen, version)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """, account.id(), account.ownerId(), account.type().name(),
+                INSERT INTO wallet_account (id, owner_id, user_name, owner_type, available, frozen, version)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, account.id(), account.ownerId(), account.userName(), account.type().name(),
                 account.available().cents(), account.frozen().cents(), account.version());
     }
 

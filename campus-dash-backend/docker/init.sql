@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS grab_record (
 CREATE TABLE IF NOT EXISTS wallet_account (
   id         BIGINT      NOT NULL,
   owner_id   VARCHAR(36)      NOT NULL COMMENT '用户 ID；系统户用固定值',
-  owner_type VARCHAR(16) NOT NULL COMMENT 'USER/ESCROW/COMMISSION',
+  user_name  VARCHAR(64) NOT NULL DEFAULT '' COMMENT '账户所属用户/系统户名称',
+  owner_type VARCHAR(16) NOT NULL COMMENT 'USER/ESCROW/COMMISSION/MARKETING/EXTERNAL',
   available  BIGINT      NOT NULL DEFAULT 0 COMMENT '可用余额，单位分',
   frozen     BIGINT      NOT NULL DEFAULT 0 COMMENT '冻结余额，单位分',
   version    BIGINT      NOT NULL DEFAULT 0,

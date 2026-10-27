@@ -32,17 +32,17 @@ public class SystemAccountInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        ensure("-1", AccountType.ESCROW, 0L);
-        ensure("-2", AccountType.COMMISSION, 0L);
-        ensure("-3", AccountType.EXTERNAL, 100_000_000L);
-        ensure("-4", AccountType.MARKETING, 100_000_000L);
+        ensure("-1", "托管账户", AccountType.ESCROW, 0L);
+        ensure("-2", "佣金账户", AccountType.COMMISSION, 0L);
+        ensure("-3", "外部资金池", AccountType.EXTERNAL, 100_000_000L);
+        ensure("-4", "营销账户", AccountType.MARKETING, 100_000_000L);
     }
 
-    private void ensure(String ownerId, AccountType type, long initialCents) {
+    private void ensure(String ownerId, String userName, AccountType type, long initialCents) {
         if (wallets.findByOwner(ownerId, type).isPresent()) {
             return;
         }
-        wallets.insertAccount(new WalletAccount(idGenerator.nextId(), ownerId, type,
+        wallets.insertAccount(new WalletAccount(idGenerator.nextId(), ownerId, userName, type,
                 Money.ofCents(initialCents), Money.ZERO, 0L));
         log.info("已创建系统账户 owner={} type={} initial={}", ownerId, type, initialCents);
     }

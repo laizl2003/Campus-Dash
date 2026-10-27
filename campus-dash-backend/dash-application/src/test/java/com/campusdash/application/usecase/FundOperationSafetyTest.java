@@ -225,7 +225,7 @@ class FundOperationSafetyTest {
                     walletReads++;
                     String owner = (String) args[0];
                     long id = "-1".equals(owner) ? 1 : "-2".equals(owner) ? 2 : Long.parseLong(owner);
-                    return Optional.of(new WalletAccount(id, owner, (AccountType) args[1],
+                    return Optional.of(new WalletAccount(id, owner, "", (AccountType) args[1],
                             Money.ofCents("-1".equals(owner) ? 2000 : 5000), Money.ofCents(0), 0));
                 }
                 if (method.equals("casEscrowStatus")) return cas(method);

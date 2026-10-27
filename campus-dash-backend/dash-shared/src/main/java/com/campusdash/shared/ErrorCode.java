@@ -51,6 +51,8 @@ public enum ErrorCode {
     PHONE_TAKEN("手机号已被注册"),
     BAD_CREDENTIALS("用户名或密码错误"),
     ACCOUNT_DISABLED("账号已被禁用"),
+    ACCOUNT_DELETE_FORBIDDEN("管理员账号不能注销"),
+    ACCOUNT_HAS_ONGOING("还有进行中的任务，完成后才能注销"),
 
     // 优惠券
     VOUCHER_SOLD_OUT("该优惠券已被领完"),

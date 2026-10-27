@@ -34,7 +34,8 @@ class RegisterUserUseCaseTest {
     void setUp() {
         users = new FakeUsers();
         captcha = new FakeCaptcha();
-        useCase = new RegisterUserUseCase(users, new FakeHasher(), captcha);
+        useCase = new RegisterUserUseCase(users, new FakeHasher(), captcha,
+                new FakeWallets(), new com.campusdash.shared.SnowflakeIdGenerator(1));
     }
 
     @Test
@@ -132,6 +133,26 @@ class RegisterUserUseCaseTest {
         }
     }
 
+    private static final class FakeWallets implements com.campusdash.domain.wallet.ports.WalletRepository {
+        final java.util.List<com.campusdash.domain.wallet.model.WalletAccount> accounts = new java.util.ArrayList<>();
+
+        @Override public java.util.Optional<com.campusdash.domain.wallet.model.WalletAccount> findByOwner(
+                String ownerId, com.campusdash.domain.wallet.model.AccountType type) {
+            return accounts.stream().filter(a -> a.ownerId().equals(ownerId) && a.type() == type).findFirst();
+        }
+        @Override public void insertAccount(com.campusdash.domain.wallet.model.WalletAccount account) { accounts.add(account); }
+        @Override public void deleteAccount(long accountId) { accounts.removeIf(a -> a.id() == accountId); }
+        @Override public java.util.Optional<com.campusdash.domain.wallet.model.WalletAccount> findById(long id) { return java.util.Optional.empty(); }
+        @Override public int casDebit(long accountId, com.campusdash.shared.Money amount) { return 1; }
+        @Override public int casCredit(long accountId, com.campusdash.shared.Money amount) { return 1; }
+        @Override public void insertLedger(com.campusdash.domain.wallet.model.LedgerEntry entry) { }
+        @Override public void insertEscrow(com.campusdash.domain.wallet.model.EscrowOrder order) { }
+        @Override public boolean escrowExists(long campusId, long errandId) { return false; }
+        @Override public java.util.Optional<com.campusdash.domain.wallet.model.EscrowOrder> findEscrowByErrandId(long campusId, long errandId) { return java.util.Optional.empty(); }
+        @Override public int casEscrowStatus(long campusId, long errandId, com.campusdash.domain.wallet.model.EscrowOrder.EscrowStatus from, com.campusdash.domain.wallet.model.EscrowOrder.EscrowStatus to) { return 0; }
+        @Override public boolean ledgerExists(String bizNo) { return false; }
+    }
+
     private static final class FakeUsers implements UserRepository {
         private final Map<String, UserAccount> byName = new LinkedHashMap<>();
         private final Map<String, UserAccount> byPhone = new LinkedHashMap<>();
@@ -146,5 +167,6 @@ class RegisterUserUseCaseTest {
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
         @Override public void markLoginFailure(String userId) { }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
+        @Override public boolean deleteById(String userId) { return byName.remove(byName.entrySet().stream().filter(e -> e.getValue().userId().equals(userId)).map(java.util.Map.Entry::getKey).findFirst().orElse(null)) != null; }
     }
 }

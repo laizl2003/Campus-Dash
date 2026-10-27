@@ -418,6 +418,7 @@ export const api = {
     voucherId: string; type: number; description: string; expireTime: string; remainingStock: number;
   }>(`/api/vouchers/${type}/claim`, 'POST'),
   me: () => request<{ userId: string; username: string; role: string }>('/api/auth/me'),
+  deleteAccount: () => request<null>('/api/account', 'DELETE'),
   adminDisputes: () => request<{
     errandId: string; title: string; status: string; rewardCents: number;
     publisherId: string; grabberId: string; round: number;

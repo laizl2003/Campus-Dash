@@ -1,5 +1,6 @@
 package com.campusdash.application.usecase;
 
+import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.wallet.model.AccountType;
 import com.campusdash.domain.wallet.model.LedgerEntry;
 import com.campusdash.domain.wallet.model.WalletAccount;
@@ -34,10 +35,13 @@ public class RechargeWalletUseCase {
 
     private final WalletRepository walletRepository;
     private final SnowflakeIdGenerator idGenerator;
+    private final UserRepository users;
 
-    public RechargeWalletUseCase(WalletRepository walletRepository, SnowflakeIdGenerator idGenerator) {
+    public RechargeWalletUseCase(WalletRepository walletRepository, SnowflakeIdGenerator idGenerator,
+                                 UserRepository users) {
         this.walletRepository = walletRepository;
         this.idGenerator = idGenerator;
+        this.users = users;
     }
 
     public record Result(long availableCents) {
@@ -53,8 +57,11 @@ public class RechargeWalletUseCase {
 
         WalletAccount target = walletRepository.findByOwner(userId, AccountType.USER)
                 .orElseGet(() -> {
+                    // 正常注册已经在同一事务里开好钱包；这里只兜底历史账号
+                    String userName = users.findById(userId).map(com.campusdash.domain.auth.model.UserAccount::username)
+                            .orElse("");
                     WalletAccount created = new WalletAccount(
-                            idGenerator.nextId(), userId, AccountType.USER,
+                            idGenerator.nextId(), userId, userName, AccountType.USER,
                             Money.ZERO, Money.ZERO, 0L);
                     walletRepository.insertAccount(created);
                     return created;
@@ -62,7 +69,7 @@ public class RechargeWalletUseCase {
         WalletAccount source = walletRepository.findByOwner(EXTERNAL_OWNER, AccountType.EXTERNAL)
                 .orElseGet(() -> {
                     WalletAccount created = new WalletAccount(
-                            idGenerator.nextId(), EXTERNAL_OWNER, AccountType.EXTERNAL,
+                            idGenerator.nextId(), EXTERNAL_OWNER, "外部资金池", AccountType.EXTERNAL,
                             Money.ofCents(EXTERNAL_INITIAL_CENTS), Money.ZERO, 0L);
                     walletRepository.insertAccount(created);
                     return created;

@@ -402,3 +402,27 @@ input::placeholder, textarea::placeholder { color: #707070; }
   text-decoration-thickness: 1px;
 }
 .auth-link-box:hover { color: var(--ink); }
+
+/* ── 右上角账号菜单 ───────────────────────────────────── */
+.account-menu-wrap { position: relative; }
+button.topbar-avatar { border: 0; padding: 0; font: inherit; font-size: 11px; cursor: pointer; }
+button.topbar-avatar:hover { filter: brightness(0.97); }
+.account-menu { position: absolute; right: 0; top: 38px; width: 190px; z-index: 80; padding: 6px;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 40px #1f24211f; }
+.account-menu-head { display: grid; gap: 1px; padding: 8px 10px 7px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.account-menu-head strong { font-size: 12px; }
+.account-menu-head small { font-size: 10px; color: var(--muted); }
+.account-menu button { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border-radius: 8px; font-size: 12px; text-align: left; color: var(--ink); }
+.account-menu button:hover { background: #f7f5ef; }
+.account-menu button.danger { color: #b23b32; }
+.modal-scrim { position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; padding: 20px; background: #1f24216b; }
+.confirm-card { width: min(430px, 100%); display: grid; gap: 10px; padding: 22px; background: #fff;
+  border-radius: 16px; box-shadow: 0 24px 70px #00000033; }
+.confirm-card h3 { margin: 0; font-size: 18px; }
+.confirm-card p { margin: 0; font-size: 12px; line-height: 1.7; color: #5b635c; }
+.confirm-card code { padding: 1px 4px; border-radius: 4px; background: #f1efe8; font-size: 11px; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.btn-danger { background: #b23b32; color: #fff; }
+.btn-danger:hover { background: #9c322a; }
+.form-error { color: #b23b32; font-size: 12px; }

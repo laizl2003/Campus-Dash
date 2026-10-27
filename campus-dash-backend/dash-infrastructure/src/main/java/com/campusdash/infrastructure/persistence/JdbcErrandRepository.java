@@ -57,6 +57,16 @@ public class JdbcErrandRepository implements ErrandRepository {
     }
 
     @Override
+    public boolean hasOngoing(String userId) {
+        Integer n = jdbc.queryForObject("""
+                SELECT COUNT(1) FROM errand
+                 WHERE (publisher_id = ? OR grabber_id = ?)
+                   AND status IN ('DRAFT','PUBLISHED','LOCKED','ACCEPTED','PICKED_UP','DELIVERED','DISPUTED')
+                """, Integer.class, userId, userId);
+        return n != null && n > 0;
+    }
+
+    @Override
     public Optional<Errand> findById(long errandId) {
         List<Errand> list = jdbc.query("SELECT * FROM errand WHERE id = ?", MAPPER, errandId);
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));

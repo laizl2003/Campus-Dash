@@ -31,7 +31,7 @@ interface MyVoucher {
 }
 const REF_TYPE_TEXT: Record<string, string> = {
   ESCROW: '任务托管', SETTLE: '任务结算', REFUND: '退款到账',
-  RECHARGE: '余额充值', WITHDRAW: '余额提现',
+  RECHARGE: '余额充值', WITHDRAW: '余额提现', CLOSE: '注销转出',
 };
 const TASK_REF_TYPES = new Set(['ESCROW', 'SETTLE', 'REFUND']);
 

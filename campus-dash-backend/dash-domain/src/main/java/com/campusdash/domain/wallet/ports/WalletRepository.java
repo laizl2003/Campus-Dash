@@ -17,6 +17,9 @@ public interface WalletRepository {
 
     Optional<WalletAccount> findById(long accountId);
 
+    /** 注销账户时删除钱包行（流水保留，用于历史追溯） */
+    void deleteAccount(long accountId);
+
     /**
      * 带条件的 CAS 转出：available -= amount，条件是 available >= amount。
      * 绝不能先 SELECT 余额再 UPDATE——两条语句之间余额可能被其他事务改掉。

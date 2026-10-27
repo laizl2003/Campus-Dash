@@ -32,4 +32,7 @@ public interface UserRepository {
 
     /** 修改密码：只更新 password_hash / password_updated_at / updated_at */
     void updatePassword(String userId, String passwordHash, Instant at);
+
+    /** 注销：物理删除账号（钱包与流水另行处理） */
+    boolean deleteById(String userId);
 }

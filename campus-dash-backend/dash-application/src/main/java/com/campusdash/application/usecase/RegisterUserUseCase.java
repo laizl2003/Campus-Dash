@@ -4,9 +4,15 @@ import com.campusdash.domain.auth.model.UserAccount;
 import com.campusdash.domain.auth.ports.CaptchaPort;
 import com.campusdash.domain.auth.ports.PasswordHasher;
 import com.campusdash.domain.auth.ports.UserRepository;
+import com.campusdash.domain.wallet.model.AccountType;
+import com.campusdash.domain.wallet.model.WalletAccount;
+import com.campusdash.domain.wallet.ports.WalletRepository;
 import com.campusdash.shared.BizException;
 import com.campusdash.shared.ErrorCode;
+import com.campusdash.shared.Money;
+import com.campusdash.shared.SnowflakeIdGenerator;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -39,11 +45,16 @@ public class RegisterUserUseCase {
     private final UserRepository users;
     private final PasswordHasher hasher;
     private final CaptchaPort captcha;
+    private final WalletRepository wallets;
+    private final SnowflakeIdGenerator idGenerator;
 
-    public RegisterUserUseCase(UserRepository users, PasswordHasher hasher, CaptchaPort captcha) {
+    public RegisterUserUseCase(UserRepository users, PasswordHasher hasher, CaptchaPort captcha,
+                               WalletRepository wallets, SnowflakeIdGenerator idGenerator) {
         this.users = users;
         this.hasher = hasher;
         this.captcha = captcha;
+        this.wallets = wallets;
+        this.idGenerator = idGenerator;
     }
 
     public record Command(String username, String phone, String password,
@@ -53,6 +64,7 @@ public class RegisterUserUseCase {
     public record Registered(String userId, String username, String phone, String role) {
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Registered register(Command command) {
         if (command == null) {
             throw new BizException(ErrorCode.INVALID_USERNAME, "请求体不能为空");
@@ -110,6 +122,13 @@ public class RegisterUserUseCase {
                 0,                   // login_fail_count
                 "");
         users.insert(account);
+
+        // 账号与钱包在同一事务里创建：注册成功就一定有可用钱包，
+        // 不再依赖"第一次充值/发布时懒创建"，否则 user 与 wallet_account 会出现短暂不一致。
+        wallets.insertAccount(new WalletAccount(
+                idGenerator.nextId(), userId, username, AccountType.USER,
+                Money.ZERO, Money.ZERO, 0L));
+
         return new Registered(userId, username, phone, UserAccount.ROLE_USER);
     }
 

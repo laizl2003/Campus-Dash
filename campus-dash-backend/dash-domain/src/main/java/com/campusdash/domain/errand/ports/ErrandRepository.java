@@ -16,6 +16,9 @@ public interface ErrandRepository {
 
     Optional<Errand> findById(long errandId);
 
+    /** 该用户是否还有进行中的任务（发单或跑腿），注销前必须为 false */
+    boolean hasOngoing(String userId);
+
     /**
      * 抢单的核心 CAS：只有当前状态与版本号都匹配时才更新成功。
      *

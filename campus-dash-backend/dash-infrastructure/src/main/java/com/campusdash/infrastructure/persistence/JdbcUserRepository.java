@@ -109,6 +109,11 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
+    public boolean deleteById(String userId) {
+        return jdbc.update("DELETE FROM `user` WHERE user_id = ?", userId) > 0;
+    }
+
+    @Override
     public void markLoginSuccess(String userId, Instant at, String ip) {
         jdbc.update("UPDATE `user` SET last_login_at = ?, last_login_ip = ?, login_fail_count = 0 WHERE user_id = ?",
                 timestamp(at), ip == null ? "" : ip, userId);

@@ -20,7 +20,7 @@ public record LedgerEntry(long id, String bizNo, long accountId, String userId, 
     }
 
     public enum RefType {
-        ESCROW, SETTLE, REFUND, RECHARGE, WITHDRAW
+        ESCROW, SETTLE, REFUND, RECHARGE, WITHDRAW, CLOSE
     }
 
     /** 托管场景的幂等键：一个任务只能托管一次 */

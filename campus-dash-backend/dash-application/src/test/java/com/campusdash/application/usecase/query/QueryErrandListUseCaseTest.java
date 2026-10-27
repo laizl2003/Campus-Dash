@@ -77,6 +77,7 @@ class QueryErrandListUseCaseTest {
     }
 
     private static final class FakeErrandRepository implements ErrandRepository {
+        @Override public boolean hasOngoing(String userId) { return false; }
         @Override public void insert(Errand errand) {}
         @Override public Optional<Errand> findById(long errandId) { return Optional.empty(); }
         @Override public int casLockForRunner(long errandId, String runnerId, long expectedVersion) { return 0; }

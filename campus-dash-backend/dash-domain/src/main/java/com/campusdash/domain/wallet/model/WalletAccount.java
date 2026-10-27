@@ -26,14 +26,18 @@ public class WalletAccount {
 
     private final long id;
     private final String ownerId;
+    /** 账户所属用户/系统户名称，冗余存储便于运营直接看账户（user 表删除后仍可追溯） */
+    private final String userName;
     private final AccountType type;
     private Money available;
     private Money frozen;
     private long version;
 
-    public WalletAccount(long id, String ownerId, AccountType type, Money available, Money frozen, long version) {
+    public WalletAccount(long id, String ownerId, String userName, AccountType type,
+                         Money available, Money frozen, long version) {
         this.id = id;
         this.ownerId = ownerId;
+        this.userName = userName == null ? "" : userName;
         this.type = type;
         this.available = available;
         this.frozen = frozen;
@@ -67,6 +71,7 @@ public class WalletAccount {
 
     public long id() { return id; }
     public String ownerId() { return ownerId; }
+    public String userName() { return userName; }
     public AccountType type() { return type; }
     public Money available() { return available; }
     public Money frozen() { return frozen; }
