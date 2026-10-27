@@ -314,6 +314,7 @@ CREATE TABLE IF NOT EXISTS voucher_record (
   voucher_type INT         NOT NULL COMMENT '优惠券类型',
   expire_time  DATETIME(3) NOT NULL COMMENT '过期时间',
   status       VARCHAR(16) NOT NULL COMMENT 'available / locked / used / expired',
+  finish_at    DATETIME(3) NULL COMMENT '券结束时间：发布锁定时=使用时间，过期时=过期时间',
   used_errand_id BIGINT NULL COMMENT '锁定/使用的订单',
   runner_bear_cents BIGINT NOT NULL DEFAULT 0 COMMENT '跑腿承担的券面金额',
   created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

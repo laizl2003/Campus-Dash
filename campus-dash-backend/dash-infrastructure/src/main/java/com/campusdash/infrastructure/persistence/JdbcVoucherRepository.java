@@ -33,6 +33,7 @@ public class JdbcVoucherRepository implements VoucherRepository {
             rs.getInt("voucher_type"),
             instant(rs, "expire_time"),
             VoucherStatus.valueOf(rs.getString("status").toUpperCase()),
+            instant(rs, "finish_at"),
             instant(rs, "created_at"));
 
     private final JdbcTemplate jdbc;
@@ -82,10 +83,11 @@ public class JdbcVoucherRepository implements VoucherRepository {
     @Override
     public void insert(Voucher voucher) {
         jdbc.update("""
-                INSERT INTO voucher_record (voucher_id, user_id, voucher_type, expire_time, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO voucher_record (voucher_id, user_id, voucher_type, expire_time, status, finish_at, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, voucher.voucherId(), voucher.userId(), voucher.type(),
-                timestamp(voucher.expireTime()), voucher.status().dbValue(), timestamp(voucher.createdAt()));
+                timestamp(voucher.expireTime()), voucher.status().dbValue(),
+                timestamp(voucher.finishAt()), timestamp(voucher.createdAt()));
     }
 
     @Override
@@ -114,7 +116,7 @@ public class JdbcVoucherRepository implements VoucherRepository {
     @Override
     public int markExpired(long voucherId) {
         return jdbc.update("""
-                UPDATE voucher_record SET status = 'expired'
+                UPDATE voucher_record SET status = 'expired', finish_at = COALESCE(finish_at, NOW(3))
                  WHERE voucher_id = ? AND status = 'available'
                 """, voucherId);
     }
@@ -122,7 +124,7 @@ public class JdbcVoucherRepository implements VoucherRepository {
     @Override
     public int markUsed(long voucherId) {
         return jdbc.update("""
-                UPDATE voucher_record SET status = 'used'
+                UPDATE voucher_record SET status = 'used', finish_at = COALESCE(finish_at, NOW(3))
                  WHERE voucher_id = ? AND status = 'available'
                 """, voucherId);
     }
@@ -131,7 +133,7 @@ public class JdbcVoucherRepository implements VoucherRepository {
     public int lockForErrand(long voucherId, String userId, long errandId, long runnerBearCents) {
         return jdbc.update("""
                 UPDATE voucher_record
-                   SET status = 'locked', used_errand_id = ?, runner_bear_cents = ?
+                   SET status = 'locked', used_errand_id = ?, runner_bear_cents = ?, finish_at = NOW(3)
                  WHERE voucher_id = ? AND user_id = ? AND status = 'available' AND expire_time > NOW(3)
                 """, errandId, runnerBearCents, voucherId, userId);
     }
@@ -158,6 +160,7 @@ public class JdbcVoucherRepository implements VoucherRepository {
         return jdbc.update("""
                 UPDATE voucher_record
                    SET status = IF(expire_time > NOW(3), 'available', 'expired'),
+                       finish_at = IF(expire_time > NOW(3), NULL, NOW(3)),
                        used_errand_id = NULL,
                        runner_bear_cents = 0
                  WHERE used_errand_id = ? AND status IN ('locked', 'used')
@@ -167,7 +170,7 @@ public class JdbcVoucherRepository implements VoucherRepository {
     @Override
     public int markUsedByErrand(long errandId) {
         return jdbc.update("""
-                UPDATE voucher_record SET status = 'used'
+                UPDATE voucher_record SET status = 'used', finish_at = COALESCE(finish_at, NOW(3))
                  WHERE used_errand_id = ? AND status = 'locked'
                 """, errandId);
     }
@@ -176,7 +179,7 @@ public class JdbcVoucherRepository implements VoucherRepository {
     public int expireOverdue(int limit) {
         return jdbc.update("""
                 UPDATE voucher_record
-                   SET status = 'expired'
+                   SET status = 'expired', finish_at = NOW(3)
                  WHERE status = 'available' AND expire_time <= NOW(3)
                  ORDER BY expire_time
                  LIMIT ?

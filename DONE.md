@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-27 · 优惠券使用时间与「未使用 / 已使用」切换
+
+- **目标**：区分未使用与已使用券；发布锁券时记录使用时间，过期时记录结束时间；已使用券展示使用时间。
+- **改动**：
+  - voucher_record 新增 finish_at（迁移脚本 + init.sql）；发布 lockForErrand 时写入 NOW，markUsed/markExpired/expireOverdue 都维护该字段；refund 恢复 available 时清空。
+  - /api/vouchers/mine 返回 finishAt；钱包新增「未使用 / 已使用」切换，默认未使用；已使用卡片右下角显示“使用时间:YYYY-MM-DD-hh:mm:ss”。
+  - cleanup-test-data.sql 删除任务时把其锁定的券恢复为 available/expired，避免 locked 孤儿。
+- **验证**：15 元券单发布时 finish_at=2026-10-27 22:11:27，结算后 status=used 保持不变；钱包已使用 tab 显示「使用时间:2026-10-27-22:11:27」；测试任务清理后 PUBLISHED=0。
+
+
 ## 2026-10-27 · Redis 缓存清理与排行榜 1 分钟重建
 
 - **目标**：并发测试后清空 Redis 缓存；排行榜可通过后台 job 定期重建。

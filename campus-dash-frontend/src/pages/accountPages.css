@@ -293,3 +293,13 @@
   .account-credit-layout .account-credit-events,
   .account-credit-layout .account-rank-list { overflow: visible; }
 }
+
+.wallet-voucher-tabs { padding: 0 0 12px; }
+.wallet-voucher-used-at { display: block; margin-top: 2px; text-align: right; font-size: 10px; color: var(--muted); }
+.wallet-voucher.is-locked { opacity: .9; }
+
+.wallet-voucher-used-at { grid-column: 1 / -1; justify-self: stretch; width: 100%; text-align: right; }
+
+.wallet-voucher-used-at { font-size: 9px; letter-spacing: 0; white-space: nowrap; }
+
+.wallet-voucher-used-at { justify-self: end; width: max-content; margin-left: auto; }

@@ -7,5 +7,5 @@ import java.time.Instant;
  * voucherId 用雪花 ID：高并发领取时由应用侧生成，避免数据库自增成为热点。
  */
 public record Voucher(long voucherId, String userId, int type, Instant expireTime,
-                      VoucherStatus status, Instant createdAt) {
+                      VoucherStatus status, Instant finishAt, Instant createdAt) {
 }

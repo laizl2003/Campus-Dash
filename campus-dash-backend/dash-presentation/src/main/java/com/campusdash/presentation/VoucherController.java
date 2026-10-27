@@ -79,6 +79,7 @@ public class VoucherController {
             item.put("discountCents", type.discountCents());
         });
         item.put("expireTime", voucher.expireTime().toString());
+        item.put("finishAt", voucher.finishAt() == null ? "" : voucher.finishAt().toString());
         item.put("status", voucher.status().dbValue());
         return item;
     }

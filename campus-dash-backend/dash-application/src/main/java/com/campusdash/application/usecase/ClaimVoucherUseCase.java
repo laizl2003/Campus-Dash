@@ -66,7 +66,7 @@ public class ClaimVoucherUseCase {
 
         long voucherId = idGenerator.nextId();
         Instant expireAt = now.plus(Duration.ofHours(expireHours));
-        vouchers.insert(new Voucher(voucherId, userId, typeCode, expireAt, VoucherStatus.AVAILABLE, now));
+        vouchers.insert(new Voucher(voucherId, userId, typeCode, expireAt, VoucherStatus.AVAILABLE, null, now));
 
         // 本地消息表 + 定时投递：到点后 worker 发到 voucher-expire，消费者把状态改成 expired。
         // 这里只登记不发送——和自动结算用的是同一套基础设施。

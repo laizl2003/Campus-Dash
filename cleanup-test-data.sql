@@ -21,6 +21,14 @@ UPDATE wallet_account wa
    SET wa.available = wa.available + x.amt
  WHERE x.amt > 0;
 
+-- 被删任务上锁定的券要退回可用（已过期则置 expired），否则会留下 locked 孤儿券
+UPDATE voucher_record
+   SET status = IF(expire_time > NOW(3), 'available', 'expired'),
+       finish_at = IF(expire_time > NOW(3), NULL, NOW(3)),
+       used_errand_id = NULL,
+       runner_bear_cents = 0
+ WHERE used_errand_id IN (SELECT id FROM cleanup_ids);
+
 DELETE FROM wallet_ledger WHERE biz_no IN (SELECT CONCAT('escrow:', id) FROM cleanup_ids);
 DELETE FROM escrow_order WHERE errand_id IN (SELECT id FROM cleanup_ids);
 DELETE FROM grab_record WHERE errand_id IN (SELECT id FROM cleanup_ids);
