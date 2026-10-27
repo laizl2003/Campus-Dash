@@ -104,7 +104,7 @@ export default function Detail({ errandId, backHref = '#/square' }: Props) {
     finally { arbitrationPending.current = false; setArbitrationBusy(false); }
   };
 
-  if (!card) return <div className="task-detail-page"><a className="task-back-link" href={backHref}><Icon name="arrow-left" size={16} /> 返回任务广场</a><section className="panel empty-state task-detail-empty"><Icon name={loading ? 'clock' : 'package'} size={32} /><h2>{loading ? '正在打开这份任务' : '暂时无法打开任务'}</h2><p>{loading ? '任务信息与最新进展即将呈现。' : error || '请稍后再试。'}</p>{!loading && <button className="btn btn-primary" onClick={() => void load()} disabled={refreshing}>{refreshing ? '正在重试…' : '重新加载'}</button>}</section></div>;
+  if (!card) return <div className="task-detail-page"><a className="task-back-link" href={backHref}><Icon name="arrow-left" size={16} /> 返回</a><section className="panel empty-state task-detail-empty"><Icon name={loading ? 'clock' : 'package'} size={32} /><h2>{loading ? '正在打开这份任务' : '暂时无法打开任务'}</h2><p>{loading ? '任务信息与最新进展即将呈现。' : error || '请稍后再试。'}</p>{!loading && <button className="btn btn-primary" onClick={() => void load()} disabled={refreshing}>{refreshing ? '正在重试…' : '重新加载'}</button>}</section></div>;
 
   const hasRunner = Boolean(card.grabberId && card.grabberId !== '-1');
   const ordinaryActions = card.availableActions.filter((action) => action !== 'ARBITRATE');
@@ -113,7 +113,7 @@ export default function Detail({ errandId, backHref = '#/square' }: Props) {
 
   return (
     <div className="task-detail-page">
-      <div className="task-detail-toolbar"><a className="task-back-link" href={backHref}><Icon name="arrow-left" size={16} /> 返回任务广场</a><div><span className="task-updated-at">{updatedAt ? `${updatedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} 更新` : ''}</span><button className="btn btn-ghost" onClick={() => void load()} disabled={refreshing}><Icon name="refresh" size={15} /> {refreshing ? '更新中…' : '刷新进度'}</button></div></div>
+      <div className="task-detail-toolbar"><a className="task-back-link" href={backHref}><Icon name="arrow-left" size={16} /> 返回</a><div><span className="task-updated-at">{updatedAt ? `${updatedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} 更新` : ''}</span><button className="btn btn-ghost" onClick={() => void load()} disabled={refreshing}><Icon name="refresh" size={15} /> {refreshing ? '更新中…' : '刷新进度'}</button></div></div>
       <div className="page-head task-detail-head"><div><span className="eyebrow">ERRAND DETAILS</span><h1>每份帮助，都有迹可循</h1><p>任务信息、当前进度与悬赏状态，在这里一目了然。</p></div></div>
       {error && <div className="banner warn" role="alert">{error}<button className="task-inline-button" disabled={refreshing} onClick={() => void load()}>重试</button></div>}
       {notice && <div className="banner info" role="status">{notice}</div>}
