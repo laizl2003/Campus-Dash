@@ -429,6 +429,6 @@ button.topbar-avatar:hover { filter: brightness(0.97); }
 
 /* 已登录时进入 #/login：顶部提示可一键回到工作台 */
 .auth-session { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 10px 12px; margin-bottom: 14px; border: 1px solid #d9e6c8; border-radius: 10px; background: #f4f9ec; font-size: 12px; color: #4a544c; }
+  padding: 10px 12px; margin-top: 10px; border: 1px solid #d9e6c8; border-radius: 10px; background: #f4f9ec; font-size: 12px; color: #4a544c; }
 .auth-session strong { color: var(--ink); }
 .auth-session .btn { padding: 6px 10px; font-size: 12px; white-space: nowrap; }

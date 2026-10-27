@@ -110,12 +110,6 @@ export default function AuthPage({ onAuthed, current, onResume }: {
     <section className="login-side"><div className="login-card">
       <h2 className="auth-title">{mode === 'login' ? '从一个身份开始' : mode === 'register' ? '创建你的账号' : '修改登录密码'}</h2>
 
-      {current && onResume && <div className="auth-session">
-        <span>当前仍登录为 <strong>{current.username}</strong></span>
-        <button type="button" className="btn" onClick={onResume}>
-          {current.role === 'Admin' ? '返回管理台' : '返回任务广场'}
-        </button>
-      </div>}
 
       <form className="auth-form" onSubmit={submit}>
         <label className="auth-field">
@@ -178,6 +172,14 @@ export default function AuthPage({ onAuthed, current, onResume }: {
                 tabIndex={mode === 'login' ? -1 : 0}>
           {busy ? '处理中…' : mode === 'login' ? '登录' : mode === 'register' ? '注册' : '确认修改'}
         </button>
+
+        {/* 只有"已登录再进 #/login"时才渲染：未登录过完全不出现这个框 */}
+        {mode === 'login' && current && onResume && <div className="auth-session">
+          <span>当前仍登录为 <strong>{current.username}</strong></span>
+          <button type="button" className="btn" onClick={onResume}>
+            {current.role === 'Admin' ? '返回管理台' : '返回任务广场'}
+          </button>
+        </div>}
 
         {mode !== 'login' && <button type="button" className="auth-switch" tabIndex={-1}
                 onClick={() => switchMode('login')}>
