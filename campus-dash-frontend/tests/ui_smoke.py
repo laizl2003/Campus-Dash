@@ -62,7 +62,12 @@ class MockApi:
         def ok(data): route.fulfill(status=200, content_type='application/json', body=json.dumps({'code':'OK','message':'成功','data':data}, ensure_ascii=False))
         if path == '/api/auth/login':
             if self.fail_login: return route.fulfill(status=503,body='mock login unavailable')
+            # 只发 access（等价 Session 模式）：401 场景仍走"直接回登录页"。
+            # 双 token 的刷新链路在 tests/refresh_single_flight.mjs 里单独覆盖。
             uid = str(req.post_data_json['userId']); return ok({'token':f'mock-{uid}', 'userId':uid})
+        if path == '/api/auth/logout':
+            # 前端登出会主动提交 refreshToken 做服务端撤销；mock 没有签发 refresh，确认即可
+            return ok(None)
         if path == '/api/wallet': return ok({'availableCents':'26880' if user == '2001' else '120000', 'frozenCents':'0'})
         if path == '/api/wallet/ledger':
             return ok([{'time':'2026-10-14T04:32:00Z','direction':d,'amountCents':'850','refType':'ESCROW','refId':IDS[0],'bizNo':f'escrow:{IDS[0]}'} for d in ['DEBIT','CREDIT']])

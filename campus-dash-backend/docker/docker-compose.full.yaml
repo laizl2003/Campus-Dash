@@ -1,0 +1,107 @@
+# 全栈本地部署：在 docker-compose.yaml（中间件）之上追加 app / worker / web。
+#
+#   cd campus-dash-backend/docker
+#   docker compose -f docker-compose.yaml -f docker-compose.full.yaml up -d --build
+#
+# 与"只起中间件、应用跑在宿主机"（默认 docker compose up -d）的区别：
+#   1. 应用改用服务名连库：mysql:3306 / redis:6379 / rmqbroker:8081，
+#      不再经过宿主机端口映射（3307/6380/8081）
+#   2. broker 必须以**容器内网 IP** 注册，否则 app 容器会拿到不可达地址。
+#      所以这里重新声明 rmqbroker.command，覆盖 docker-compose.override.yaml
+#      里的 brokerIP1=127.0.0.1（那份 override 是给"应用跑在宿主机"用的）
+services:
+  rmqbroker:
+    command: sh mqbroker -n rmqnamesrv:9876 --enable-proxy
+
+  # broker 没有挂数据卷，容器重建后 topic / 消费组会丢。
+  # 原来这一步是手工跑 init-mq.sh；放进 compose 后"一条命令起全套"才成立。
+  # 注意 topic 的 message.type 必须建对：定时消息要 DELAY，事务消息要 TRANSACTION，
+  # 建错类型无法原地修改，只能 deleteTopic 重建。
+  mq-init:
+    image: apache/rocketmq:5.3.1
+    container_name: dash-mq-init
+    depends_on:
+      rmqbroker:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        cd /home/rocketmq/rocketmq-*/bin
+        # 注意：compose 会把 $t 当变量插值（会警告并替换成空串），
+        # 想交给容器内 shell 展开必须写成 $$t
+        for t in errand-confirm-timeout errand-auto-settle errand-cache-evict; do
+          sh mqadmin updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t "$$t" -a +message.type=DELAY
+        done
+        sh mqadmin updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t errand-fund-event -a +message.type=TRANSACTION
+        for g in dash-timeout-consumer dash-autosettle-consumer dash-fund-event-consumer dash-fund-event-push dash-cache-evict-consumer; do
+          sh mqadmin updateSubGroup -n rmqnamesrv:9876 -c DefaultCluster -g "$$g"
+        done
+        echo "mq init done"
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: dash-app:local
+    container_name: dash-app
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/campus_dash?useSSL=false&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: dash123456
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      DASH_MQ_ENDPOINTS: rmqbroker:8081
+      DASH_WORKER_ID: "1"
+      TZ: Asia/Shanghai
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rmqbroker:
+        condition: service_healthy
+      mq-init:
+        condition: service_completed_successfully
+    healthcheck:
+      # temurin 镜像里没有 curl/wget，用 bash 的 /dev/tcp 探端口
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
+
+  worker:
+    # 复用 app 镜像，只换 ENTRYPOINT
+    image: dash-app:local
+    container_name: dash-worker
+    entrypoint: ["java","-XX:MaxRAMPercentage=70","-jar","/app/worker.jar"]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/campus_dash?useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: dash123456
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      DASH_MQ_ENDPOINTS: rmqbroker:8081
+      DASH_WORKER_ID: "2"
+      DASH_WS_ENABLED: "false"
+      TZ: Asia/Shanghai
+    depends_on:
+      app:
+        condition: service_started
+      # worker 的消费者一启动就要拉 topic 路由，topic 没建好会直接退出（Exited 1）
+      mq-init:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ../../campus-dash-frontend
+    image: dash-web:local
+    container_name: dash-web
+    ports:
+      - "8088:80"
+    depends_on:
+      app:
+        condition: service_healthy

@@ -63,6 +63,19 @@ mvn install -DskipTests
 java -jar dash-worker/target/dash-worker-1.0.0-SNAPSHOT.jar
 ```
 
+### 1.1 或者：一条命令起全栈（nginx + 应用 + worker + 中间件）
+
+已经构建过前端产物后（`mvn -pl dash-bootstrap,dash-worker -am package -DskipTests` + `npm run build`）：
+
+```bash
+cd campus-dash-backend/docker
+docker compose -f docker-compose.yaml -f docker-compose.full.yaml up -d --build
+```
+
+访问 **http://localhost:8088**：nginx 托管前端静态文件，并把 `/api/**` 与 `/ws` 反代到应用容器，
+前端与 API 同源（不需要 CORS，也不需要 vite 代理）。详见
+[docker/README-full-stack.md](campus-dash-backend/docker/README-full-stack.md)。
+
 ### 2. 启动前端
 
 ```bash
