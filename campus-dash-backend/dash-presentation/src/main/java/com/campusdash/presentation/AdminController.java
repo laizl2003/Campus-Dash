@@ -7,6 +7,7 @@ import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.domain.voucher.model.VoucherType;
 import com.campusdash.domain.voucher.model.VoucherUse;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
+import com.campusdash.domain.wallet.model.AccountType;
 import com.campusdash.domain.wallet.model.EscrowOrder;
 import com.campusdash.domain.wallet.ports.WalletRepository;
 import com.campusdash.presentation.auth.CurrentUser;
@@ -21,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,11 +68,54 @@ public class AdminController {
         return Result.ok(items);
     }
 
-    /** 平台账户流水：佣金户 -2 与营销户 -4 的每一笔入账/出账 */
+    /**
+     * 平台账户流水（分账户、分页、分时间区间）。
+     * account = COMMISSION | MARKETING；period = WEEK | MONTH | YEAR | ALL。
+     */
     @GetMapping("/ledger")
-    public Result<List<Map<String, Object>>> ledger(@RequestParam(defaultValue = "50") int limit) {
-        int size = Math.max(1, Math.min(limit, 200));
-        List<Map<String, Object>> rows = walletRepository.findPlatformLedger(size).stream()
+    public Result<Map<String, Object>> ledger(@RequestParam(defaultValue = "COMMISSION") String account,
+                                              @RequestParam(defaultValue = "ALL") String period,
+                                              @RequestParam(defaultValue = "0") int page,
+                                              @RequestParam(defaultValue = "10") int size) {
+        AccountType type;
+        String ownerId;
+        if ("MARKETING".equalsIgnoreCase(account)) {
+            type = AccountType.MARKETING;
+            ownerId = "-4";
+        } else {
+            type = AccountType.COMMISSION;
+            ownerId = "-2";
+        }
+
+        Instant from = switch (period == null ? "ALL" : period.toUpperCase()) {
+            case "WEEK" -> Instant.now().minus(7, ChronoUnit.DAYS);
+            case "MONTH" -> Instant.now().minus(30, ChronoUnit.DAYS);
+            case "YEAR" -> Instant.now().minus(365, ChronoUnit.DAYS);
+            default -> null;
+        };
+        int safeSize = Math.max(1, Math.min(size, 50));
+        int safePage = Math.max(0, page);
+        int offset = safePage * safeSize;
+
+        var pageData = walletRepository.queryPlatformLedger(type, from, offset, safeSize);
+        var accountRow = walletRepository.findByOwner(ownerId, type).orElse(null);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        Map<String, Object> accountInfo = new LinkedHashMap<>();
+        accountInfo.put("type", type.name());
+        accountInfo.put("ownerId", ownerId);
+        accountInfo.put("name", accountRow == null ? "Admin" : accountRow.userName());
+        accountInfo.put("balanceCents", accountRow == null ? 0L : accountRow.available().cents());
+        data.put("account", accountInfo);
+        data.put("period", period == null ? "ALL" : period.toUpperCase());
+        data.put("page", safePage);
+        data.put("size", safeSize);
+        data.put("total", pageData.total());
+        data.put("summary", Map.of(
+                "incomeCents", pageData.incomeCents(),
+                "expenseCents", pageData.expenseCents()));
+        data.put("netCents", walletRepository.netPlatformIncomeCents());
+        data.put("items", pageData.items().stream()
                 .map(row -> {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("id", String.valueOf(row.id()));
@@ -84,8 +130,8 @@ public class AdminController {
                     item.put("createdAt", row.createdAt().toString());
                     return item;
                 })
-                .toList();
-        return Result.ok(rows);
+                .toList());
+        return Result.ok(data);
     }
 
     @GetMapping("/disputes/{id}")

@@ -10,7 +10,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Repository
@@ -40,28 +43,62 @@ public class JdbcWalletRepository implements WalletRepository {
     }
 
     @Override
-    public java.util.List<PlatformLedgerRow> findPlatformLedger(int limit) {
-        return jdbc.query("""
+    public PlatformLedgerPage queryPlatformLedger(AccountType type, Instant from, int offset, int limit) {
+        String timeFilter = from == null ? "" : " AND l.created_at >= ?";
+        Object[] base = from == null
+                ? new Object[]{type.name()}
+                : new Object[]{type.name(), Timestamp.from(from)};
+
+        String select = """
                 SELECT l.id, l.biz_no, l.account_id, l.direction, l.amount, l.balance_after,
                        l.ref_type, l.ref_id, l.created_at,
                        a.user_name, a.owner_type
                   FROM wallet_ledger l
                   JOIN wallet_account a ON a.id = l.account_id
-                 WHERE a.owner_type IN ('COMMISSION', 'MARKETING')
-                 ORDER BY l.id DESC
-                 LIMIT ?
-                """, (rs, n) -> new PlatformLedgerRow(
-                        rs.getLong("id"),
-                        rs.getString("biz_no"),
-                        rs.getLong("account_id"),
-                        rs.getString("user_name"),
-                        rs.getString("owner_type"),
-                        rs.getString("direction"),
-                        rs.getLong("amount"),
-                        rs.getLong("balance_after"),
-                        rs.getString("ref_type"),
-                        rs.getLong("ref_id"),
-                        rs.getTimestamp("created_at").toInstant()), limit);
+                 WHERE a.owner_type = ?""" + timeFilter;
+        List<PlatformLedgerRow> items = jdbc.query(select + " ORDER BY l.id DESC LIMIT ? OFFSET ?",
+                (rs, n) -> new PlatformLedgerRow(
+                        rs.getLong("id"), rs.getString("biz_no"), rs.getLong("account_id"),
+                        rs.getString("user_name"), rs.getString("owner_type"),
+                        rs.getString("direction"), rs.getLong("amount"), rs.getLong("balance_after"),
+                        rs.getString("ref_type"), rs.getLong("ref_id"),
+                        rs.getTimestamp("created_at").toInstant()),
+                concat(base, limit, offset));
+
+        Long total = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM wallet_ledger l
+                  JOIN wallet_account a ON a.id = l.account_id
+                 WHERE a.owner_type = ?""" + timeFilter, Long.class, base);
+
+        Map<String, Long> sums = jdbc.queryForObject("""
+                SELECT COALESCE(SUM(CASE WHEN l.direction='CREDIT' THEN l.amount ELSE 0 END), 0) AS income,
+                       COALESCE(SUM(CASE WHEN l.direction='DEBIT'  THEN l.amount ELSE 0 END), 0) AS expense
+                  FROM wallet_ledger l
+                  JOIN wallet_account a ON a.id = l.account_id
+                 WHERE a.owner_type = ?""" + timeFilter, (rs, n) ->
+                        Map.of("income", rs.getLong("income"), "expense", rs.getLong("expense")), base);
+
+        long income = sums == null ? 0 : sums.getOrDefault("income", 0L);
+        long expense = sums == null ? 0 : sums.getOrDefault("expense", 0L);
+        return new PlatformLedgerPage(items, total == null ? 0 : total, income, expense);
+    }
+
+    @Override
+    public long netPlatformIncomeCents() {
+        Long net = jdbc.queryForObject("""
+                SELECT COALESCE(SUM(CASE WHEN a.owner_type='COMMISSION' AND l.direction='CREDIT' THEN l.amount ELSE 0 END), 0)
+                     - COALESCE(SUM(CASE WHEN a.owner_type='MARKETING' AND l.direction='DEBIT'  THEN l.amount ELSE 0 END), 0)
+                  FROM wallet_ledger l
+                  JOIN wallet_account a ON a.id = l.account_id
+                """, Long.class);
+        return net == null ? 0 : net;
+    }
+
+    private static Object[] concat(Object[] base, Object... tail) {
+        Object[] all = new Object[base.length + tail.length];
+        System.arraycopy(base, 0, all, 0, base.length);
+        System.arraycopy(tail, 0, all, base.length, tail.length);
+        return all;
     }
 
     @Override

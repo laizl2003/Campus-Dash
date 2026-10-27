@@ -67,3 +67,28 @@
 .admin-ledger td.in { color: #2f6b4a; font-weight: 600; }
 .admin-ledger td.out { color: #a35a1c; font-weight: 600; }
 .admin-ledger td.mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; color: #7d857e; }
+
+/* ── 平台资金：双账户面板 ─────────────────────────────── */
+.admin-ledger-view { display: grid; gap: 14px; }
+.admin-net { display: flex; align-items: baseline; gap: 10px; background: #fff; border: 1px solid #e7e2d8; border-radius: 14px; padding: 15px 20px; }
+.admin-net span { font-size: 12px; color: #7d857e; }
+.admin-net strong { font-size: 26px; font-weight: 700; }
+.admin-net small { font-size: 10px; color: #9aa39c; }
+.admin-net.in strong { color: #2f6b4a; }
+.admin-net.out strong { color: #b23b32; }
+.admin-ledger-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.admin-ledger-panel { display: flex; flex-direction: column; min-height: 430px; padding: 16px; background: #fff; border: 1px solid #e7e2d8; border-radius: 14px; }
+.admin-ledger-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.admin-ledger-panel-head h2 { margin: 0; font-size: 15px; }
+.admin-ledger-panel-head small { font-size: 11px; color: #7d857e; }
+.admin-periods { display: flex; gap: 4px; padding: 3px; background: #f6f3ec; border-radius: 8px; }
+.admin-periods button { padding: 4px 8px; font-size: 11px; border-radius: 6px; color: #6b746c; }
+.admin-periods button.is-active { background: #fff; color: #1f2421; font-weight: 600; box-shadow: 0 1px 3px #00000014; }
+.admin-ledger-summary { display: flex; gap: 14px; align-items: baseline; margin: 10px 0 6px; font-size: 11px; }
+.admin-ledger-summary .in { color: #2f6b4a; font-weight: 600; }
+.admin-ledger-summary .out { color: #b23b32; font-weight: 600; }
+.admin-ledger-summary .muted { margin-left: auto; color: #9aa39c; }
+.admin-ledger-panel .admin-empty { padding: 36px 10px; }
+.admin-pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 10px; font-size: 11px; color: #7d857e; }
+.admin-pager .btn { padding: 4px 9px; font-size: 11px; }
+@media (max-width: 900px) { .admin-ledger-grid { grid-template-columns: 1fr; } }

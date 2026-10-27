@@ -500,10 +500,17 @@ export const api = {
   }>(`/api/vouchers/${type}/claim`, 'POST'),
   me: () => request<{ userId: string; username: string; role: string }>('/api/auth/me'),
   deleteAccount: () => request<null>('/api/account', 'DELETE'),
-  adminLedger: () => request<{
-    id: string; bizNo: string; accountName: string; accountType: string; direction: string;
-    amountCents: number; balanceAfterCents: number; refType: string; refId: string; createdAt: string;
-  }[]>('/api/admin/ledger'),
+  adminLedger: (account: 'COMMISSION' | 'MARKETING', period: 'WEEK' | 'MONTH' | 'YEAR' | 'ALL', page = 0, size = 10) =>
+    request<{
+      account: { type: string; ownerId: string; name: string; balanceCents: number };
+      period: string; page: number; size: number; total: number;
+      summary: { incomeCents: number; expenseCents: number };
+      netCents: number;
+      items: {
+        id: string; bizNo: string; accountName: string; accountType: string; direction: string;
+        amountCents: number; balanceAfterCents: number; refType: string; refId: string; createdAt: string;
+      }[];
+    }>(`/api/admin/ledger?account=${account}&period=${period}&page=${page}&size=${size}`),
   adminDisputes: () => request<{
     errandId: string; title: string; status: string; rewardCents: number;
     publisherId: string; grabberId: string; round: number;

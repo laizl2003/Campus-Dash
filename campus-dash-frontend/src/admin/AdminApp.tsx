@@ -25,7 +25,7 @@ export default function AdminApp() {
   const [pendingFavor, setPendingFavor] = useState<'RUNNER' | 'PUBLISHER' | null>(null);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [view, setView] = useState<'disputes' | 'ledger'>('disputes');
-  const [ledger, setLedger] = useState<Awaited<ReturnType<typeof api.adminLedger>>>([]);
+  const [netCents, setNetCents] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,13 +39,14 @@ export default function AdminApp() {
     }
   }, []);
 
-  const loadLedger = useCallback(async () => {
-    try { setLedger(await api.adminLedger()); }
-    catch (e) { setMessage({ text: e instanceof Error ? e.message : '平台流水加载失败', error: true }); }
-  }, []);
-
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { if (view === 'ledger') void loadLedger(); }, [view, loadLedger]);
+  useEffect(() => {
+    if (view !== 'ledger') return;
+    Promise.all([
+      api.adminLedger('COMMISSION', 'ALL', 0, 1),
+      api.adminLedger('MARKETING', 'ALL', 0, 1),
+    ]).then(([commission]) => setNetCents(commission.netCents)).catch(() => {});
+  }, [view]);
 
   const open = async (id: string) => {
     try {
@@ -90,8 +91,8 @@ export default function AdminApp() {
     <div className="admin-main">
       <header className="admin-top">
         <div><span className="eyebrow">ADMIN CONSOLE</span><h1>{view === 'disputes' ? '仲裁工作台' : '平台资金流水'}<span className="heading-dot">.</span></h1>
-          <p>{view === 'disputes' ? '处理争议任务，决定托管资金流向跑腿或发单人。' : '佣金账户与营销账户的每一笔入账/出账，均来自 wallet_ledger。'}</p></div>
-        <button type="button" className="btn btn-ghost" onClick={() => void (view === 'disputes' ? load() : loadLedger())} disabled={loading}>
+          <p>{view === 'disputes' ? '处理争议任务，决定托管资金流向跑腿或发单人。' : '佣金账户与营销账户的每一笔入账/出账。'}</p></div>
+        <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
           <Icon name="refresh" size={15} className={loading ? 'is-spinning' : ''}/>刷新
         </button>
       </header>
@@ -165,22 +166,79 @@ export default function AdminApp() {
             <p className="admin-hint">裁决前请核对双方描述与送达凭证；资金动作在同一个事务里完成。</p>
           </>}
         </section>
-      </div> : <section className="admin-ledger" aria-label="平台资金流水">
-        <div className="admin-list-head"><h2>平台资金流水 <span>{ledger.length}</span></h2><small>佣金户 / 营销户 · 最近 50 条</small></div>
-        {ledger.length === 0 ? <div className="admin-empty"><Icon name="receipt" size={26}/><strong>暂无平台流水</strong><p>任务结算后，佣金入账与营销补贴会同时出现在这里。</p></div>
-        : <div className="admin-ledger-scroll"><table>
-          <thead><tr><th>时间</th><th>账户</th><th>方向</th><th>金额</th><th>余额</th><th>业务号</th><th>类型</th></tr></thead>
-          <tbody>{ledger.map(row => <tr key={row.id}>
-            <td>{new Date(row.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-            <td>{row.accountName}<small>{row.accountType === 'COMMISSION' ? '佣金' : '营销'}</small></td>
-            <td className={row.direction === 'CREDIT' ? 'in' : 'out'}>{row.direction === 'CREDIT' ? '入账' : '出账'}</td>
-            <td>{yuan(row.amountCents)}</td>
-            <td>{yuan(row.balanceAfterCents)}</td>
-            <td className="mono">{row.bizNo}</td>
-            <td>{row.refType}</td>
-          </tr>)}</tbody>
-        </table></div>}
-      </section>}
+      </div> : <div className="admin-ledger-view">
+        <div className={`admin-net ${netCents >= 0 ? 'in' : 'out'}`}>
+          <span>平台净收入</span>
+          <strong>{yuan(netCents)}</strong>
+          <small>Commission 收入 − Marketing 支出</small>
+        </div>
+        <div className="admin-ledger-grid">
+          <LedgerPanel account="COMMISSION" title="佣金账户" />
+          <LedgerPanel account="MARKETING" title="营销账户" />
+        </div>
+      </div>}
     </div>
   </div>;
+}
+
+type Period = 'WEEK' | 'MONTH' | 'YEAR' | 'ALL';
+
+const PERIOD_OPTIONS: [Period, string][] = [
+  ['WEEK', '近一周'],
+  ['MONTH', '一个月'],
+  ['YEAR', '一年'],
+  ['ALL', '历史'],
+];
+
+function LedgerPanel({ account, title }: { account: 'COMMISSION' | 'MARKETING'; title: string }) {
+  const [period, setPeriod] = useState<Period>('WEEK');
+  const [page, setPage] = useState(0);
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.adminLedger>> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true); setError('');
+    api.adminLedger(account, period, page)
+      .then(next => { if (active) setData(next); })
+      .catch(e => { if (active) setError(e instanceof Error ? e.message : '流水加载失败'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [account, period, page]);
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / Math.max(data.size, 1))) : 1;
+
+  return <section className="admin-ledger-panel" aria-label={title}>
+    <div className="admin-ledger-panel-head">
+      <div><h2>{title}</h2><small>{data ? `余额 ${yuan(data.account.balanceCents)}` : '—'}</small></div>
+      <div className="admin-periods">{PERIOD_OPTIONS.map(([value, label]) =>
+        <button key={value} type="button" className={period === value ? 'is-active' : ''}
+                onClick={() => { setPeriod(value); setPage(0); }}>{label}</button>)}</div>
+    </div>
+    <div className="admin-ledger-summary">
+      <span className="in">收入 +{yuan(data?.summary.incomeCents ?? 0)}</span>
+      <span className="out">支出 -{yuan(data?.summary.expenseCents ?? 0)}</span>
+      <span className="muted">共 {data?.total ?? 0} 条</span>
+    </div>
+    {error && <div className="banner warn" role="alert">{error}</div>}
+    {loading && !data ? <div className="admin-empty">正在加载…</div>
+      : !data || data.items.length === 0 ? <div className="admin-empty">该区间暂无流水</div>
+      : <div className="admin-ledger-scroll"><table>
+        <thead><tr><th>时间</th><th>方向</th><th>金额</th><th>余额</th><th>业务号</th><th>类型</th></tr></thead>
+        <tbody>{data.items.map(row => <tr key={row.id}>
+          <td>{new Date(row.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+          <td className={row.direction === 'CREDIT' ? 'in' : 'out'}>{row.direction === 'CREDIT' ? '入账' : '出账'}</td>
+          <td className={row.direction === 'CREDIT' ? 'in' : 'out'}>{row.direction === 'CREDIT' ? '' : '-'}{yuan(row.amountCents)}</td>
+          <td>{yuan(row.balanceAfterCents)}</td>
+          <td className="mono">{row.bizNo}</td>
+          <td>{row.refType}</td>
+        </tr>)}</tbody>
+      </table></div>}
+    <div className="admin-pager">
+      <button type="button" className="btn btn-ghost" disabled={page <= 0 || loading} onClick={() => setPage(p => Math.max(0, p - 1))}>上一页</button>
+      <span>第 {page + 1} / {totalPages} 页</span>
+      <button type="button" className="btn btn-ghost" disabled={page + 1 >= totalPages || loading} onClick={() => setPage(p => p + 1)}>下一页</button>
+    </div>
+  </section>;
 }

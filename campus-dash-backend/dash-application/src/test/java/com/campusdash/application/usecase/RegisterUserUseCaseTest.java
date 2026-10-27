@@ -155,7 +155,12 @@ class RegisterUserUseCaseTest {
         @Override public java.util.Optional<com.campusdash.domain.wallet.model.EscrowOrder> findEscrowByErrandId(long campusId, long errandId) { return java.util.Optional.empty(); }
         @Override public int casEscrowStatus(long campusId, long errandId, com.campusdash.domain.wallet.model.EscrowOrder.EscrowStatus from, com.campusdash.domain.wallet.model.EscrowOrder.EscrowStatus to) { return 0; }
         @Override public boolean ledgerExists(String bizNo) { return false; }
-        @Override public java.util.List<PlatformLedgerRow> findPlatformLedger(int limit) { return java.util.List.of(); }
+        @Override public com.campusdash.domain.wallet.ports.WalletRepository.PlatformLedgerPage queryPlatformLedger(
+                com.campusdash.domain.wallet.model.AccountType type, java.time.Instant from, int offset, int limit) {
+            return new com.campusdash.domain.wallet.ports.WalletRepository.PlatformLedgerPage(
+                    java.util.List.of(), 0, 0, 0);
+        }
+        @Override public long netPlatformIncomeCents() { return 0; }
     }
 
     private static final class FakeCredits implements com.campusdash.domain.credit.ports.CreditRepository {

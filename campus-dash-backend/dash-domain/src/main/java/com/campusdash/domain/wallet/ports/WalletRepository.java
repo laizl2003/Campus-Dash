@@ -55,8 +55,15 @@ public interface WalletRepository {
     /** 幂等判定：该 bizNo 是否已有流水。用于事务消息回查与重复请求识别 */
     boolean ledgerExists(String bizNo);
 
-    /** 平台账户（佣金户 -2 / 营销户 -4）的流水，按时间倒序 */
-    List<PlatformLedgerRow> findPlatformLedger(int limit);
+    /** 平台账户分页流水 + 区间内收入/支出合计 */
+    PlatformLedgerPage queryPlatformLedger(AccountType type, Instant from, int offset, int limit);
+
+    /** 平台净收入 = 佣金户全部 CREDIT − 营销户全部 DEBIT */
+    long netPlatformIncomeCents();
+
+    record PlatformLedgerPage(List<PlatformLedgerRow> items, long total,
+                              long incomeCents, long expenseCents) {
+    }
 
     /**
      * 平台账户流水视图：把账户名与类型一起带出来，方便管理端直接看"佣金入账/营销支出"。

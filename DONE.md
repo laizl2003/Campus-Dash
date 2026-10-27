@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-27 · 系统账户名统一 Admin；资金流水按账户分页、分区间统计
+
+- **目标**：修正 ESCROW/COMMISSION/EXTERNAL/MARKETING 的乱码 user_name；资金流水按佣金/营销分栏分页，并按周/月/年/历史统计收支，外层展示净收入。
+- **改动**：
+  - 数据库与 SystemAccountInitializer 统一四个系统户 user_name = Admin；新增 migrate-system-account-name.sql。
+  - WalletRepository 新增 queryPlatformLedger(type, from, offset, limit) 与 netPlatformIncomeCents；GET /api/admin/ledger 改为 account/period/page/size，返回账户余额、区间收支、总数与净收入。
+  - 管理台「资金流水」拆成两个面板，各自四个时间按钮 + 上一页/下一页；顶部显示净收入（Commission 收入 − Marketing 支出）；副标题删去“均来自 wallet_ledger”。
+- **验证**：接口 COMMISSION 余额 680、周收入 680；MARKETING 余额 99999040、周支出 650；净收入 30。页面两面板、净收入 ¥0.30、分页正常。
+
+
 ## 2026-10-27 · 结算双方各 +2 信用分，榜单与信用足迹等高滚动
 
 - **目标**：结算后发单人与跑腿都加分；榜单区域与左侧信用足迹对齐，超出 20 名在卡片内滚动。
