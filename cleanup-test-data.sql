@@ -6,7 +6,8 @@ SELECT e.id AS id, e.publisher_id AS publisher_id
     OR e.title LIKE 'settle%' OR e.title LIKE 'refund%' OR e.title LIKE 'api_it%'
     OR e.title LIKE 'credit_%' OR e.title LIKE 'bench%'
     OR e.title LIKE '%测试%' OR e.title LIKE '%联调%' OR e.title LIKE '%验证%'
-    OR e.title LIKE '%演示%' OR e.title = '历史测试任务';
+    OR e.title LIKE '%演示%' OR e.title = '历史测试任务'
+    OR e.publisher_id = '001' OR e.grabber_id = '001';
 
 ALTER TABLE cleanup_ids ADD PRIMARY KEY (id);
 
