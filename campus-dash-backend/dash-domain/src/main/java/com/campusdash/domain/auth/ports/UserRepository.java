@@ -1,0 +1,32 @@
+package com.campusdash.domain.auth.ports;
+
+import com.campusdash.domain.auth.model.UserAccount;
+
+import java.time.Instant;
+import java.util.Optional;
+
+/**
+ * 账号仓储端口。
+ *
+ * 唯一性由数据库唯一索引兜底：existsBy* 只是为了给出更友好的错误码，
+ * 真正的并发防线是 uk_user_username / uk_user_phone。
+ */
+public interface UserRepository {
+
+    Optional<UserAccount> findByUsername(String username);
+
+    Optional<UserAccount> findById(String userId);
+
+    Optional<UserAccount> findByPhone(String phone);
+
+    boolean existsByUsername(String username);
+
+    boolean existsByPhone(String phone);
+
+    /** 插入新账号；撞唯一索引时抛 BizException(USERNAME_TAKEN / PHONE_TAKEN) */
+    void insert(UserAccount account);
+
+    void markLoginSuccess(String userId, Instant at, String ip);
+
+    void markLoginFailure(String userId);
+}

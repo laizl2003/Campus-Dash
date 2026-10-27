@@ -27,6 +27,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 // 登录/登出本身不需要认证；健康检查供前端探测
                 .excludePathPatterns("/api/auth/login", "/api/auth/refresh", "/api/health")
+                // 注册与验证码：此时还没有任何凭证
+                .excludePathPatterns("/api/auth/register", "/api/auth/captcha")
                 // 内部观测端点：仅供本机压测/运维，生产由网关屏蔽外部访问
                 .excludePathPatterns("/api/internal/**");
     }

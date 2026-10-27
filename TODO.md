@@ -92,3 +92,51 @@
 - `campus-dash-backend/dash-bootstrap/src/test/.../it/AuthRefreshIT.java`：轮换、登出撤销、并发单胜
 - `campus-dash-frontend/tests/refresh_single_flight.mjs`：并发 401 单飞与失败登出的行为验证
 
+## 2. 用户身份从 long 切到 UUID + 用户名密码登录（未完成）
+
+**目标**：登录改成"用户名 + 密码 + 图形验证码"，校验通过后用数据库里查到的 user_id 放进拦截器的 ThreadLocal；
+注册用户（UUID）与系统仲裁账号（`001`）都能正常走业务接口。
+
+### 现状与差距
+
+- 已完成（2026-10-27）：`user` 表（UUID 主键 + 唯一索引 + 冗余字段）、验证码、注册接口、Admin 种子账号。
+- 未完成：登录仍是演示用的 `{userId}`，因为身份类型还是 `long`：
+  - 130 处 `long userId` / `publisherId` / `operatorId` 声明（含测试）
+  - 8 个 `BIGINT` 用户外键列：`errand.publisher_id/grabber_id`、`escrow_order.publisher_id`、
+    `wallet_account.owner_id`、`wallet_ledger.user_id`、`credit_*`、`notification.user_id`、`errand_status_log.operator_id`
+  - 126 个测试用 `1001L` 这类数字身份
+- 两条路：
+  - **A（推荐）**：全系统 `userId` 换成 `String`，系统账户用 `"-1"`/`"-2"`；`JWT sub`、ThreadLocal、MQ 事件一起改
+  - **B**：`user` 表 UUID 主键 + `numeric_id BIGINT` 代理键，业务表不动；登录返回 UUID，拦截器查库后把 `numeric_id` 放进 ThreadLocal
+
+### 实现步骤
+
+1. 选 A 或 B，先把结论写进 `docs/注册与验证码.md`。
+2. 按 A：domain 模型/端口 → application 用例 → 基础设施 JDBC → presentation DTO 依次改 `long` 为 `String`，每层编译通过再下一层。
+3. 改 `AuthPort` / `RefreshTokenPort`：`login(String userId)`、`resolve` 返回 `Optional<String>`；JWT `sub` 存原样字符串。
+4. 新增 `POST /api/auth/login`（username + password + captchaId + captchaCode）：查账号 → 校验密码 → 校验 status → 签发 token；失败统一 `BAD_CREDENTIALS`，`login_fail_count` 累加。
+5. 拦截器把查到的 `user_id` 放进 ThreadLocal（替换现在的 request attribute 或与之并存）；`CurrentUser.get()` 返回 `String`。
+6. 前端登录页改成用户名/密码/验证码，加注册页；`getUserId()` 类型从 `number` 改 `string`，演示身份映射同步调整。
+7. 保留 `dash.auth.demo-login` 开关（默认 true，生产 false）给旧测试与压测用。
+
+### 验收标准
+
+- [ ] 用户名 + 密码 + 验证码登录成功，token 的 sub 等于数据库 `user_id`
+- [ ] 密码错误 / 账号不存在都返回 `BAD_CREDENTIALS`，不泄露账号是否存在
+- [ ] 验证码错误或重复使用返回 `CAPTCHA_INVALID`
+- [ ] `status=0` 的账号返回 `ACCOUNT_DISABLED`
+- [ ] 用注册用户（UUID）完整走通发布→抢单→结算，资金与流水正确
+- [ ] Admin（`001`）能登录并拿到 `role=Admin`
+- [ ] 旧接口 `{userId}` 在 `demo-login=false` 时返回 401
+- [ ] 全量测试通过
+
+### 参考文件
+
+- `campus-dash-backend/docker/init.sql`、`docker/migrate-user.sql`：`user` 表
+- `campus-dash-backend/dash-application/.../usecase/RegisterUserUseCase.java`：注册校验顺序
+- `campus-dash-backend/dash-infrastructure/.../auth/Pbkdf2PasswordHasher.java`：密码哈希
+- `campus-dash-backend/dash-infrastructure/.../auth/ImageCaptchaService.java`：验证码
+- `campus-dash-backend/dash-presentation/.../auth/RegistrationController.java`：`/captcha`、`/register`
+- `campus-dash-backend/dash-bootstrap/.../bootstrap/AdminAccountInitializer.java`：Admin 种子
+- `campus-dash-backend/docs/注册与验证码.md`：表结构与接口说明
+

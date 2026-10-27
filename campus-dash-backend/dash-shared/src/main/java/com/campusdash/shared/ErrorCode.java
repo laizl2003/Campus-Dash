@@ -40,6 +40,17 @@ public enum ErrorCode {
     NOT_PUBLISHER("你不是该任务的发单人"),
     NOT_ARBITRABLE("任务当前不可仲裁"),
 
+    // 注册与账号
+    INVALID_USERNAME("用户名需为 3-20 位字母、数字或下划线"),
+    INVALID_PHONE("手机号格式不正确"),
+    INVALID_PASSWORD("密码需为 8-32 位且同时包含字母和数字"),
+    PASSWORD_MISMATCH("两次输入的密码不一致"),
+    CAPTCHA_INVALID("验证码错误或已过期"),
+    USERNAME_TAKEN("用户名已被注册"),
+    PHONE_TAKEN("手机号已被注册"),
+    BAD_CREDENTIALS("用户名或密码错误"),
+    ACCOUNT_DISABLED("账号已被禁用"),
+
     // 通用
     UNAUTHORIZED("未登录或会话已过期"),
     ERRAND_NOT_FOUND("任务不存在"),
