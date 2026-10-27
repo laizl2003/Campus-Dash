@@ -10,48 +10,187 @@ export interface ApiResult<T> {
   data: T;
 }
 
-let token: string | null = localStorage.getItem('dash_token');
+const ACCESS_KEY = 'dash_token';
+const REFRESH_KEY = 'dash_refresh';
+const USER_KEY = 'dash_user';
+
+let token: string | null = localStorage.getItem(ACCESS_KEY);
+let refreshToken: string | null = localStorage.getItem(REFRESH_KEY);
 let currentUserId: number | null = null;
-try { currentUserId = token ? JSON.parse(localStorage.getItem('dash_user') || 'null') : null; } catch { /* 无效本地身份按未登录处理。 */ }
+try { currentUserId = token ? JSON.parse(localStorage.getItem(USER_KEY) || 'null') : null; } catch { /* 无效本地身份按未登录处理。 */ }
+
+// 会话代号：登录、登出、切换身份都 +1。请求发出时记下代号，
+// 401 回来发现代号变了，说明期间换了人——既不能拿新身份的 refresh 去续旧请求，
+// 也不能用新身份把旧请求重放一遍（那会以另一个身份产生副作用）。
+let sessionEpoch = 0;
 
 export function getToken() { return token; }
 export function getUserId() { return currentUserId; }
 
-export async function issueToken(userId: number): Promise<string> {
+interface TokenPair { accessToken: string; refreshToken: string | null; }
+
+/** 只改凭证，不动 epoch：刷新是同一会话内的轮换，不是换人 */
+function applyTokens(pair: TokenPair) {
+  token = pair.accessToken;
+  refreshToken = pair.refreshToken;
+  localStorage.setItem(ACCESS_KEY, pair.accessToken);
+  if (pair.refreshToken) localStorage.setItem(REFRESH_KEY, pair.refreshToken);
+  else localStorage.removeItem(REFRESH_KEY);
+}
+
+// 多标签页同步：另一个标签页刷新或登出后，本页跟着换凭证，
+// 否则本页会继续拿已经轮换掉的旧 refresh token 去换新，被服务端拒绝。
+try {
+  window.addEventListener('storage', event => {
+    if (event.key === ACCESS_KEY) token = event.newValue;
+    if (event.key === REFRESH_KEY) refreshToken = event.newValue;
+  });
+} catch { /* 非浏览器环境（Node 验证脚本）忽略 */ }
+
+async function requestTokens(userId: number): Promise<TokenPair> {
   const resp = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId }),
   });
   if (!resp.ok) throw new Error('登录服务暂时不可用，请确认服务已启动后重试');
-  const body = (await resp.json()) as ApiResult<{ token: string; userId: number }>;
+  const body = (await resp.json()) as ApiResult<{ token?: string; accessToken?: string; refreshToken?: string }>;
   if (body.code !== 'OK') throw new Error(body.message);
-  return body.data.token;
+  const accessToken = body.data?.accessToken ?? body.data?.token;
+  if (!accessToken) throw new Error('登录响应缺少 access token');
+  return { accessToken, refreshToken: body.data?.refreshToken ?? null };
+}
+
+/** 并发抢单演示用的一次性身份：不写入本地会话。
+ *  它也会拿到 refresh token，但演示结束后身份即丢弃，这里不保存，7 天后由服务端 TTL 清理。 */
+export async function issueToken(userId: number): Promise<string> {
+  return (await requestTokens(userId)).accessToken;
 }
 
 export async function login(userId: number): Promise<string> {
-  token = await issueToken(userId);
+  const pair = await requestTokens(userId);
+  const previousRefresh = refreshToken;
+  applyTokens(pair);
   currentUserId = userId;
-  localStorage.setItem('dash_token', token!);
-  localStorage.setItem('dash_user', JSON.stringify(userId));
-  return token!;
+  sessionEpoch++;
+  localStorage.setItem(USER_KEY, JSON.stringify(userId));
+  // 切换演示身份时顺手撤销上一条 refresh，否则它会在 Redis 里活满 7 天
+  if (previousRefresh && previousRefresh !== pair.refreshToken) revokeQuietly(previousRefresh, null);
+  return pair.accessToken;
 }
 
-/** 并发抢单演示后恢复原身份：token 与模块内 userId 一起恢复，
- *  只写 localStorage 不恢复模块变量的话 getUserId() 会返回错的值（实测踩过） */
-export function restoreIdentity(tok: string | null, userId: number | null) {
-  token = tok;
+/** 并发抢单演示后恢复原身份：token、refresh 与模块内 userId 一起恢复，
+ *  只写 localStorage 不恢复模块变量的话 getUserId() 会返回错的值（实测踩过）。
+ *  演示身份没有 refresh token，第三个参数省略时按 null 处理。 */
+export function restoreIdentity(access: string | null, userId: number | null, refresh: string | null = null) {
+  token = access;
+  refreshToken = refresh;
   currentUserId = userId;
-  if (tok) localStorage.setItem('dash_token', tok);
-  if (userId !== null) localStorage.setItem('dash_user', JSON.stringify(userId));
+  sessionEpoch++;
+  if (access) localStorage.setItem(ACCESS_KEY, access); else localStorage.removeItem(ACCESS_KEY);
+  if (refresh) localStorage.setItem(REFRESH_KEY, refresh); else localStorage.removeItem(REFRESH_KEY);
+  if (userId !== null) localStorage.setItem(USER_KEY, JSON.stringify(userId));
 }
 
 export function logout() {
+  const access = token;
+  const refresh = refreshToken;
   token = null;
+  refreshToken = null;
   currentUserId = null;
-  localStorage.removeItem('dash_token');
-  localStorage.removeItem('dash_user');
+  sessionEpoch++;
+  localStorage.removeItem(ACCESS_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+  localStorage.removeItem(USER_KEY);
   window.dispatchEvent(new Event('dash:logout'));
+  // 只清本地等于把 refresh 留在服务端：登出必须让服务端也撤销，否则 7 天内仍可换新 access
+  revokeQuietly(refresh, access);
+}
+
+/** 服务端撤销：不读响应、不抛错，撤销失败也不该阻塞前端退出 */
+function revokeQuietly(refresh: string | null, access: string | null) {
+  if (!refresh && !access) return;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (access) headers['Authorization'] = `Bearer ${access}`;
+  void fetch('/api/auth/logout', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ refreshToken: refresh }),
+    keepalive: true, // 关闭/刷新页面时请求也能发完
+  }).catch(() => { /* 撤销失败只影响服务端残留，不影响本地登出 */ });
+}
+
+// ── 刷新：单飞 + 轮换 ─────────────────────────────────
+// 并发 401 共享同一个 Promise，只发一次 /api/auth/refresh；
+// 多标签页再用 Web Locks 串行化，锁内重新读取最新 refresh token。
+let refreshInFlight: Promise<boolean> | null = null;
+
+function withRefreshLock<T>(task: () => Promise<T>): Promise<T> {
+  const locks = navigator.locks;
+  if (!locks?.request) return task(); // 老浏览器/Node：退化为标签页内单飞
+  return locks.request('dash:refresh', () => task()) as Promise<T>;
+}
+
+async function doRefresh(accessSeenBeforeLock: string | null): Promise<boolean> {
+  // 等锁期间别的标签页已经换了新 access：直接用它的结果，不必再换一次
+  if (token !== accessSeenBeforeLock) return true;
+  const presented = refreshToken;
+  if (!presented) return false;
+  const epoch = sessionEpoch;
+  try {
+    const resp = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: presented }),
+    });
+    const body = resp.ok
+      ? ((await resp.json()) as ApiResult<{ token?: string; accessToken?: string; refreshToken?: string }>)
+      : null;
+    const access = body?.code === 'OK' ? body.data?.accessToken ?? body.data?.token : null;
+    if (!body || body.code !== 'OK' || !access) {
+      // 可能是别的标签页抢先把这张 refresh 用掉了；先看共享存储再判过期
+      return adoptSharedRotation(presented);
+    }
+    // 刷新期间用户切了身份：丢弃这次结果，绝不覆盖新会话
+    if (epoch !== sessionEpoch) return false;
+    // 期间别的标签页已经轮换过：用它的结果
+    if (refreshToken !== presented) return token !== null;
+    // 必须保存服务端新发的 refresh：旧的那张已被 GETDEL 删除，不存就等于自断续期
+    applyTokens({ accessToken: access, refreshToken: body.data?.refreshToken ?? null });
+    return true;
+  } catch {
+    return adoptSharedRotation(presented);
+  }
+}
+
+/** 刷新失败时先看别的标签页是否已经轮换过，是就采用它的凭证，避免把"别人换过了"误判成"会话过期" */
+function adoptSharedRotation(presented: string): boolean {
+  const sharedRefresh = localStorage.getItem(REFRESH_KEY);
+  const sharedAccess = localStorage.getItem(ACCESS_KEY);
+  if (sharedAccess && sharedRefresh && sharedRefresh !== presented) {
+    token = sharedAccess;
+    refreshToken = sharedRefresh;
+    return true;
+  }
+  return false;
+}
+
+/** 成功刷新返回 true；refresh 缺失/过期/被撤销返回 false */
+function refreshOnce(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  if (!refreshToken) return Promise.resolve(false);
+  const accessAtStart = token;
+  const run = async (): Promise<boolean> => {
+    try {
+      const refreshed = await withRefreshLock(() => doRefresh(accessAtStart));
+      // 等锁期间别的标签页已经换了新 access：直接重试原请求即可
+      return refreshed || token !== accessAtStart;
+    } finally {
+      refreshInFlight = null;
+    }
+  };
+  refreshInFlight = run();
+  return refreshInFlight;
 }
 
 export class BizError extends Error {
@@ -62,8 +201,10 @@ export class BizError extends Error {
   }
 }
 
-/** 发请求并返回 data；code 非 OK 时抛 BizError（带业务码） */
-async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+/** 发请求并返回 data；code 非 OK 时抛 BizError（带业务码）
+ *  retried：原请求是否已经重试过。只允许重试一次，否则刷新失败会变成死循环。 */
+async function request<T>(path: string, method = 'GET', body?: unknown, retried = false): Promise<T> {
+  const epoch = sessionEpoch;
   const requestToken = token;
   const headers: Record<string, string> = {};
   if (requestToken) headers['Authorization'] = `Bearer ${requestToken}`;
@@ -74,8 +215,19 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (resp.status === 401) {
-    // 已切换身份时，旧请求的 401 不能把新会话退出。
-    if (token === requestToken) { logout(); location.hash = '#/'; }
+    // 已切换身份 / 已登出：旧请求的 401 既不能退出新会话，也不能用新身份把旧请求重放一遍
+    if (epoch !== sessionEpoch) throw new BizError('UNAUTHORIZED', '会话已过期，请重新登录');
+    // 刷新接口自身返回 401 不再递归；业务请求最多重试一次
+    if (!retried && !path.startsWith('/api/auth/')) {
+      // 别的请求已经换过 token：直接重试；否则发起（或被复用的）刷新
+      const refreshed = token !== requestToken ? true : await refreshOnce();
+      if (refreshed) {
+        if (epoch !== sessionEpoch) throw new BizError('UNAUTHORIZED', '会话已过期，请重新登录');
+        return request<T>(path, method, body, true);
+      }
+    }
+    logout();
+    location.hash = '#/';
     throw new BizError('UNAUTHORIZED', '会话已过期，请重新登录');
   }
   if (!resp.ok) throw new BizError('HTTP_ERROR', '服务暂时不可用，请稍后重试');

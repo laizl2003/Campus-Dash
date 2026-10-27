@@ -63,6 +63,48 @@ class AuthControllerTest {
         assertEquals(1, issued[0]);
     }
 
+    @Test
+    @DisplayName("登出撤销 refresh token，之后无法再用它换新 access")
+    void logout_revokes_refresh_token() {
+        FakeRefreshAuthPort auth = new FakeRefreshAuthPort();
+        AuthController controller = new AuthController(auth);
+        var login = controller.login(new AuthController.LoginRequest(7201L)).data();
+        String access = String.valueOf(login.get("accessToken"));
+        String refresh = String.valueOf(login.get("refreshToken"));
+
+        assertEquals("OK", controller.logout("Bearer " + access,
+                new AuthController.LogoutRequest(refresh)).code());
+        assertEquals("UNAUTHORIZED",
+                controller.refresh(new AuthController.RefreshRequest(refresh)).code(),
+                "登出后 refresh token 必须立即失效");
+    }
+
+    @Test
+    @DisplayName("登出没有 body 时退化为只撤销 access，不抛异常")
+    void logout_without_body_is_still_valid() {
+        FakeRefreshAuthPort auth = new FakeRefreshAuthPort();
+        AuthController controller = new AuthController(auth);
+        var login = controller.login(new AuthController.LoginRequest(7202L)).data();
+        String access = String.valueOf(login.get("accessToken"));
+
+        assertEquals("OK", controller.logout(null, null).code());
+        assertEquals("OK", controller.logout("Bearer " + access, null).code());
+        assertEquals("OK", controller.logout(null, new AuthController.LogoutRequest("   ")).code());
+    }
+
+    @Test
+    @DisplayName("Session 模式登出不触碰 refresh（端口不支持），仍返回成功")
+    void session_logout_ignores_refresh_body() {
+        AuthPort auth = new AuthPort() {
+            @Override public String login(long userId) { return "session-" + userId; }
+            @Override public Optional<Long> resolve(String token) { return Optional.empty(); }
+            @Override public void logout(String token) {}
+        };
+        AuthController controller = new AuthController(auth);
+        assertEquals("OK", controller.logout("Bearer session-1",
+                new AuthController.LogoutRequest("whatever")).code());
+    }
+
     private static final class FakeRefreshAuthPort implements RefreshTokenPort {
         private final Map<String, Long> refreshTokens = new HashMap<>();
         private int accessSeq;

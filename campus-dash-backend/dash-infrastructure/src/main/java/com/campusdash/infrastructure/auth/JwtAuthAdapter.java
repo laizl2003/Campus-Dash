@@ -29,8 +29,9 @@ import java.util.UUID;
  *   2. 吊销难：JWT 签发后无法"作废"，只能靠黑名单补救——
  *      本实现用 Redis 存 auth:jwt:revoked:{jti}，TTL 设为 token 剩余有效期。
  *      这等于承认"纯无状态"在需要吊销的场景里是伪命题。
- *   3. 续期：Session 每次访问自动延长 TTL；JWT 要显式换新 token
- *      （本实现简化为固定有效期，刷新令牌机制留作教程演进点）。
+ *   3. 续期：Session 每次访问自动延长 TTL；JWT 只能显式换新 token。
+ *      本实现用 refresh token（Redis 里的随机串，非 JWT）做续期：
+ *      一次一换（轮换）+ GETDEL 原子取用，重放与并发都只能成功一次。
  *
  * ── 秘钥管理 ──
  * 秘钥从配置读（生产应从环境变量/密钥服务注入，绝不进代码库）。
@@ -74,13 +75,21 @@ public class JwtAuthAdapter implements RefreshTokenPort {
         if (refreshToken == null || refreshToken.isBlank()) {
             return Optional.empty();
         }
-        String key = REFRESH_PREFIX + refreshToken;
-        String userIdText = redis.opsForValue().get(key);
+        // 必须用 GETDEL（Redis 6.2+）而不是 get + delete：
+        // 两步之间有窗口，同一张 refresh token 被并发提交时两个线程都能读到旧值，
+        // 于是换出两对凭证，轮换语义失效。GETDEL 只有一个线程能拿到值，其余直接拒绝。
+        String userIdText = redis.opsForValue().getAndDelete(REFRESH_PREFIX + refreshToken);
         if (userIdText == null) {
             return Optional.empty();
         }
-        redis.delete(key);
-        long userId = Long.parseLong(userIdText);
+        long userId;
+        try {
+            userId = Long.parseLong(userIdText);
+        } catch (NumberFormatException e) {
+            // 映射值被写坏时按失效处理，不能让脏数据变成 500
+            log.warn("refresh token 映射值非法，按失效处理 value={}", userIdText);
+            return Optional.empty();
+        }
         return Optional.of(new TokenPair(issueAccessToken(userId), issueRefreshToken(userId)));
     }
 

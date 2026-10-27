@@ -52,7 +52,7 @@
 
 **字段**：`AuthPort authPort`
 **构造器**：`AuthController(AuthPort authPort)`
-**请求体**：`LoginRequest(Long userId)`、`RefreshRequest(String refreshToken)`
+**请求体**：`LoginRequest(Long userId)`、`RefreshRequest(String refreshToken)`、`LogoutRequest(String refreshToken)`
 
 **方法**
 
@@ -60,7 +60,7 @@
 | --- | --- | --- |
 | `login(LoginRequest)` | POST `/api/auth/login` | 校验 userId > 0；若实现是 `RefreshTokenPort` 就发一对，否则只发 access |
 | `refresh(RefreshRequest)` | POST `/api/auth/refresh` | 调 `refresh`，成功返回新的一对，失败返回 `UNAUTHORIZED` |
-| `logout(Authorization)` | POST `/api/auth/logout` | 取 Bearer token 调 `logout`，始终返回 ok |
+| `logout(Authorization, LogoutRequest)` | POST `/api/auth/logout` | 取 Bearer token 调 `logout` 拉黑 jti；body 带 refreshToken 时一并 `revokeRefresh`，始终返回 ok |
 
 **关键源码（双模式兼容）**
 
@@ -78,7 +78,8 @@ return Result.ok(Map.of("token", authPort.login(req.userId()), "userId", req.use
 **要点**：
 
 - 负数和 0 被拒绝——系统内部账户（-1/-2）不能通过演示登录拿到令牌；
-- **登出没有撤销 refresh token**（请求体里没有 refreshToken），这是 TODO 第一条要补的缺口。
+- 登出必须同时撤销 refresh：只把 access 的 `jti` 拉黑，refresh 在 7 天内仍能换出新 access，等于登出无效。
+  该缺口已于 2026-10-27 补齐（见 `TODO.md` 第 1 条），前端 `logout()` 会用 `keepalive` 请求把 refresh 交给服务端撤销。
 
 ### 1.2 `AuthInterceptor` · 认证拦截器（class）
 

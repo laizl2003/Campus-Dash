@@ -28,5 +28,11 @@
     <!-- P7：Sentinel 热点参数限流适配器 -->
     <dependency><groupId>com.alibaba.csp</groupId><artifactId>sentinel-core</artifactId></dependency>
     <dependency><groupId>com.alibaba.csp</groupId><artifactId>sentinel-parameter-flow-control</artifactId></dependency>
+    <!-- 测试用 Mockito：Redis/MQ 适配器的交互契约（到底发了哪条命令）不需要真中间件就能验证 -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

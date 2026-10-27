@@ -7,8 +7,19 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,7 +27,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * P6：JWT 刷新令牌。
  *
  * access token 仍是短生命周期 JWT；refresh token 是服务端可吊销、可轮换的随机凭证。
- * 这里验证最关键的安全语义：刷新成功后旧 refresh token 必须失效，不能反复换新 access token。
+ * 这里验证三条安全语义：
+ *   1. 刷新成功后旧 refresh token 立即失效，不能反复换新 access token；
+ *   2. 同一张 refresh token 并发提交只有一次成功（GETDEL 原子取用）；
+ *   3. 登出撤销 refresh token，之后不能再换出新 access。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"dash.auth.mode=jwt", "dash.mq.enabled=false", "dash.auth.refresh-ttl-minutes=120"})
@@ -57,5 +71,59 @@ class AuthRefreshIT {
         Map<?, ?> replay = rest.postForEntity("/api/auth/refresh",
                 Map.of("refreshToken", refreshToken), Map.class).getBody();
         assertEquals("UNAUTHORIZED", replay.get("code"), "旧 refresh token 复用必须被拒绝");
+    }
+
+    @Test
+    @DisplayName("登出撤销 refresh token，之后刷新被拒绝")
+    @SuppressWarnings("unchecked")
+    void logout_revokes_refresh_token() {
+        Map<String, Object> login = data(rest.postForEntity("/api/auth/login",
+                Map.of("userId", 7102L), Map.class).getBody());
+        String accessToken = String.valueOf(login.get("accessToken"));
+        String refreshToken = String.valueOf(login.get("refreshToken"));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+        ResponseEntity<Map> logout = rest.postForEntity("/api/auth/logout",
+                new HttpEntity<>(Map.of("refreshToken", refreshToken), headers), Map.class);
+        assertEquals("OK", logout.getBody().get("code"), "登出应成功: " + logout.getBody());
+
+        Map<?, ?> replay = rest.postForEntity("/api/auth/refresh",
+                Map.of("refreshToken", refreshToken), Map.class).getBody();
+        assertEquals("UNAUTHORIZED", replay.get("code"), "登出后 refresh token 必须立即失效");
+    }
+
+    @Test
+    @DisplayName("同一 refresh token 并发提交只有一次成功")
+    void concurrent_refresh_on_same_token_has_single_winner() throws Exception {
+        Map<String, Object> login = data(rest.postForEntity("/api/auth/login",
+                Map.of("userId", 7103L), Map.class).getBody());
+        String refreshToken = String.valueOf(login.get("refreshToken"));
+
+        int threads = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<String>> futures = new ArrayList<>();
+        try {
+            for (int i = 0; i < threads; i++) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    Map<?, ?> body = rest.postForEntity("/api/auth/refresh",
+                            Map.of("refreshToken", refreshToken), Map.class).getBody();
+                    return String.valueOf(body.get("code"));
+                }));
+            }
+            start.countDown();
+            int ok = 0;
+            for (Future<String> future : futures) {
+                if ("OK".equals(future.get(10, TimeUnit.SECONDS))) {
+                    ok++;
+                }
+            }
+            assertEquals(1, ok, "并发重放同一 refresh token 只能成功一次（GETDEL 原子取用）");
+        } finally {
+            pool.shutdownNow();
+        }
     }
 }

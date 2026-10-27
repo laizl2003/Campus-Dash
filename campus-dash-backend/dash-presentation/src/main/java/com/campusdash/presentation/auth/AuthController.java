@@ -26,6 +26,9 @@ public class AuthController {
     public record LoginRequest(Long userId) {}
     public record RefreshRequest(String refreshToken) {}
 
+    /** 登出时一并提交 refresh token；没有 body 的老客户端仍然只撤销 access。 */
+    public record LogoutRequest(String refreshToken) {}
+
     @PostMapping("/login")
     public Result<Map<String, Object>> login(@RequestBody LoginRequest req) {
         // 负数用于系统内部账户，不能通过演示登录获取系统操作者的令牌。
@@ -62,9 +65,16 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public Result<Void> logout(@RequestHeader(value = "Authorization", required = false) String auth) {
+    public Result<Void> logout(@RequestHeader(value = "Authorization", required = false) String auth,
+                               @RequestBody(required = false) LogoutRequest body) {
         if (auth != null && auth.startsWith("Bearer ")) {
             authPort.logout(auth.substring(7).trim());
+        }
+        // access token 进黑名单只挡住剩余 2 小时；refresh token 若留在 Redis，
+        // 登出后 7 天内还能换出新 access —— 等于登出无效。
+        if (authPort instanceof RefreshTokenPort refreshTokenPort
+                && body != null && body.refreshToken() != null) {
+            refreshTokenPort.revokeRefresh(body.refreshToken().trim());
         }
         return Result.ok(null);
     }

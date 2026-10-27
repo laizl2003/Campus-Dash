@@ -420,7 +420,7 @@ return lock.tryLock(0, 10, TimeUnit.SECONDS);   // waitTime=0
 **条件**：`dash.auth.mode=jwt`；实现 `RefreshTokenPort`
 **字段**：`SecretKey key`、`StringRedisTemplate redis`
 **方法**：`login`、`loginWithRefresh`、`refresh`、`revokeRefresh`、`resolve`、`logout`
-**要点**：无状态验签；吊销靠 `auth:jwt:revoked:{jti}` 黑名单（TTL = token 剩余有效期）；refresh token 存 `auth:jwt:refresh:{token}`。
+**要点**：无状态验签；吊销靠 `auth:jwt:revoked:{jti}` 黑名单（TTL = token 剩余有效期）；refresh token 存 `auth:jwt:refresh:{token}`，刷新时用 `GETDEL` 原子取用（并发重放只有一次成功）。
 
 ---
 
