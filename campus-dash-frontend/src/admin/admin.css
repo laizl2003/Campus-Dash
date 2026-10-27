@@ -92,3 +92,9 @@
 .admin-pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 10px; font-size: 11px; color: #7d857e; }
 .admin-pager .btn { padding: 4px 9px; font-size: 11px; }
 @media (max-width: 900px) { .admin-ledger-grid { grid-template-columns: 1fr; } }
+
+/* 账户选择：单面板展示，默认佣金账户 */
+.admin-account-tabs { display: flex; gap: 8px; }
+.admin-account-tabs button { padding: 7px 16px; border: 1px solid #e7e2d8; border-radius: 9px; background: #fff; color: #6b746c; font-size: 12px; }
+.admin-account-tabs button.is-active { background: #1f2421; border-color: #1f2421; color: #fff; font-weight: 600; }
+.admin-ledger-view .admin-ledger-panel { min-height: 520px; }

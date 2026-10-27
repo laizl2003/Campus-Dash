@@ -26,6 +26,7 @@ export default function AdminApp() {
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [view, setView] = useState<'disputes' | 'ledger'>('disputes');
   const [netCents, setNetCents] = useState(0);
+  const [ledgerAccount, setLedgerAccount] = useState<'COMMISSION' | 'MARKETING'>('COMMISSION');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,10 +173,16 @@ export default function AdminApp() {
           <strong>{yuan(netCents)}</strong>
           <small>Commission 收入 − Marketing 支出</small>
         </div>
-        <div className="admin-ledger-grid">
-          <LedgerPanel account="COMMISSION" title="佣金账户" />
-          <LedgerPanel account="MARKETING" title="营销账户" />
+        <div className="admin-account-tabs" role="tablist" aria-label="选择账户">
+          <button type="button" role="tab" aria-selected={ledgerAccount === 'COMMISSION'}
+                  className={ledgerAccount === 'COMMISSION' ? 'is-active' : ''}
+                  onClick={() => setLedgerAccount('COMMISSION')}>佣金账户</button>
+          <button type="button" role="tab" aria-selected={ledgerAccount === 'MARKETING'}
+                  className={ledgerAccount === 'MARKETING' ? 'is-active' : ''}
+                  onClick={() => setLedgerAccount('MARKETING')}>营销账户</button>
         </div>
+        <LedgerPanel key={ledgerAccount} account={ledgerAccount}
+                     title={ledgerAccount === 'COMMISSION' ? '佣金账户' : '营销账户'} />
       </div>}
     </div>
   </div>;
