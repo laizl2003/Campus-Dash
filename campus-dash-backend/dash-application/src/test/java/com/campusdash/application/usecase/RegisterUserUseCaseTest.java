@@ -145,5 +145,6 @@ class RegisterUserUseCaseTest {
         @Override public void insert(UserAccount account) { byName.put(account.username(), account); byPhone.put(account.phone(), account); }
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
         @Override public void markLoginFailure(String userId) { }
+        @Override public void updatePassword(String userId, String hash, Instant at) { }
     }
 }

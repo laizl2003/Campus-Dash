@@ -119,6 +119,13 @@ public class JdbcUserRepository implements UserRepository {
         jdbc.update("UPDATE `user` SET login_fail_count = login_fail_count + 1 WHERE user_id = ?", userId);
     }
 
+    @Override
+    public void updatePassword(String userId, String passwordHash, Instant at) {
+        Timestamp now = timestamp(at);
+        jdbc.update("UPDATE `user` SET password_hash = ?, password_updated_at = ?, updated_at = ? WHERE user_id = ?",
+                passwordHash, now, now, userId);
+    }
+
     private Optional<UserAccount> one(String sql, Object value) {
         List<UserAccount> rows = jdbc.query(sql, MAPPER, value);
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));

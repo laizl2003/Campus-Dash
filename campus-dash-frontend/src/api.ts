@@ -109,6 +109,19 @@ export async function registerAccount(input: RegisterInput): Promise<{ userId: s
   return { userId: String(data.userId), username: data.username };
 }
 
+export interface ChangePasswordInput {
+  username: string;
+  oldPassword: string;
+  newPassword: string;
+  captchaId: string;
+  captchaCode: string;
+}
+
+/** 修改密码：原密码 + 验证码校验，不需要登录态 */
+export async function changePassword(input: ChangePasswordInput): Promise<void> {
+  await postJson<null>('/api/auth/password', input);
+}
+
 export interface LoginInput {
   username: string;
   password: string;

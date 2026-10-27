@@ -29,4 +29,7 @@ public interface UserRepository {
     void markLoginSuccess(String userId, Instant at, String ip);
 
     void markLoginFailure(String userId);
+
+    /** 修改密码：只更新 password_hash / password_updated_at / updated_at */
+    void updatePassword(String userId, String passwordHash, Instant at);
 }

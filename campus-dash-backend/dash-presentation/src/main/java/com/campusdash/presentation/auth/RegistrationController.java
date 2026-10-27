@@ -1,5 +1,6 @@
 package com.campusdash.presentation.auth;
 
+import com.campusdash.application.usecase.ChangePasswordUseCase;
 import com.campusdash.application.usecase.RegisterUserUseCase;
 import com.campusdash.domain.auth.ports.CaptchaPort;
 import com.campusdash.shared.Result;
@@ -27,10 +28,14 @@ import java.util.Map;
 public class RegistrationController {
 
     private final RegisterUserUseCase registerUser;
+    private final ChangePasswordUseCase changePassword;
     private final CaptchaPort captcha;
 
-    public RegistrationController(RegisterUserUseCase registerUser, CaptchaPort captcha) {
+    public RegistrationController(RegisterUserUseCase registerUser,
+                                  ChangePasswordUseCase changePassword,
+                                  CaptchaPort captcha) {
         this.registerUser = registerUser;
+        this.changePassword = changePassword;
         this.captcha = captcha;
     }
 
@@ -47,6 +52,19 @@ public class RegistrationController {
         data.put("image", "data:image/png;base64," + issued.imageBase64());
         data.put("expireSeconds", issued.expireSeconds());
         return Result.ok(data);
+    }
+
+    public record ChangePasswordRequest(String username, String oldPassword, String newPassword,
+                                        String captchaId, String captchaCode) {
+    }
+
+    /** 修改密码：不要求已登录（忘记密码场景也走这里），靠原密码 + 验证码双重校验 */
+    @PostMapping("/password")
+    public Result<Void> changePassword(@RequestBody ChangePasswordRequest req) {
+        changePassword.change(new ChangePasswordUseCase.Command(
+                req.username(), req.oldPassword(), req.newPassword(),
+                req.captchaId(), req.captchaCode()));
+        return Result.ok(null);
     }
 
     @PostMapping("/register")

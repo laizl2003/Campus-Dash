@@ -185,6 +185,7 @@ class AuthControllerTest {
         @Override public void insert(UserAccount account) { byName.put(account.username(), account); }
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
         @Override public void markLoginFailure(String userId) { loginFailures++; }
+        @Override public void updatePassword(String userId, String hash, Instant at) { }
     }
 
     private static final class EmptyUsers implements UserRepository {
@@ -196,5 +197,6 @@ class AuthControllerTest {
         @Override public void insert(UserAccount account) { }
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
         @Override public void markLoginFailure(String userId) { }
+        @Override public void updatePassword(String userId, String hash, Instant at) { }
     }
 }

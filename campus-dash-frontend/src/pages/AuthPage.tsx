@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { captchaImage, login, registerAccount, type Profile } from '../api';
+import { captchaImage, changePassword, login, registerAccount, type Profile } from '../api';
 import Icon from '../components/Icon';
 import CampusArt from '../components/CampusArt';
 
@@ -10,11 +10,12 @@ import CampusArt from '../components/CampusArt';
  * 注册成功后回到登录并预填用户名——不做"注册即登录"，避免验证码被复用。
  */
 export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) => void }) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'change'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [captchaCode, setCaptchaCode] = useState('');
   const [captcha, setCaptcha] = useState<{ captchaId: string; image: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,12 +35,13 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
 
   useEffect(() => { void reloadCaptcha(); }, [reloadCaptcha]);
 
-  const switchMode = (next: 'login' | 'register') => {
+  const switchMode = (next: 'login' | 'register' | 'change') => {
     setMode(next);
     setError('');
     setNotice('');
     setPassword('');
     setConfirmPassword('');
+    setNewPassword('');
     void reloadCaptcha();
   };
 
@@ -56,6 +58,18 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
           username: username.trim(), password, captchaId: captcha.captchaId, captchaCode,
         });
         onAuthed(profile);
+        return;
+      }
+      if (mode === 'change') {
+        await changePassword({
+          username: username.trim(), oldPassword: password, newPassword,
+          captchaId: captcha.captchaId, captchaCode,
+        });
+        setMode('login');
+        setPassword('');
+        setNewPassword('');
+        setNotice('密码已修改，请用新密码登录');
+        await reloadCaptcha();
         return;
       }
       if (password !== confirmPassword) {
@@ -89,7 +103,7 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
     </section>
 
     <section className="login-side"><div className="login-card">
-      <h2 className="auth-title">{mode === 'login' ? '从一个身份开始' : '创建你的账号'}</h2>
+      <h2 className="auth-title">{mode === 'login' ? '从一个身份开始' : mode === 'register' ? '创建你的账号' : '修改登录密码'}</h2>
 
       <form className="auth-form" onSubmit={submit}>
         <label className="auth-field">
@@ -105,16 +119,26 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
         </label>}
 
         <label className="auth-field">
-          <span>密码</span>
+          <span>{mode === 'change' ? '原密码' : '密码'}</span>
           <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                 placeholder={mode === 'login' ? '请输入密码' : '8-32 位，需同时含字母与数字'}
-                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required/>
+                 placeholder={mode === 'register' ? '8-32 位，需同时含字母与数字' : mode === 'change' ? '请输入当前密码' : '请输入密码'}
+                 autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required/>
         </label>
 
-        {mode === 'login' && <button type="button" className="auth-switch" tabIndex={-1}
-                onClick={() => switchMode('register')}>
-          还没有账号？<strong>注册新账号</strong>
-        </button>}
+        {mode === 'change' && <label className="auth-field">
+          <span>新密码</span>
+          <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                 placeholder="8-32 位，需同时含字母与数字" autoComplete="new-password" required/>
+        </label>}
+
+        {mode === 'login' && <div className="auth-switch-row">
+          <button type="button" className="auth-switch" tabIndex={-1} onClick={() => switchMode('register')}>
+            还没有账号？<strong>注册新账号</strong>
+          </button>
+          <button type="button" className="auth-switch" tabIndex={-1} onClick={() => switchMode('change')}>
+            忘记密码？<strong>修改密码</strong>
+          </button>
+        </div>}
 
         {mode === 'register' && <label className="auth-field">
           <span>确认密码</span>
@@ -141,12 +165,12 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
         {/* 登录态只让 Tab 在三个输入框之间走：其余控件用鼠标点，或用回车提交 */}
         <button className="btn btn-primary auth-submit" disabled={busy} type="submit"
                 tabIndex={mode === 'login' ? -1 : 0}>
-          {busy ? '处理中…' : mode === 'login' ? '登录' : '注册'}
+          {busy ? '处理中…' : mode === 'login' ? '登录' : mode === 'register' ? '注册' : '确认修改'}
         </button>
 
-        {mode === 'register' && <button type="button" className="auth-switch" tabIndex={-1}
+        {mode !== 'login' && <button type="button" className="auth-switch" tabIndex={-1}
                 onClick={() => switchMode('login')}>
-          已有账号？<strong>返回登录</strong>
+          返回<strong>登录</strong>
         </button>}
       </form>
     </div></section>
