@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router';
-import { getUserId, loginAs, logout } from './api';
+import { getRole, getUserId, loginAs, logout } from './api';
 import { IDENTITIES } from './identities';
 import TopBar from './components/TopBar';
 import Icon from './components/Icon';
@@ -12,12 +12,22 @@ import Wallet from './pages/Wallet';
 import Notifications from './pages/Notifications';
 import Credit from './pages/Credit';
 import AuthPage from './pages/AuthPage';
+import AdminApp from './admin/AdminApp';
 import { connectWs, disconnectWs } from './ws';
+
+/** 非管理员误入管理路由：静默替换 hash，不渲染任何管理内容 */
+function RedirectToSquare() {
+  useEffect(() => { window.location.hash = '#/square'; }, []);
+  return null;
+}
 
 export default function App() {
   const route = useHashRoute();
   // userId 现在是字符串：UUID / 001 / 演示账号 "1001"
   const [userId, setUserId] = useState<string | null>(getUserId());
+  // 角色由后端登录响应给出（Admin / user），只影响落地页与路由守卫；
+  // 真正的权限校验在后端 AdminInterceptor。
+  const [role, setRole] = useState<string>(getRole());
   const [loginBusy, setLoginBusy] = useState<string | null>(null);
   const loginLock = useRef(false);
   const [error, setError] = useState('');
@@ -36,12 +46,13 @@ export default function App() {
       const displayName = IDENTITIES.find(i => String(i.userId) === id)?.name;
       const profile = await loginAs(id, displayName);
       setUserId(profile.userId);
+      setRole(profile.role);
     }
     catch (e) { setError(e instanceof Error ? e.message : '切换身份失败，请重试'); }
     finally { setLoginBusy(null); loginLock.current = false; }
   };
   useEffect(() => {
-    const onLogout = () => { disconnectWs(); setUserId(null); };
+    const onLogout = () => { disconnectWs(); setUserId(null); setRole('user'); };
     window.addEventListener('dash:logout', onLogout);
     return () => window.removeEventListener('dash:logout', onLogout);
   }, []);
@@ -52,12 +63,18 @@ export default function App() {
 
   if (userId === null) return <AuthPage onAuthed={profile => {
     setUserId(profile.userId);
-    // 登录/注册成功后直接回到任务广场，而不是停在登录页
-    window.location.hash = '#/square';
+    setRole(profile.role);
+    // 同一张登录表单，按角色决定落地页：Admin -> 管理台，其余 -> 任务广场
+    window.location.hash = profile.role === 'Admin' ? '#/admin' : '#/square';
   }} />;
 
   let page;
   const path = route.split('?')[0];
+  if (path.startsWith('/admin')) {
+    // 路由守卫：非管理员手输 #/admin 会被弹回广场，且不会发出任何管理请求
+    if (role !== 'Admin') return <RedirectToSquare />;
+    return <AdminApp />;
+  }
   if (path.startsWith('/detail/')) page = <Detail key={path.split('/')[2]} errandId={path.split('/')[2]}/>;
   else if (path === '/publish') page = <Publish key={route}/>;
   else if (path === '/mine') page = <Mine/>;

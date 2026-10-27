@@ -31,6 +31,8 @@ export function getToken() { return token; }
 export function getUserId() { return currentUserId; }
 /** 展示用昵称：注册用户是用户名，演示账号退回身份名或 id */
 export function getUsername() { return currentUsername ?? currentUserId; }
+/** 登录身份角色：Admin 进管理台，其余进任务广场 */
+export function getRole() { return localStorage.getItem('dash_role') || 'user'; }
 
 interface TokenPair { accessToken: string; refreshToken: string | null; }
 
@@ -129,6 +131,7 @@ export async function login(input: LoginInput): Promise<Profile> {
   sessionEpoch++;
   localStorage.setItem(USER_KEY, JSON.stringify(currentUserId));
   localStorage.setItem(NAME_KEY, currentUsername);
+  localStorage.setItem('dash_role', data.role ?? 'user');
   if (previousRefresh && previousRefresh !== (data.refreshToken ?? null)) revokeQuietly(previousRefresh, null);
   return {
     userId: currentUserId,
@@ -151,6 +154,7 @@ export async function loginAs(userId: string, displayName?: string): Promise<Pro
   sessionEpoch++;
   localStorage.setItem(USER_KEY, JSON.stringify(currentUserId));
   localStorage.setItem(NAME_KEY, currentUsername);
+  localStorage.setItem('dash_role', 'user');
   return { userId: currentUserId, username: currentUsername, role: 'user' };
 }
 
@@ -194,6 +198,7 @@ export function logout() {
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(NAME_KEY);
+  localStorage.removeItem('dash_role');
   window.dispatchEvent(new Event('dash:logout'));
   // 只清本地等于把 refresh 留在服务端：登出必须让服务端也撤销，否则 7 天内仍可换新 access
   revokeQuietly(refresh, access);
@@ -325,7 +330,8 @@ async function request<T>(path: string, method = 'GET', body?: unknown, retried 
   if (!resp.ok) throw new BizError('HTTP_ERROR', '服务暂时不可用，请稍后重试');
   // 后端所有 long 都序列化为 string；仅金额转安全整数，ID 保留原始字符串。
   const result = JSON.parse(await resp.text(), (key, value) => {
-    if (['rewardCents', 'amountCents', 'availableCents', 'frozenCents', 'discountCents', 'paidCents'].includes(key)) {
+    if (['rewardCents', 'amountCents', 'availableCents', 'frozenCents', 'discountCents', 'paidCents',
+      'escrowAmountCents', 'voucherDiscountCents', 'runnerBearCents'].includes(key)) {
       const amount = Number(value);
       if (!Number.isSafeInteger(amount)) throw new BizError('INVALID_AMOUNT', '金额数据超出可显示范围');
       return amount;
@@ -398,6 +404,18 @@ export const api = {
   claimVoucher: (type: number) => request<{
     voucherId: string; type: number; description: string; expireTime: string; remainingStock: number;
   }>(`/api/vouchers/${type}/claim`, 'POST'),
+  adminDisputes: () => request<{
+    errandId: string; title: string; status: string; rewardCents: number;
+    publisherId: string; grabberId: string; round: number;
+  }[]>('/api/admin/disputes'),
+  adminDispute: (id: string) => request<{
+    errandId: string; title: string; status: string; rewardCents: number;
+    publisherId: string; grabberId: string; round: number;
+    escrowAmountCents?: number; escrowStatus?: string;
+    voucherDescription?: string; voucherDiscountCents?: number; runnerBearCents?: number;
+  }>(`/api/admin/disputes/${id}`),
+  adminArbitrate: (id: string, favor: 'RUNNER' | 'PUBLISHER') =>
+    request<{ result: string }>(`/api/admin/disputes/${id}/arbitrate`, 'POST', { favor }),
   unread: async () => {
     const result = await request<{ count: number | string }>('/api/notifications/unread');
     return { count: Number(result.count) };

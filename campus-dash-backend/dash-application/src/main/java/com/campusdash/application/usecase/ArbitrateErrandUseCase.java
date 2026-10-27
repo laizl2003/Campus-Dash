@@ -1,5 +1,7 @@
 package com.campusdash.application.usecase;
 
+import com.campusdash.domain.auth.model.UserAccount;
+import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.credit.model.CreditEvent;
 import com.campusdash.domain.credit.model.CreditEventType;
 import com.campusdash.domain.credit.ports.CreditRepository;
@@ -45,6 +47,7 @@ public class ArbitrateErrandUseCase {
     private final CreditRepository creditRepository;
     private final SnowflakeIdGenerator idGenerator;
     private final RealtimeNotifier notifier;
+    private final UserRepository users;
     private final String arbitratorId;
 
     public ArbitrateErrandUseCase(ErrandRepository errandRepository,
@@ -57,6 +60,7 @@ public class ArbitrateErrandUseCase {
                                   CreditRepository creditRepository,
                                   SnowflakeIdGenerator idGenerator,
                                   RealtimeNotifier notifier,
+                                  UserRepository users,
                                   @Value("${dash.auth.arbitrator-id:9001}") String arbitratorId) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
@@ -68,6 +72,7 @@ public class ArbitrateErrandUseCase {
         this.creditRepository = creditRepository;
         this.idGenerator = idGenerator;
         this.notifier = notifier;
+        this.users = users;
         this.arbitratorId = arbitratorId;
     }
 
@@ -77,7 +82,10 @@ public class ArbitrateErrandUseCase {
     public enum Result { SETTLED_TO_RUNNER, REFUNDED_TO_PUBLISHER, ALREADY_DONE, CONFLICT }
 
     public Result arbitrate(long errandId, Favor favor, String operatorId) {
-        if (!arbitratorId.equals(operatorId)) {
+        // 两种身份可以裁决：配置的仲裁员（演示号 9001）或 role=Admin 的账号（001）
+        boolean allowed = arbitratorId.equals(operatorId)
+                || users.findById(operatorId).map(UserAccount::isAdmin).orElse(false);
+        if (!allowed) {
             throw new BizException(ErrorCode.UNAUTHORIZED, "只有仲裁员可以裁决，actor=" + operatorId);
         }
         Errand errand = errandRepository.findById(errandId)

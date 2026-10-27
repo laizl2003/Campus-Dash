@@ -7,6 +7,7 @@ import com.campusdash.domain.errand.model.ErrandStatus;
 import com.campusdash.domain.errand.model.ErrandType;
 import com.campusdash.domain.errand.ports.ErrandCachePort;
 import com.campusdash.domain.errand.ports.ErrandRepository;
+import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.notify.ports.RealtimeNotifier;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.*;
@@ -274,7 +275,8 @@ class FundOperationSafetyTest {
             ProxyFactory proxy = new ProxyFactory(target);
             proxy.addAdvice(new TransactionInterceptor(tx, new AnnotationTransactionAttributeSource()));
             return new ArbitrateErrandUseCase(errands, wallets, refund(), (ArbitrateSettleStep) proxy.getProxy(),
-                    audit, fund, cache, credit, ids, notifier, ARBITRATOR);
+                    audit, fund, cache, credit, ids, notifier,
+                    stub(UserRepository.class, (method, args) -> Optional.empty()), ARBITRATOR);
         }
 
         void assertUntouched() {
