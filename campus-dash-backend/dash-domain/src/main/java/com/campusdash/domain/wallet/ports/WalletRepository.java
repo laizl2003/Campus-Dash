@@ -6,6 +6,8 @@ import com.campusdash.domain.wallet.model.LedgerEntry;
 import com.campusdash.domain.wallet.model.WalletAccount;
 import com.campusdash.shared.Money;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 public interface WalletRepository {
@@ -52,4 +54,16 @@ public interface WalletRepository {
 
     /** 幂等判定：该 bizNo 是否已有流水。用于事务消息回查与重复请求识别 */
     boolean ledgerExists(String bizNo);
+
+    /** 平台账户（佣金户 -2 / 营销户 -4）的流水，按时间倒序 */
+    List<PlatformLedgerRow> findPlatformLedger(int limit);
+
+    /**
+     * 平台账户流水视图：把账户名与类型一起带出来，方便管理端直接看"佣金入账/营销支出"。
+     * 金额单位统一为分。
+     */
+    record PlatformLedgerRow(long id, String bizNo, long accountId, String accountName, String accountType,
+                             String direction, long amount, long balanceAfter, String refType, long refId,
+                             Instant createdAt) {
+    }
 }

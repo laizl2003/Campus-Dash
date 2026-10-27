@@ -65,6 +65,29 @@ public class AdminController {
         return Result.ok(items);
     }
 
+    /** 平台账户流水：佣金户 -2 与营销户 -4 的每一笔入账/出账 */
+    @GetMapping("/ledger")
+    public Result<List<Map<String, Object>>> ledger(@RequestParam(defaultValue = "50") int limit) {
+        int size = Math.max(1, Math.min(limit, 200));
+        List<Map<String, Object>> rows = walletRepository.findPlatformLedger(size).stream()
+                .map(row -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", String.valueOf(row.id()));
+                    item.put("bizNo", row.bizNo());
+                    item.put("accountName", row.accountName());
+                    item.put("accountType", row.accountType());
+                    item.put("direction", row.direction());
+                    item.put("amountCents", row.amount());
+                    item.put("balanceAfterCents", row.balanceAfter());
+                    item.put("refType", row.refType());
+                    item.put("refId", String.valueOf(row.refId()));
+                    item.put("createdAt", row.createdAt().toString());
+                    return item;
+                })
+                .toList();
+        return Result.ok(rows);
+    }
+
     @GetMapping("/disputes/{id}")
     public Result<Map<String, Object>> detail(@PathVariable long id) {
         Errand errand = errandRepository.findById(id)

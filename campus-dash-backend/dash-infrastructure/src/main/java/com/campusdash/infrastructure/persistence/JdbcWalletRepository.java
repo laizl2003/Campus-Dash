@@ -40,6 +40,31 @@ public class JdbcWalletRepository implements WalletRepository {
     }
 
     @Override
+    public java.util.List<PlatformLedgerRow> findPlatformLedger(int limit) {
+        return jdbc.query("""
+                SELECT l.id, l.biz_no, l.account_id, l.direction, l.amount, l.balance_after,
+                       l.ref_type, l.ref_id, l.created_at,
+                       a.user_name, a.owner_type
+                  FROM wallet_ledger l
+                  JOIN wallet_account a ON a.id = l.account_id
+                 WHERE a.owner_type IN ('COMMISSION', 'MARKETING')
+                 ORDER BY l.id DESC
+                 LIMIT ?
+                """, (rs, n) -> new PlatformLedgerRow(
+                        rs.getLong("id"),
+                        rs.getString("biz_no"),
+                        rs.getLong("account_id"),
+                        rs.getString("user_name"),
+                        rs.getString("owner_type"),
+                        rs.getString("direction"),
+                        rs.getLong("amount"),
+                        rs.getLong("balance_after"),
+                        rs.getString("ref_type"),
+                        rs.getLong("ref_id"),
+                        rs.getTimestamp("created_at").toInstant()), limit);
+    }
+
+    @Override
     public void deleteAccount(long accountId) {
         jdbc.update("DELETE FROM wallet_account WHERE id = ?", accountId);
     }

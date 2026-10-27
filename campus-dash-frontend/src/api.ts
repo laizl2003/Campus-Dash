@@ -417,7 +417,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown, retried 
   // 后端所有 long 都序列化为 string；仅金额转安全整数，ID 保留原始字符串。
   const result = JSON.parse(await resp.text(), (key, value) => {
     if (['rewardCents', 'amountCents', 'availableCents', 'frozenCents', 'discountCents', 'paidCents',
-      'escrowAmountCents', 'voucherDiscountCents', 'runnerBearCents'].includes(key)) {
+      'escrowAmountCents', 'voucherDiscountCents', 'runnerBearCents', 'balanceAfterCents'].includes(key)) {
       const amount = Number(value);
       if (!Number.isSafeInteger(amount)) throw new BizError('INVALID_AMOUNT', '金额数据超出可显示范围');
       return amount;
@@ -492,6 +492,10 @@ export const api = {
   }>(`/api/vouchers/${type}/claim`, 'POST'),
   me: () => request<{ userId: string; username: string; role: string }>('/api/auth/me'),
   deleteAccount: () => request<null>('/api/account', 'DELETE'),
+  adminLedger: () => request<{
+    id: string; bizNo: string; accountName: string; accountType: string; direction: string;
+    amountCents: number; balanceAfterCents: number; refType: string; refId: string; createdAt: string;
+  }[]>('/api/admin/ledger'),
   adminDisputes: () => request<{
     errandId: string; title: string; status: string; rewardCents: number;
     publisherId: string; grabberId: string; round: number;

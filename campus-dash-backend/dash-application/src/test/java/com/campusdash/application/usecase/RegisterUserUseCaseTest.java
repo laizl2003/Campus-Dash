@@ -151,6 +151,7 @@ class RegisterUserUseCaseTest {
         @Override public java.util.Optional<com.campusdash.domain.wallet.model.EscrowOrder> findEscrowByErrandId(long campusId, long errandId) { return java.util.Optional.empty(); }
         @Override public int casEscrowStatus(long campusId, long errandId, com.campusdash.domain.wallet.model.EscrowOrder.EscrowStatus from, com.campusdash.domain.wallet.model.EscrowOrder.EscrowStatus to) { return 0; }
         @Override public boolean ledgerExists(String bizNo) { return false; }
+        @Override public java.util.List<PlatformLedgerRow> findPlatformLedger(int limit) { return java.util.List.of(); }
     }
 
     private static final class FakeUsers implements UserRepository {

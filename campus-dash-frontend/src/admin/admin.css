@@ -56,3 +56,14 @@
 .admin-confirm { margin-top: 12px; padding: 12px 14px; border: 1px solid #e8cf7a; background: #fffbea; border-radius: 10px; }
 .admin-confirm p { margin: 0 0 10px; font-size: 11px; line-height: 1.7; color: #6b5a2a; }
 .admin-confirm div { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── 管理台：平台资金流水 ─────────────────────────────── */
+.admin-ledger { background: #fff; border: 1px solid #e7e2d8; border-radius: 14px; padding: 18px; min-height: 420px; }
+.admin-ledger-scroll { overflow-x: auto; }
+.admin-ledger table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.admin-ledger th { text-align: left; font-size: 10px; color: #9aa39c; font-weight: 600; padding: 8px 10px; border-bottom: 1px solid #eee7da; white-space: nowrap; }
+.admin-ledger td { padding: 9px 10px; border-bottom: 1px solid #f3f0e9; color: #333; white-space: nowrap; }
+.admin-ledger td small { display: block; font-size: 9px; color: #9aa39c; }
+.admin-ledger td.in { color: #2f6b4a; font-weight: 600; }
+.admin-ledger td.out { color: #a35a1c; font-weight: 600; }
+.admin-ledger td.mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; color: #7d857e; }

@@ -24,6 +24,8 @@ export default function AdminApp() {
   const [busy, setBusy] = useState(false);
   const [pendingFavor, setPendingFavor] = useState<'RUNNER' | 'PUBLISHER' | null>(null);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [view, setView] = useState<'disputes' | 'ledger'>('disputes');
+  const [ledger, setLedger] = useState<Awaited<ReturnType<typeof api.adminLedger>>>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,7 +39,13 @@ export default function AdminApp() {
     }
   }, []);
 
+  const loadLedger = useCallback(async () => {
+    try { setLedger(await api.adminLedger()); }
+    catch (e) { setMessage({ text: e instanceof Error ? e.message : '平台流水加载失败', error: true }); }
+  }, []);
+
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (view === 'ledger') void loadLedger(); }, [view, loadLedger]);
 
   const open = async (id: string) => {
     try {
@@ -68,7 +76,8 @@ export default function AdminApp() {
     <aside className="admin-side">
       <div className="admin-brand"><span className="admin-brand-mark">C</span><div><strong>CampusDash</strong><small>平台管理台</small></div></div>
       <nav className="admin-nav" aria-label="管理导航">
-        <button type="button" className="is-active"><Icon name="shield" size={16}/>仲裁工作台</button>
+        <button type="button" className={view === 'disputes' ? 'is-active' : ''} onClick={() => setView('disputes')}><Icon name="shield" size={16}/>仲裁工作台</button>
+        <button type="button" className={view === 'ledger' ? 'is-active' : ''} onClick={() => setView('ledger')}><Icon name="receipt" size={16}/>资金流水</button>
         <button type="button" disabled title="规划中"><Icon name="ticket" size={16}/>优惠券管理</button>
         <button type="button" disabled title="规划中"><Icon name="wallet" size={16}/>平台配置</button>
       </nav>
@@ -80,9 +89,9 @@ export default function AdminApp() {
 
     <div className="admin-main">
       <header className="admin-top">
-        <div><span className="eyebrow">ADMIN CONSOLE</span><h1>仲裁工作台<span className="heading-dot">.</span></h1>
-          <p>处理争议任务，决定托管资金流向跑腿或发单人。</p></div>
-        <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
+        <div><span className="eyebrow">ADMIN CONSOLE</span><h1>{view === 'disputes' ? '仲裁工作台' : '平台资金流水'}<span className="heading-dot">.</span></h1>
+          <p>{view === 'disputes' ? '处理争议任务，决定托管资金流向跑腿或发单人。' : '佣金账户与营销账户的每一笔入账/出账，均来自 wallet_ledger。'}</p></div>
+        <button type="button" className="btn btn-ghost" onClick={() => void (view === 'disputes' ? load() : loadLedger())} disabled={loading}>
           <Icon name="refresh" size={15} className={loading ? 'is-spinning' : ''}/>刷新
         </button>
       </header>
@@ -92,7 +101,7 @@ export default function AdminApp() {
         <button className="text-button" onClick={() => setMessage(null)}>关闭</button>
       </div>}
 
-      <div className="admin-body">
+      {view === 'disputes' ? <div className="admin-body">
         <section className="admin-list" aria-label="待仲裁任务">
           <div className="admin-list-head"><h2>待仲裁 <span>{list.length}</span></h2><small>按任务编号倒序</small></div>
           {loading && list.length === 0 && <div className="admin-empty">正在加载…</div>}
@@ -156,7 +165,22 @@ export default function AdminApp() {
             <p className="admin-hint">裁决前请核对双方描述与送达凭证；资金动作在同一个事务里完成。</p>
           </>}
         </section>
-      </div>
+      </div> : <section className="admin-ledger" aria-label="平台资金流水">
+        <div className="admin-list-head"><h2>平台资金流水 <span>{ledger.length}</span></h2><small>佣金户 / 营销户 · 最近 50 条</small></div>
+        {ledger.length === 0 ? <div className="admin-empty"><Icon name="receipt" size={26}/><strong>暂无平台流水</strong><p>任务结算后，佣金入账与营销补贴会同时出现在这里。</p></div>
+        : <div className="admin-ledger-scroll"><table>
+          <thead><tr><th>时间</th><th>账户</th><th>方向</th><th>金额</th><th>余额</th><th>业务号</th><th>类型</th></tr></thead>
+          <tbody>{ledger.map(row => <tr key={row.id}>
+            <td>{new Date(row.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+            <td>{row.accountName}<small>{row.accountType === 'COMMISSION' ? '佣金' : '营销'}</small></td>
+            <td className={row.direction === 'CREDIT' ? 'in' : 'out'}>{row.direction === 'CREDIT' ? '入账' : '出账'}</td>
+            <td>{yuan(row.amountCents)}</td>
+            <td>{yuan(row.balanceAfterCents)}</td>
+            <td className="mono">{row.bizNo}</td>
+            <td>{row.refType}</td>
+          </tr>)}</tbody>
+        </table></div>}
+      </section>}
     </div>
   </div>;
 }

@@ -3,6 +3,18 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-27 · 清理测试任务 + 平台资金流水（佣金/营销）视图
+
+- **目标**：删除库里测试发布的任务；让佣金户与营销户的每笔入账/出账可见、可核对。
+- **改动**：
+  - 删除全部非终态任务（DRAFT/PUBLISHED/LOCKED/ACCEPTED/PICKED_UP/DELIVERED/DISPUTED）及其 grab_record / status_log / escrow / escrow 流水；托管中的 22,200 分退回发单人钱包。
+  - `WalletRepository.findPlatformLedger` + `GET /api/admin/ledger`：按账户名/类型返回 COMMISSION、MARKETING 的 `wallet_ledger` 记录。
+  - 管理台新增「资金流水」页：时间、账户、方向、金额、余额、业务号、类型。
+- **验证**：
+  - 清理后非终态任务 0 条，全局 `SUM(DEBIT)-SUM(CREDIT)=0`。
+  - 用券结算 1500 元单：同一 `bizNo` 下 4 条流水——托管 DEBIT 1300、跑腿 CREDIT 1310、佣金 CREDIT 120、营销 DEBIT 130；管理台接口返回佣金 120 / 营销 130 两条。
+
+
 ## 2026-10-27 · 账号下拉排除 Admin；登录页可一键返回工作台
 
 - **目标**：普通用户的切换列表不出现管理员；从「返回登录页」进来后不用重新输密码就能回到广场。
