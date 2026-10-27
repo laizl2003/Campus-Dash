@@ -36,7 +36,7 @@ public class JdbcFundAuditAdapter implements FundAuditPort {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void record(String bizNo, String action, long errandId, long operatorId,
+    public void record(String bizNo, String action, long errandId, String operatorId,
                        String detailJson, boolean success, String message) {
         try {
             jdbc.update("""

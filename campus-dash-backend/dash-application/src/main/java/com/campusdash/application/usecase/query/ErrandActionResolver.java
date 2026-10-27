@@ -25,21 +25,21 @@ import java.util.List;
 public class ErrandActionResolver {
 
     /** 平台仲裁员的固定用户 id，由配置给定。真实系统里是角色系统，本项目简化 */
-    private final long arbitratorId;
+    private final String arbitratorId;
 
-    public ErrandActionResolver(@Value("${dash.auth.arbitrator-id:9001}") long arbitratorId) {
+    public ErrandActionResolver(@Value("${dash.auth.arbitrator-id:9001}") String arbitratorId) {
         this.arbitratorId = arbitratorId;
     }
 
     public record Resolved(List<String> actions, String role) {}
 
-    public Resolved resolve(Errand errand, long viewerId) {
+    public Resolved resolve(Errand errand, String viewerId) {
         ErrandStatus status = errand.status();
         List<String> actions = new ArrayList<>();
 
-        boolean isPublisher = errand.publisherId() == viewerId;
-        boolean isCurrentRunner = errand.grabberId() != null && errand.grabberId() == viewerId;
-        boolean isArbitrator = viewerId == arbitratorId;
+        boolean isPublisher = errand.publisherId().equals(viewerId);
+        boolean isCurrentRunner = errand.grabberId() != null && errand.grabberId().equals(viewerId);
+        boolean isArbitrator = arbitratorId.equals(viewerId);
 
         // 抢单：任何非发单人的跑腿都可以（发单人不能抢自己的任务）
         if (status.grabbable() && !isPublisher) {

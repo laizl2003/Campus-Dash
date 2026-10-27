@@ -22,8 +22,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CreditIT {
 
-    static final long PUB = 1001L;
-    static final long RUNNER = 2001L;
+    static final String PUB = "1001";
+    static final String RUNNER = "2001";
 
     @Autowired PublishErrandUseCase publishUseCase;
     @Autowired GrabErrandUseCase grabUseCase;

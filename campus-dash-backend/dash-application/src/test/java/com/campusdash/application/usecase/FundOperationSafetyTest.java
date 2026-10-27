@@ -36,9 +36,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /** 通过真实 Spring 事务边界验证资金操作的授权、阶段校验和失败回滚。 */
 class FundOperationSafetyTest {
     private static final long ID = 10001L;
-    private static final long PUBLISHER = 1001L;
-    private static final long RUNNER = 2001L;
-    private static final long ARBITRATOR = 9007L;
+    private static final String PUBLISHER = "1001";
+    private static final String RUNNER = "2001";
+    private static final String ARBITRATOR = "9007";
 
     @Test
     void settlement_rejects_other_users_even_after_completion() {
@@ -63,7 +63,7 @@ class FundOperationSafetyTest {
 
     @Test
     void settlement_accepts_publisher_and_internal_worker_and_balances_ledger() {
-        for (long actor : List.of(PUBLISHER, Errand.SYSTEM_OPERATOR)) {
+        for (String actor : List.of(PUBLISHER, Errand.SYSTEM_OPERATOR)) {
             Fixture f = new Fixture(ErrandStatus.DELIVERED);
             assertEquals(SettleErrandUseCase.Result.SETTLED, f.settle().settle(ID, actor));
             assertEquals(1, f.tx.commits);
@@ -100,7 +100,7 @@ class FundOperationSafetyTest {
         for (ErrandStatus status : List.of(ErrandStatus.DISPUTED, ErrandStatus.SETTLED, ErrandStatus.REFUNDED)) {
             for (var favor : ArbitrateErrandUseCase.Favor.values()) {
                 Fixture f = new Fixture(status);
-                assertCode(ErrorCode.UNAUTHORIZED, () -> f.arbitrate().arbitrate(ID, favor, 9001));
+                assertCode(ErrorCode.UNAUTHORIZED, () -> f.arbitrate().arbitrate(ID, favor, "9001"));
                 assertEquals(0, f.errandReads);
                 f.assertUntouched();
             }
@@ -221,10 +221,10 @@ class FundOperationSafetyTest {
                 }
                 if (method.equals("findByOwner")) {
                     walletReads++;
-                    long owner = (Long) args[0];
-                    long id = owner == -1 ? 1 : owner == -2 ? 2 : owner;
+                    String owner = (String) args[0];
+                    long id = "-1".equals(owner) ? 1 : "-2".equals(owner) ? 2 : Long.parseLong(owner);
                     return Optional.of(new WalletAccount(id, owner, (AccountType) args[1],
-                            Money.ofCents(owner == -1 ? 2000 : 5000), Money.ofCents(0), 0));
+                            Money.ofCents("-1".equals(owner) ? 2000 : 5000), Money.ofCents(0), 0));
                 }
                 if (method.equals("casEscrowStatus")) return cas(method);
                 if (method.equals("casDebit") || method.equals("casCredit")) {

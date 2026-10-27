@@ -12,14 +12,14 @@ import java.time.Instant;
  * 上一轮遗留的记录不能挡住新一轮的抢单。P1 时索引没带 round，
  * 单轮场景一切正常，P2 引入多轮流转后立刻暴露——回退后的任务谁都抢不到。
  */
-public record GrabRecord(long id, long campusId, long errandId, long runnerId, int seq, int round,
+public record GrabRecord(long id, long campusId, long errandId, String runnerId, int seq, int round,
                          GrabResultType result, Instant createdAt) {
 
-    public static GrabRecord grabbed(long id, long campusId, long errandId, long runnerId, int seq, int round) {
+    public static GrabRecord grabbed(long id, long campusId, long errandId, String runnerId, int seq, int round) {
         return new GrabRecord(id, campusId, errandId, runnerId, seq, round, GrabResultType.GRABBED, Instant.now());
     }
 
-    public static GrabRecord candidate(long id, long campusId, long errandId, long runnerId, int round) {
+    public static GrabRecord candidate(long id, long campusId, long errandId, String runnerId, int round) {
         return new GrabRecord(id, campusId, errandId, runnerId, 0, round, GrabResultType.CANDIDATE, Instant.now());
     }
 

@@ -68,8 +68,8 @@ public class FundEventPushConsumer {
                     String body = StandardCharsets.UTF_8.decode(msg.getBody()).toString();
                     try {
                         long errandId = extractLong(body, "errandId");
-                        long publisherId = extractLong(body, "publisherId");
-                        long runnerId = extractLong(body, "runnerId");
+                        String publisherId = extractString(body, "publisherId");
+                        String runnerId = extractString(body, "runnerId");
                         long amount = extractLong(body, "amountCents");
                         String tag = msg.getTag().orElse("");
 
@@ -81,7 +81,7 @@ public class FundEventPushConsumer {
                         };
                         // 推给双方（多端登录由 SessionRegistry 处理）
                         notifier.notificationArrived(publisherId, errandId, tag, content);
-                        if (runnerId > 0) {
+                        if (!runnerId.isEmpty()) {
                             String runnerContent = "SETTLED".equals(tag)
                                     ? "任务结算完成，你获得 " + amount + " 分" : content;
                             notifier.notificationArrived(runnerId, errandId, tag, runnerContent);
@@ -102,6 +102,18 @@ public class FundEventPushConsumer {
         if (consumer != null) {
             consumer.close();
         }
+    }
+
+    /** 读取 JSON 里的字符串字段：publisherId/runnerId 现在是 UUID 或数字串 */
+    private static String extractString(String json, String field) {
+        String needle = "\"" + field + "\":\"";
+        int start = json.indexOf(needle);
+        if (start < 0) {
+            throw new IllegalArgumentException("消息体缺少字段 " + field + ": " + json);
+        }
+        int from = start + needle.length();
+        int to = json.indexOf('"', from);
+        return to < 0 ? json.substring(from) : json.substring(from, to);
     }
 
     private static long extractLong(String json, String field) {

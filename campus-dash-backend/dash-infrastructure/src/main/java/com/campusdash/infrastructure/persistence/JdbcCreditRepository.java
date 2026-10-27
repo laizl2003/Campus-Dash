@@ -25,17 +25,17 @@ public class JdbcCreditRepository implements CreditRepository {
     }
 
     @Override
-    public int scoreOf(long userId) {
+    public int scoreOf(String userId) {
         List<Integer> list = jdbc.queryForList(
                 "SELECT score FROM credit_score WHERE user_id = ?", Integer.class, userId);
         return list.isEmpty() ? CreditEventType.BASE_SCORE : list.get(0);
     }
 
     @Override
-    public Optional<CreditScore> find(long userId) {
+    public Optional<CreditScore> find(String userId) {
         List<CreditScore> list = jdbc.query(
                 "SELECT user_id, score, version FROM credit_score WHERE user_id = ?",
-                (rs, n) -> new CreditScore(rs.getLong("user_id"), rs.getInt("score"), rs.getLong("version")),
+                (rs, n) -> new CreditScore(rs.getString("user_id"), rs.getInt("score"), rs.getLong("version")),
                 userId);
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
     }
@@ -74,7 +74,7 @@ public class JdbcCreditRepository implements CreditRepository {
     }
 
     @Override
-    public List<CreditEvent> recentEvents(long userId, int days, int limit) {
+    public List<CreditEvent> recentEvents(String userId, int days, int limit) {
         return jdbc.query("""
                 SELECT id, biz_no, user_id, type, delta, ref_type, ref_id, created_at
                   FROM credit_event
@@ -83,7 +83,7 @@ public class JdbcCreditRepository implements CreditRepository {
                  LIMIT ?
                 """,
                 (rs, n) -> new CreditEvent(
-                        rs.getLong("id"), rs.getString("biz_no"), rs.getLong("user_id"),
+                        rs.getLong("id"), rs.getString("biz_no"), rs.getString("user_id"),
                         CreditEventType.valueOf(rs.getString("type")), rs.getInt("delta"),
                         rs.getString("ref_type"), rs.getLong("ref_id"),
                         rs.getTimestamp("created_at").toInstant()),
@@ -91,7 +91,7 @@ public class JdbcCreditRepository implements CreditRepository {
     }
 
     @Override
-    public int windowDelta(long userId, int windowDays) {
+    public int windowDelta(String userId, int windowDays) {
         Integer sum = jdbc.queryForObject("""
                 SELECT COALESCE(SUM(delta), 0) FROM credit_event
                  WHERE user_id = ? AND created_at >= ?
@@ -120,7 +120,7 @@ public class JdbcCreditRepository implements CreditRepository {
                  LIMIT ?
                 """,
                 (rs, n) -> new CalibrationRow(
-                        rs.getLong("user_id"), rs.getInt("old_score"), rs.getInt("new_score")),
+                        rs.getString("user_id"), rs.getInt("old_score"), rs.getInt("new_score")),
                 CreditEventType.BASE_SCORE,
                 CreditEventType.MIN_SCORE, CreditEventType.MAX_SCORE, CreditEventType.BASE_SCORE,
                 windowStart, windowStart, limit);
@@ -142,5 +142,5 @@ public class JdbcCreditRepository implements CreditRepository {
         return rows.size();
     }
 
-    private record CalibrationRow(long userId, int oldScore, int newScore) {}
+    private record CalibrationRow(String userId, int oldScore, int newScore) {}
 }

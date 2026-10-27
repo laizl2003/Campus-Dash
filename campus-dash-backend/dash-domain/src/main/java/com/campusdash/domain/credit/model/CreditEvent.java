@@ -3,7 +3,7 @@ package com.campusdash.domain.credit.model;
 import java.time.Instant;
 
 /** 信用事件：一次加减分的事实记录（只增不改） */
-public record CreditEvent(long id, String bizNo, long userId, CreditEventType type,
+public record CreditEvent(long id, String bizNo, String userId, CreditEventType type,
                           int delta, String refType, long refId, Instant createdAt) {
 
     public static String settleBizNo(long errandId) {
@@ -18,7 +18,7 @@ public record CreditEvent(long id, String bizNo, long userId, CreditEventType ty
         return "cancelgrab:" + errandId;
     }
 
-    public static String disputeLoseBizNo(long errandId, long loserId) {
+    public static String disputeLoseBizNo(long errandId, String loserId) {
         return "disputelose:" + errandId + ":" + loserId;
     }
 }

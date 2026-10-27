@@ -22,19 +22,19 @@ public class RedisCandidateQueueAdapter implements CandidateQueuePort {
     }
 
     @Override
-    public void offer(long errandId, long runnerId, double score) {
+    public void offer(long errandId, String runnerId, double score) {
         redis.opsForZSet().add(key(errandId), String.valueOf(runnerId), score);
     }
 
     @Override
-    public Optional<Long> pollBest(long errandId) {
+    public Optional<String> pollBest(long errandId) {
         Set<String> popped = redis.opsForZSet().range(key(errandId), 0, 0);
         if (popped == null || popped.isEmpty()) {
             return Optional.empty();
         }
         String runner = popped.iterator().next();
         redis.opsForZSet().remove(key(errandId), runner);
-        return Optional.of(Long.parseLong(runner));
+        return Optional.of(runner);
     }
 
     @Override

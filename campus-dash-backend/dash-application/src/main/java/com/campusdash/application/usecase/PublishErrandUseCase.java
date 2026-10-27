@@ -33,7 +33,7 @@ public class PublishErrandUseCase {
 
     /** 名额键 TTL 给足，避免任务还没被抢完 Redis 键就过期了 */
     private static final long SLOT_TTL_SECONDS = 7 * 24 * 3600;
-    private static final long ESCROW_ACCOUNT_OWNER = -1L;
+    private static final String ESCROW_ACCOUNT_OWNER = "-1";
 
     private final ErrandRepository errandRepository;
     private final WalletRepository walletRepository;
@@ -53,7 +53,7 @@ public class PublishErrandUseCase {
         this.cache = cache;
     }
 
-    public record Command(long campusId, long publisherId, ErrandType type,
+    public record Command(long campusId, String publisherId, ErrandType type,
                           String title, long rewardCents, int slotTotal) {}
 
     public record Result(long errandId, ErrandStatus status, long frozenCents) {}

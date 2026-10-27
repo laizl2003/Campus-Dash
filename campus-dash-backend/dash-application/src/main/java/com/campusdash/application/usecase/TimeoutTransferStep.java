@@ -51,7 +51,7 @@ public class TimeoutTransferStep {
      * 三者必须原子——否则会出现"已流转但没有超时保护"的黑洞，任务永久卡住。
      */
     @Transactional(rollbackFor = Exception.class)
-    public StepResult transfer(Errand errand, long nextRunnerId, long timeoutSeconds) {
+    public StepResult transfer(Errand errand, String nextRunnerId, long timeoutSeconds) {
         int affected = errandRepository.casTransferToNext(
                 errand.id(), nextRunnerId, errand.version(), errand.round());
         if (affected == 0) {
@@ -75,7 +75,7 @@ public class TimeoutTransferStep {
             return StepResult.skipped();
         }
         errandRepository.appendStatusLog(errand.id(), ErrandStatus.LOCKED, ErrandStatus.PUBLISHED,
-                errand.round() + 1, -1L);
+                errand.round() + 1, Errand.SYSTEM_OPERATOR);
         return new StepResult(true, null);
     }
 

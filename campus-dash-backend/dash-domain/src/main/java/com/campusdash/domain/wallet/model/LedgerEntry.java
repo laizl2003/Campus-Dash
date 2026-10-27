@@ -9,7 +9,7 @@ import com.campusdash.shared.Money;
  * bizNo 上有唯一索引做幂等：重复请求会撞唯一索引，应用层捕获后返回"已处理"，
  * 比"先查再插"可靠，因为唯一索引的判定与插入是数据库层的一个原子动作。
  */
-public record LedgerEntry(long id, String bizNo, long accountId, long userId, Direction direction,
+public record LedgerEntry(long id, String bizNo, long accountId, String userId, Direction direction,
                           Money amount, Money balanceAfter, RefType refType, long refId) {
 
     public enum Direction {

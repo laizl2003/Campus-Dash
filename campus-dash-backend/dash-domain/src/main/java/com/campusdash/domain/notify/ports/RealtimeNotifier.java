@@ -14,12 +14,12 @@ package com.campusdash.domain.notify.ports;
 public interface RealtimeNotifier {
 
     /** 任务状态变更：推给发单人与当前抢中者 */
-    void errandStatusChanged(long errandId, long publisherId, Long grabberId,
+    void errandStatusChanged(long errandId, String publisherId, String grabberId,
                            String status, int round);
 
     /** 站内消息到达：推给指定用户 */
-    void notificationArrived(long userId, long errandId, String type, String content);
+    void notificationArrived(String userId, long errandId, String type, String content);
 
     /** 信用分变更：推给本人 */
-    void creditChanged(long userId, int newScore, int delta, String reason);
+    void creditChanged(String userId, int newScore, int delta, String reason);
 }

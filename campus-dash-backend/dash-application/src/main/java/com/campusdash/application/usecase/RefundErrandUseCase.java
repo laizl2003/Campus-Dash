@@ -29,7 +29,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class RefundErrandUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(RefundErrandUseCase.class);
-    private static final long ESCROW_ACCOUNT_OWNER = -1L;
+    private static final String ESCROW_ACCOUNT_OWNER = "-1";
 
     private final ErrandRepository errandRepository;
     private final WalletRepository walletRepository;
@@ -61,10 +61,10 @@ public class RefundErrandUseCase {
     public enum Result { REFUNDED, ALREADY_REFUNDED, CONFLICT }
 
     /** 发单人主动取消 */
-    public Result cancelAndRefund(long errandId, long publisherId) {
+    public Result cancelAndRefund(long errandId, String publisherId) {
         Errand errand = errandRepository.findById(errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ERRAND_NOT_FOUND, "id=" + errandId));
-        if (errand.publisherId() != publisherId) {
+        if (!errand.publisherId().equals(publisherId)) {
             throw new BizException(ErrorCode.NOT_PUBLISHER, "actor=" + publisherId);
         }
         // 领域层校验状态。from 必须在流转前取——领域对象流转后 status() 已是 CANCELLED，
@@ -77,7 +77,7 @@ public class RefundErrandUseCase {
     }
 
     /** 仲裁支持发单人 */
-    public Result arbitrateRefund(long errandId, long operatorId) {
+    public Result arbitrateRefund(long errandId, String operatorId) {
         Errand errand = errandRepository.findById(errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ERRAND_NOT_FOUND, "id=" + errandId));
         if (errand.status() != ErrandStatus.DISPUTED) {
@@ -89,7 +89,7 @@ public class RefundErrandUseCase {
                 expectedVersion);
     }
 
-    private Result doRefund(long errandId, Errand errand, long operatorId,
+    private Result doRefund(long errandId, Errand errand, String operatorId,
                             ErrandStatus from, ErrandStatus target, long expectedVersion) {
         EscrowOrder escrow = walletRepository.findEscrowByErrandId(errand.campusId(), errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ESCROW_NOT_FOUND, "errandId=" + errandId));
@@ -99,7 +99,7 @@ public class RefundErrandUseCase {
 
         String bizNo = LedgerEntry.refundBizNo(errandId);
         FundEvent event = new FundEvent(bizNo, "REFUNDED", errandId, errand.publisherId(),
-                errand.grabberId() != null ? errand.grabberId() : 0L, escrow.amount().cents(), 0);
+                errand.grabberId() != null ? errand.grabberId() : "", escrow.amount().cents(), 0);
 
         // 与结算同理：lambda 自调用下 @Transactional 不生效（P3 遗留隐患，P5 修复），
         // 改用程序化事务保证退款动作的原子性
@@ -124,7 +124,7 @@ public class RefundErrandUseCase {
 
     /** 退款事务体，由 TransactionTemplate 包裹（见 doRefund 注释） */
     boolean doRefundInTx(long errandId, Errand errand, EscrowOrder escrow, String bizNo,
-                         long operatorId, ErrandStatus from, ErrandStatus target, long expectedVersion) {
+                         String operatorId, ErrandStatus from, ErrandStatus target, long expectedVersion) {
         int escrowed = walletRepository.casEscrowStatus(errand.campusId(), errandId,
                 EscrowOrder.EscrowStatus.HELD, EscrowOrder.EscrowStatus.REFUNDED);
         if (escrowed == 0) return false;

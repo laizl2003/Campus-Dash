@@ -14,12 +14,12 @@ public class JdbcErrandQueryAdapter implements ErrandQueryPort {
 
     /** 读模型的字段映射与写仓储共用一套 rehydrate 逻辑，避免两边漂移 */
     private static final RowMapper<Errand> MAPPER = (rs, n) -> Errand.rehydrate(
-            rs.getLong("id"), rs.getLong("campus_id"), rs.getLong("publisher_id"),
+            rs.getLong("id"), rs.getLong("campus_id"), rs.getString("publisher_id"),
             com.campusdash.domain.errand.model.ErrandType.valueOf(rs.getString("type")),
             rs.getString("title"),
             com.campusdash.shared.Money.ofCents(rs.getLong("reward_amount")),
             rs.getInt("slot_total"),
-            rs.getObject("grabber_id") == null ? null : rs.getLong("grabber_id"),
+            rs.getObject("grabber_id") == null ? null : rs.getString("grabber_id"),
             com.campusdash.domain.errand.model.ErrandStatus.valueOf(rs.getString("status")),
             rs.getInt("slot_taken"), rs.getInt("round"), rs.getLong("version"),
             rs.getTimestamp("locked_at") == null ? null : rs.getTimestamp("locked_at").toInstant(),
@@ -67,7 +67,7 @@ public class JdbcErrandQueryAdapter implements ErrandQueryPort {
     }
 
     @Override
-    public List<Errand> listByPublisher(long publisherId, int page, int size) {
+    public List<Errand> listByPublisher(String publisherId, int page, int size) {
         return jdbc.query("""
                 SELECT * FROM errand
                  WHERE publisher_id = ?
@@ -77,7 +77,7 @@ public class JdbcErrandQueryAdapter implements ErrandQueryPort {
     }
 
     @Override
-    public List<Errand> listByRunner(long runnerId, int page, int size) {
+    public List<Errand> listByRunner(String runnerId, int page, int size) {
         // 抢中过的任务：grab_record 里每一轮都有记录，用 DISTINCT 去重
         return jdbc.query("""
                 SELECT e.* FROM errand e
@@ -98,7 +98,7 @@ public class JdbcErrandQueryAdapter implements ErrandQueryPort {
                 """, (rs, n) -> new StatusChange(
                         rs.getTimestamp("created_at").toInstant(),
                         rs.getString("from_status"), rs.getString("to_status"),
-                        rs.getInt("round"), rs.getLong("operator_id")), campusId, errandId);
+                        rs.getInt("round"), rs.getString("operator_id")), campusId, errandId);
     }
 
     @Override
@@ -107,7 +107,7 @@ public class JdbcErrandQueryAdapter implements ErrandQueryPort {
     }
 
     @Override
-    public int countOngoingByRunner(long runnerId) {
+    public int countOngoingByRunner(String runnerId) {
         // 在途 = 已确认接单但还没送达的任务（ACCEPTED/PICKED_UP）。
         // LOCKED 不算：还没确认，可能超时流转走
         Integer n = jdbc.queryForObject("""

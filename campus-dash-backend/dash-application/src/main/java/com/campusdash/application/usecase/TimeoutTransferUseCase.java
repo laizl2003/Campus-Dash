@@ -112,9 +112,9 @@ public class TimeoutTransferUseCase {
             return revertAndReturnSlot(errand);
         }
 
-        Optional<Long> next = candidateQueue.pollBest(errandId);
+        Optional<String> next = candidateQueue.pollBest(errandId);
         if (next.isPresent()) {
-            long nextRunner = next.get();
+            String nextRunner = next.get();
             var result = step.transfer(errand, nextRunner, confirmTimeoutSeconds);
             if (!result.applied()) {
                 // CAS 失败：任务刚被确认或被别的消费者处理了。
@@ -138,7 +138,7 @@ public class TimeoutTransferUseCase {
         if (!result.applied()) {
             return Outcome.SKIPPED;
         }
-        Long grabber = errand.grabberId();
+        String grabber = errand.grabberId();
         if (grabber != null) {
             grabSlotPort.rollback(errand.id(), grabber, "revert:" + errand.round());
             // 抢中后超时未确认：信用扣分。biz_no 带 round 保证同一轮不重复扣分。

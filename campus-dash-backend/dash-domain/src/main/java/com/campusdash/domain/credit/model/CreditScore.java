@@ -10,17 +10,17 @@ package com.campusdash.domain.credit.model;
  */
 public class CreditScore {
 
-    private final long userId;
+    private final String userId;
     private int score;
     private long version;
 
-    public CreditScore(long userId, int score, long version) {
+    public CreditScore(String userId, int score, long version) {
         this.userId = userId;
         this.score = score;
         this.version = version;
     }
 
-    public static CreditScore initial(long userId) {
+    public static CreditScore initial(String userId) {
         return new CreditScore(userId, CreditEventType.BASE_SCORE, 0);
     }
 
@@ -30,7 +30,7 @@ public class CreditScore {
         this.version++;
     }
 
-    public long userId() { return userId; }
+    public String userId() { return userId; }
     public int score() { return score; }
     public long version() { return version; }
 }

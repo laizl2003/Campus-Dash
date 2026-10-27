@@ -39,7 +39,7 @@ public class SentinelGrabRateLimiterAdapter implements GrabRateLimiterPort {
     }
 
     @Override
-    public boolean tryPass(long errandId, long runnerId) {
+    public boolean tryPass(long errandId, String runnerId) {
         if (!enabled) {
             return true;
         }

@@ -22,7 +22,7 @@ public class JdbcNotificationRepository implements NotificationRepository {
     }
 
     @Override
-    public boolean insertIfAbsent(long id, String msgKey, long userId, long errandId,
+    public boolean insertIfAbsent(long id, String msgKey, String userId, long errandId,
                                   String type, String content) {
         try {
             jdbc.update("""

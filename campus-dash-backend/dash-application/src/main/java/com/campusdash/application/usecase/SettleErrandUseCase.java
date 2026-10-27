@@ -40,8 +40,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class SettleErrandUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(SettleErrandUseCase.class);
-    private static final long ESCROW_ACCOUNT_OWNER = -1L;
-    private static final long COMMISSION_ACCOUNT_OWNER = -2L;
+    private static final String ESCROW_ACCOUNT_OWNER = "-1";
+    private static final String COMMISSION_ACCOUNT_OWNER = "-2";
 
     private final ErrandRepository errandRepository;
     private final WalletRepository walletRepository;
@@ -84,12 +84,13 @@ public class SettleErrandUseCase {
     /**
      * @param operatorId 发单人确认时传发单人 ID；自动结算时传 Errand.SYSTEM_OPERATOR
      */
-    public Result settle(long errandId, long operatorId) {
+    public Result settle(long errandId, String operatorId) {
         Errand errand = errandRepository.findById(errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ERRAND_NOT_FOUND, "id=" + errandId));
 
         // 幂等返回也必须先鉴权，不能把终态当作绕过业务权限的入口。
-        if (operatorId != Errand.SYSTEM_OPERATOR && operatorId != errand.publisherId()) {
+        // 字符串 id 必须用 equals：!= 比的是引用，UUID 每次都不同
+        if (!Errand.SYSTEM_OPERATOR.equals(operatorId) && !errand.publisherId().equals(operatorId)) {
             throw new BizException(ErrorCode.NOT_PUBLISHER, "actor=" + operatorId);
         }
         if (errand.status() == com.campusdash.domain.errand.model.ErrandStatus.SETTLED) {
@@ -113,7 +114,7 @@ public class SettleErrandUseCase {
 
         String bizNo = LedgerEntry.settleBizNo(errandId);
         FundEvent event = new FundEvent(bizNo, "SETTLED", errandId, errand.publisherId(),
-                errand.grabberId() != null ? errand.grabberId() : 0L, runnerCents, commissionCents);
+                errand.grabberId() != null ? errand.grabberId() : "", runnerCents, commissionCents);
 
         // 注意：lambda 里的 this 是原始对象不是 Spring 代理，方法上的 @Transactional
         // 在自调用下不生效（P3 遗留隐患，P5 修复）。改用程序化事务，
@@ -158,7 +159,7 @@ public class SettleErrandUseCase {
      * 不依赖 @Transactional 代理——lambda 自调用场景下代理不可靠。
      */
     boolean doSettle(long errandId, Errand errand, EscrowOrder escrow,
-                     Money runnerAmount, Money commissionAmount, String bizNo, long operatorId) {
+                     Money runnerAmount, Money commissionAmount, String bizNo, String operatorId) {
         // 闸门 1：托管单状态 CAS
         int escrowUpdated = walletRepository.casEscrowStatus(errand.campusId(), errandId,
                 EscrowOrder.EscrowStatus.HELD, EscrowOrder.EscrowStatus.RELEASED);

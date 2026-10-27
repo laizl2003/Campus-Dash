@@ -11,10 +11,10 @@ import java.util.Optional;
  */
 public interface CandidateQueuePort {
 
-    void offer(long errandId, long runnerId, double score);
+    void offer(long errandId, String runnerId, double score);
 
     /** 弹出当前最优候选人（score 最小），P2 超时流转会用到 */
-    Optional<Long> pollBest(long errandId);
+    Optional<String> pollBest(long errandId);
 
     long size(long errandId);
 }

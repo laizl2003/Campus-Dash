@@ -56,11 +56,11 @@ public class QueryErrandListUseCase {
         return new CursorPage<>(pageRows.stream().map(ErrandQueryPort.CursorItem::errand).toList(), nextCursor);
     }
 
-    public List<Errand> myPublished(long publisherId, int page, int size) {
+    public List<Errand> myPublished(String publisherId, int page, int size) {
         return queryPort.listByPublisher(publisherId, Math.max(page, 0), Math.min(Math.max(size, 1), 50));
     }
 
-    public List<Errand> myGrabbed(long runnerId, int page, int size) {
+    public List<Errand> myGrabbed(String runnerId, int page, int size) {
         return queryPort.listByRunner(runnerId, Math.max(page, 0), Math.min(Math.max(size, 1), 50));
     }
 

@@ -58,7 +58,7 @@ public class JdbcReconRepository implements ReconRepository {
                  WHERE a.owner_type IN ('ESCROW', 'COMMISSION')
                 HAVING snapshot_total <> ledger_net
                 """, (rs, n) -> new AccountDiff(
-                        rs.getLong("id"), rs.getLong("owner_id"),
+                        rs.getLong("id"), rs.getString("owner_id"),
                         rs.getLong("snapshot_total"), rs.getLong("ledger_net")));
     }
 

@@ -64,26 +64,26 @@ class SettlementIT {
     void full_lifecycle_settle() {
         // 发布（托管 2000 分）
         var pub = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY, "settle_test", 2000L, 1));
+                1L, "1001", ErrandType.DELIVERY, "settle_test", 2000L, 1));
         long errandId = pub.errandId();
 
         // 抢单+确认
-        grabUseCase.grab(new GrabErrandUseCase.Command(errandId, 2001L, "req-settle-1", 60));
-        confirmUseCase.confirm(new ConfirmErrandUseCase.Command(errandId, 2001L));
+        grabUseCase.grab(new GrabErrandUseCase.Command(errandId, "2001", "req-settle-1", 60));
+        confirmUseCase.confirm(new ConfirmErrandUseCase.Command(errandId, "2001"));
 
         // 取货：P4 补上用例后走真实链路，不再用 SQL 绕过
-        pickUpUseCase.pickUp(errandId, 2001L);
+        pickUpUseCase.pickUp(errandId, "2001");
         // 送达
-        deliverUseCase.deliver(errandId, 2001L);
+        deliverUseCase.deliver(errandId, "2001");
 
         // 结算
-        var result = settleUseCase.settle(errandId, 1001L);
+        var result = settleUseCase.settle(errandId, "1001");
         assertEquals(SettleErrandUseCase.Result.SETTLED, result);
 
         // 验证余额
-        long runnerAvailable = walletRepository.findByOwner(2001L, AccountType.USER).orElseThrow().available().cents();
-        long commissionAvailable = walletRepository.findByOwner(-2L, AccountType.COMMISSION).orElseThrow().available().cents();
-        long escrowAvailable = walletRepository.findByOwner(-1L, AccountType.ESCROW).orElseThrow().available().cents();
+        long runnerAvailable = walletRepository.findByOwner("2001", AccountType.USER).orElseThrow().available().cents();
+        long commissionAvailable = walletRepository.findByOwner("-2", AccountType.COMMISSION).orElseThrow().available().cents();
+        long escrowAvailable = walletRepository.findByOwner("-1", AccountType.ESCROW).orElseThrow().available().cents();
 
         // 佣金 = 2000 * 0.05 = 100，跑腿 = 2000 - 100 = 1900
         assertEquals(5000 + 1900, runnerAvailable, "跑腿余额");
@@ -104,19 +104,19 @@ class SettlementIT {
     @DisplayName("重复结算幂等：不会重复打钱")
     void settle_idempotent() {
         var pub = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY, "settle_idem", 1000L, 1));
+                1L, "1001", ErrandType.DELIVERY, "settle_idem", 1000L, 1));
         long errandId = pub.errandId();
-        grabUseCase.grab(new GrabErrandUseCase.Command(errandId, 2001L, "req-idem-1", 60));
-        confirmUseCase.confirm(new ConfirmErrandUseCase.Command(errandId, 2001L));
-        pickUpUseCase.pickUp(errandId, 2001L);
-        deliverUseCase.deliver(errandId, 2001L);
+        grabUseCase.grab(new GrabErrandUseCase.Command(errandId, "2001", "req-idem-1", 60));
+        confirmUseCase.confirm(new ConfirmErrandUseCase.Command(errandId, "2001"));
+        pickUpUseCase.pickUp(errandId, "2001");
+        deliverUseCase.deliver(errandId, "2001");
 
-        assertEquals(SettleErrandUseCase.Result.SETTLED, settleUseCase.settle(errandId, 1001L));
+        assertEquals(SettleErrandUseCase.Result.SETTLED, settleUseCase.settle(errandId, "1001"));
         // 第二次
-        assertEquals(SettleErrandUseCase.Result.ALREADY_SETTLED, settleUseCase.settle(errandId, 1001L));
+        assertEquals(SettleErrandUseCase.Result.ALREADY_SETTLED, settleUseCase.settle(errandId, "1001"));
 
         // 跑腿只加了一次
-        long runnerAvailable = walletRepository.findByOwner(2001L, AccountType.USER).orElseThrow().available().cents();
+        long runnerAvailable = walletRepository.findByOwner("2001", AccountType.USER).orElseThrow().available().cents();
         assertEquals(5000 + 950, runnerAvailable); // 1000 * 0.95 = 950
     }
 
@@ -125,18 +125,18 @@ class SettlementIT {
     @DisplayName("退款闭环：发布后取消，余额回到初始值")
     void cancel_and_refund() {
         var pub = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.BUY, "refund_test", 3000L, 1));
+                1L, "1001", ErrandType.BUY, "refund_test", 3000L, 1));
         long errandId = pub.errandId();
 
-        var result = refundUseCase.cancelAndRefund(errandId, 1001L);
+        var result = refundUseCase.cancelAndRefund(errandId, "1001");
         assertEquals(RefundErrandUseCase.Result.REFUNDED, result);
 
         // 发单人余额恢复
-        long available = walletRepository.findByOwner(1001L, AccountType.USER).orElseThrow().available().cents();
+        long available = walletRepository.findByOwner("1001", AccountType.USER).orElseThrow().available().cents();
         assertEquals(100000L, available, "退款后余额应恢复到初始值");
 
         // 托管账户清零
-        long escrow = walletRepository.findByOwner(-1L, AccountType.ESCROW).orElseThrow().available().cents();
+        long escrow = walletRepository.findByOwner("-1", AccountType.ESCROW).orElseThrow().available().cents();
         assertEquals(0L, escrow);
 
         // 对账零差异

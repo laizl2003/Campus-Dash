@@ -60,7 +60,7 @@ class CacheEvictionOrderControlIT {
     @DisplayName("对照实验：先删缓存再更新 DB，慢读把旧值写回且无人再删")
     void before_commit_eviction_leaves_stale_value() {
         var pub = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY,
+                1L, "1001", ErrandType.DELIVERY,
                 "对照_先删后更_" + UUID.randomUUID().toString().substring(0, 6), 1000L, 1));
         long id = pub.errandId();
 
@@ -74,7 +74,7 @@ class CacheEvictionOrderControlIT {
         // 3. 更新 DB：PUBLISHED -> LOCKED。
         //    AFTER_COMMIT 实现里，写用例提交后的那次删除发生在这里；
         //    但 BEFORE_COMMIT 的删除已经在第 2 步用掉了，此后不会再有删除
-        grabUseCase.grab(new GrabErrandUseCase.Command(id, 2001L, UUID.randomUUID().toString(), 60));
+        grabUseCase.grab(new GrabErrandUseCase.Command(id, "2001", UUID.randomUUID().toString(), 60));
 
         // 4. 慢读登场：它在第 2 步删除之后才开始回源。
         //    真实场景里这个读可能开始于事务提交前（读到旧值）、完成于提交后（把旧值写回）；

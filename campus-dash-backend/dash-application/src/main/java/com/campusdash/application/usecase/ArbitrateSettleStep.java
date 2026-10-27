@@ -28,8 +28,8 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 public class ArbitrateSettleStep {
 
     private static final Logger log = LoggerFactory.getLogger(ArbitrateSettleStep.class);
-    private static final long ESCROW_ACCOUNT_OWNER = -1L;
-    private static final long COMMISSION_ACCOUNT_OWNER = -2L;
+    private static final String ESCROW_ACCOUNT_OWNER = "-1";
+    private static final String COMMISSION_ACCOUNT_OWNER = "-2";
 
     private final ErrandRepository errandRepository;
     private final WalletRepository walletRepository;
@@ -51,7 +51,7 @@ public class ArbitrateSettleStep {
 
     @Transactional(rollbackFor = Exception.class)
     public boolean settleFromDispute(long errandId, Errand errand, EscrowOrder escrow,
-                                     String bizNo, long operatorId) {
+                                     String bizNo, String operatorId) {
         // 闸门 1：托管单 HELD -> RELEASED
         if (walletRepository.casEscrowStatus(errand.campusId(), errandId,
                 EscrowOrder.EscrowStatus.HELD, EscrowOrder.EscrowStatus.RELEASED) == 0) {

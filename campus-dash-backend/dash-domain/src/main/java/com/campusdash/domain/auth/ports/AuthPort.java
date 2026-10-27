@@ -12,10 +12,10 @@ import java.util.Optional;
 public interface AuthPort {
 
     /** 登录：为 userId 签发 token。同一用户可持有多个 token（多端） */
-    String login(long userId);
+    String login(String userId);
 
     /** token -> userId。不存在或已过期返回 empty */
-    Optional<Long> resolve(String token);
+    Optional<String> resolve(String token);
 
     /** 登出：删除 token */
     void logout(String token);

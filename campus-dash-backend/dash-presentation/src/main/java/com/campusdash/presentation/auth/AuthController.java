@@ -1,16 +1,26 @@
 package com.campusdash.presentation.auth;
 
+import com.campusdash.application.usecase.LoginUserUseCase;
 import com.campusdash.domain.auth.ports.AuthPort;
 import com.campusdash.domain.auth.ports.RefreshTokenPort;
 import com.campusdash.shared.ErrorCode;
 import com.campusdash.shared.Result;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 登录 / 刷新 / 登出。登录与刷新不走 AuthInterceptor（登录时还没有 token，刷新时 access token 可能已过期），
+ * 登录 / 刷新 / 登出。
+ *
+ * 登录有两条路径：
+ *   1. 正门：username + password + captcha → 查库拿 user_id → 签发 token（token 的 sub 就是 user_id）
+ *   2. 后门：{ "userId": "1001" } 演示登录，只给测试/压测用，
+ *      由 dash.auth.demo-login 控制（默认 true，生产必须 false）
+ *
+ * 登录与刷新不走 AuthInterceptor（登录时还没有 token，刷新时 access 可能已过期），
  * 由 WebConfig 的 excludePathPatterns 排除。
  */
 @RestController
@@ -18,34 +28,64 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthPort authPort;
+    private final LoginUserUseCase loginUseCase;
+    private final boolean demoLoginEnabled;
 
-    public AuthController(AuthPort authPort) {
+    public AuthController(AuthPort authPort,
+                          LoginUserUseCase loginUseCase,
+                          @Value("${dash.auth.demo-login:true}") boolean demoLoginEnabled) {
         this.authPort = authPort;
+        this.loginUseCase = loginUseCase;
+        this.demoLoginEnabled = demoLoginEnabled;
     }
 
-    public record LoginRequest(Long userId) {}
-    public record RefreshRequest(String refreshToken) {}
+    /** 新字段与演示字段放在同一个 record 里：有 username 走正门，没有才看 userId */
+    public record LoginRequest(String username, String password, String captchaId,
+                               String captchaCode, String userId) {
+    }
 
-    /** 登出时一并提交 refresh token；没有 body 的老客户端仍然只撤销 access。 */
+    public record RefreshRequest(String refreshToken) {}
     public record LogoutRequest(String refreshToken) {}
 
     @PostMapping("/login")
-    public Result<Map<String, Object>> login(@RequestBody LoginRequest req) {
-        // 负数用于系统内部账户，不能通过演示登录获取系统操作者的令牌。
-        if (req == null || req.userId() == null || req.userId() <= 0) {
+    public Result<Map<String, Object>> login(@RequestBody LoginRequest req, HttpServletRequest http) {
+        if (req == null) {
             return Result.fail(ErrorCode.UNAUTHORIZED);
         }
-        if (authPort instanceof RefreshTokenPort refreshTokenPort) {
-            var pair = refreshTokenPort.loginWithRefresh(req.userId());
+
+        if (req.username() != null && !req.username().isBlank()) {
+            LoginUserUseCase.LoggedIn logged = loginUseCase.login(new LoginUserUseCase.Command(
+                    req.username(), req.password(), req.captchaId(), req.captchaCode(), clientIp(http)));
             Map<String, Object> data = new LinkedHashMap<>();
-            data.put("token", pair.accessToken());       // 兼容旧前端
-            data.put("accessToken", pair.accessToken());
-            data.put("refreshToken", pair.refreshToken());
-            data.put("userId", req.userId());
+            data.put("token", logged.accessToken());          // 兼容旧前端
+            data.put("accessToken", logged.accessToken());
+            data.put("refreshToken", logged.refreshToken());
+            data.put("userId", logged.userId());
+            data.put("username", logged.username());
+            data.put("role", logged.role());
             return Result.ok(data);
         }
-        String token = authPort.login(req.userId());
-        return Result.ok(Map.of("token", token, "userId", req.userId()));
+
+        // 演示登录：只发 token，不查账号表
+        if (!demoLoginEnabled) {
+            return Result.fail(ErrorCode.UNAUTHORIZED);
+        }
+        String userId = req.userId();
+        if (userId == null || userId.isBlank() || userId.startsWith("-")) {
+            return Result.fail(ErrorCode.UNAUTHORIZED);
+        }
+        userId = userId.trim();
+        if (authPort instanceof RefreshTokenPort refreshTokenPort) {
+            var pair = refreshTokenPort.loginWithRefresh(userId);
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("token", pair.accessToken());
+            data.put("accessToken", pair.accessToken());
+            data.put("refreshToken", pair.refreshToken());
+            data.put("userId", userId);
+            return Result.ok(data);
+        }
+        String token = authPort.login(userId);
+        return Result.ok(Map.of("token", token, "userId", userId));
     }
 
     @PostMapping("/refresh")
@@ -56,7 +96,7 @@ public class AuthController {
         return refreshTokenPort.refresh(req.refreshToken())
                 .map(pair -> {
                     Map<String, Object> data = new LinkedHashMap<>();
-                    data.put("token", pair.accessToken());       // 兼容旧前端
+                    data.put("token", pair.accessToken());
                     data.put("accessToken", pair.accessToken());
                     data.put("refreshToken", pair.refreshToken());
                     return Result.ok(data);
@@ -70,12 +110,23 @@ public class AuthController {
         if (auth != null && auth.startsWith("Bearer ")) {
             authPort.logout(auth.substring(7).trim());
         }
-        // access token 进黑名单只挡住剩余 2 小时；refresh token 若留在 Redis，
-        // 登出后 7 天内还能换出新 access —— 等于登出无效。
+        // access token 进黑名单只挡住剩余有效期；refresh 若留在 Redis，登出后仍能换新 access
         if (authPort instanceof RefreshTokenPort refreshTokenPort
                 && body != null && body.refreshToken() != null) {
             refreshTokenPort.revokeRefresh(body.refreshToken().trim());
         }
         return Result.ok(null);
+    }
+
+    /** nginx / 网关后会带 X-Forwarded-For，取第一个地址 */
+    private static String clientIp(HttpServletRequest request) {
+        if (request == null) {
+            return "";
+        }
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr() == null ? "" : request.getRemoteAddr();
     }
 }

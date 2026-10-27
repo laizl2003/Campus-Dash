@@ -46,7 +46,7 @@ class GrabErrandUseCaseTest {
                 rateLimiter);
 
         GrabErrandUseCase.Result result = useCase.grab(
-                new GrabErrandUseCase.Command(10001L, 2001L, "req-limited"));
+                new GrabErrandUseCase.Command(10001L, "2001", "req-limited"));
 
         assertFalse(result.grabbed());
         assertEquals(ErrorCode.GRAB_RATE_LIMITED, result.code());
@@ -59,7 +59,7 @@ class GrabErrandUseCaseTest {
         int calls;
 
         @Override
-        public boolean tryPass(long errandId, long runnerId) {
+        public boolean tryPass(long errandId, String runnerId) {
             calls++;
             return false;
         }
@@ -69,15 +69,15 @@ class GrabErrandUseCaseTest {
         int scoreCalls;
 
         @Override
-        public int scoreOf(long userId) {
+        public int scoreOf(String userId) {
             scoreCalls++;
             return 60;
         }
 
-        @Override public Optional<CreditScore> find(long userId) { return Optional.empty(); }
+        @Override public Optional<CreditScore> find(String userId) { return Optional.empty(); }
         @Override public boolean applyEvent(CreditEvent event) { return false; }
-        @Override public List<CreditEvent> recentEvents(long userId, int days, int limit) { return List.of(); }
-        @Override public int windowDelta(long userId, int windowDays) { return 0; }
+        @Override public List<CreditEvent> recentEvents(String userId, int days, int limit) { return List.of(); }
+        @Override public int windowDelta(String userId, int windowDays) { return 0; }
         @Override public int calibrateScores(int windowDays, int limit) { return 0; }
     }
 
@@ -85,34 +85,34 @@ class GrabErrandUseCaseTest {
         int tryAcquireCalls;
 
         @Override
-        public SlotOutcome tryAcquire(long errandId, long runnerId, String requestId) {
+        public SlotOutcome tryAcquire(long errandId, String runnerId, String requestId) {
             tryAcquireCalls++;
             return SlotOutcome.NOT_GRABBABLE;
         }
 
-        @Override public void rollback(long errandId, long runnerId, String requestId) {}
+        @Override public void rollback(long errandId, String runnerId, String requestId) {}
         @Override public void initSlot(long errandId, int slotTotal, long ttlSeconds) {}
         @Override public long remainingSlot(long errandId) { return 0; }
     }
 
     private static final class NoopCandidateQueue implements CandidateQueuePort {
-        @Override public void offer(long errandId, long runnerId, double score) {}
-        @Override public Optional<Long> pollBest(long errandId) { return Optional.empty(); }
+        @Override public void offer(long errandId, String runnerId, double score) {}
+        @Override public Optional<String> pollBest(long errandId) { return Optional.empty(); }
         @Override public long size(long errandId) { return 0; }
     }
 
     private static final class EmptyErrandRepository implements ErrandRepository {
         @Override public void insert(Errand errand) {}
         @Override public Optional<Errand> findById(long errandId) { return Optional.empty(); }
-        @Override public int casLockForRunner(long errandId, long runnerId, long expectedVersion) { return 0; }
+        @Override public int casLockForRunner(long errandId, String runnerId, long expectedVersion) { return 0; }
         @Override public int casPublish(long errandId, long expectedVersion) { return 0; }
-        @Override public void appendStatusLog(long errandId, ErrandStatus from, ErrandStatus to, int round, long operatorId) {}
-        @Override public int casAccept(long errandId, long runnerId, long expectedVersion) { return 0; }
-        @Override public int casTransferToNext(long errandId, long nextRunnerId, long expectedVersion, int expectedRound) { return 0; }
+        @Override public void appendStatusLog(long errandId, ErrandStatus from, ErrandStatus to, int round, String operatorId) {}
+        @Override public int casAccept(long errandId, String runnerId, long expectedVersion) { return 0; }
+        @Override public int casTransferToNext(long errandId, String nextRunnerId, long expectedVersion, int expectedRound) { return 0; }
         @Override public int casRevertToPublished(long errandId, long expectedVersion, int expectedRound) { return 0; }
         @Override public List<Errand> findConfirmTimeout(long timeoutSeconds, int limit) { return List.of(); }
-        @Override public int casPickUp(long errandId, long runnerId, long expectedVersion) { return 0; }
-        @Override public int casDeliver(long errandId, long runnerId, long expectedVersion) { return 0; }
+        @Override public int casPickUp(long errandId, String runnerId, long expectedVersion) { return 0; }
+        @Override public int casDeliver(long errandId, String runnerId, long expectedVersion) { return 0; }
         @Override public int casSettle(long errandId, long expectedVersion) { return 0; }
         @Override public int casRefundFromDispute(long errandId, long expectedVersion) { return 0; }
         @Override public int casCancel(long errandId, long expectedVersion) { return 0; }
@@ -124,16 +124,16 @@ class GrabErrandUseCaseTest {
     private static final class NoopErrandQueryPort implements ErrandQueryPort {
         @Override public List<Errand> list(long campusId, String status, int page, int size) { return List.of(); }
         @Override public List<CursorItem> listByCursor(long campusId, String status, java.time.Instant beforeCreatedAt, Long beforeId, int size) { return List.of(); }
-        @Override public List<Errand> listByPublisher(long publisherId, int page, int size) { return List.of(); }
-        @Override public List<Errand> listByRunner(long runnerId, int page, int size) { return List.of(); }
+        @Override public List<Errand> listByPublisher(String publisherId, int page, int size) { return List.of(); }
+        @Override public List<Errand> listByRunner(String runnerId, int page, int size) { return List.of(); }
         @Override public List<StatusChange> statusLog(long campusId, long errandId) { return List.of(); }
         @Override public List<Long> sampleIds(int limit) { return List.of(); }
-        @Override public int countOngoingByRunner(long runnerId) { return 0; }
+        @Override public int countOngoingByRunner(String runnerId) { return 0; }
     }
 
     private static final class NoopRealtimeNotifier implements RealtimeNotifier {
-        @Override public void errandStatusChanged(long errandId, long publisherId, Long grabberId, String status, int round) {}
-        @Override public void notificationArrived(long userId, long errandId, String type, String content) {}
-        @Override public void creditChanged(long userId, int newScore, int delta, String reason) {}
+        @Override public void errandStatusChanged(long errandId, String publisherId, String grabberId, String status, int round) {}
+        @Override public void notificationArrived(String userId, long errandId, String type, String content) {}
+        @Override public void creditChanged(String userId, int newScore, int delta, String reason) {}
     }
 }

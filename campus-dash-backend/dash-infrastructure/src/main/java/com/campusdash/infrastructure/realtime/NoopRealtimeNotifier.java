@@ -13,15 +13,15 @@ import org.springframework.stereotype.Component;
 public class NoopRealtimeNotifier implements RealtimeNotifier {
 
     @Override
-    public void errandStatusChanged(long errandId, long publisherId, Long grabberId,
+    public void errandStatusChanged(long errandId, String publisherId, String grabberId,
                                     String status, int round) {
     }
 
     @Override
-    public void notificationArrived(long userId, long errandId, String type, String content) {
+    public void notificationArrived(String userId, long errandId, String type, String content) {
     }
 
     @Override
-    public void creditChanged(long userId, int newScore, int delta, String reason) {
+    public void creditChanged(String userId, int newScore, int delta, String reason) {
     }
 }

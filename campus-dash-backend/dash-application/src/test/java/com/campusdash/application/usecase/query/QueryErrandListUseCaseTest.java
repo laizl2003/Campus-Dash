@@ -64,30 +64,30 @@ class QueryErrandListUseCaseTest {
 
         private CursorItem item(long id, String createdAt) {
             return new CursorItem(Errand.rehydrate(
-                    id, 1L, 1001L, ErrandType.DELIVERY, "cursor_" + id, Money.ofCents(1000),
+                    id, 1L, "1001", ErrandType.DELIVERY, "cursor_" + id, Money.ofCents(1000),
                     1, null, ErrandStatus.PUBLISHED, 0, 0, 0L, null, null), Instant.parse(createdAt));
         }
 
         @Override public List<Errand> list(long campusId, String status, int page, int size) { return List.of(); }
-        @Override public List<Errand> listByPublisher(long publisherId, int page, int size) { return List.of(); }
-        @Override public List<Errand> listByRunner(long runnerId, int page, int size) { return List.of(); }
+        @Override public List<Errand> listByPublisher(String publisherId, int page, int size) { return List.of(); }
+        @Override public List<Errand> listByRunner(String runnerId, int page, int size) { return List.of(); }
         @Override public List<StatusChange> statusLog(long campusId, long errandId) { return List.of(); }
         @Override public List<Long> sampleIds(int limit) { return List.of(); }
-        @Override public int countOngoingByRunner(long runnerId) { return 0; }
+        @Override public int countOngoingByRunner(String runnerId) { return 0; }
     }
 
     private static final class FakeErrandRepository implements ErrandRepository {
         @Override public void insert(Errand errand) {}
         @Override public Optional<Errand> findById(long errandId) { return Optional.empty(); }
-        @Override public int casLockForRunner(long errandId, long runnerId, long expectedVersion) { return 0; }
+        @Override public int casLockForRunner(long errandId, String runnerId, long expectedVersion) { return 0; }
         @Override public int casPublish(long errandId, long expectedVersion) { return 0; }
-        @Override public void appendStatusLog(long errandId, ErrandStatus from, ErrandStatus to, int round, long operatorId) {}
-        @Override public int casAccept(long errandId, long runnerId, long expectedVersion) { return 0; }
-        @Override public int casTransferToNext(long errandId, long nextRunnerId, long expectedVersion, int expectedRound) { return 0; }
+        @Override public void appendStatusLog(long errandId, ErrandStatus from, ErrandStatus to, int round, String operatorId) {}
+        @Override public int casAccept(long errandId, String runnerId, long expectedVersion) { return 0; }
+        @Override public int casTransferToNext(long errandId, String nextRunnerId, long expectedVersion, int expectedRound) { return 0; }
         @Override public int casRevertToPublished(long errandId, long expectedVersion, int expectedRound) { return 0; }
         @Override public List<Errand> findConfirmTimeout(long timeoutSeconds, int limit) { return List.of(); }
-        @Override public int casPickUp(long errandId, long runnerId, long expectedVersion) { return 0; }
-        @Override public int casDeliver(long errandId, long runnerId, long expectedVersion) { return 0; }
+        @Override public int casPickUp(long errandId, String runnerId, long expectedVersion) { return 0; }
+        @Override public int casDeliver(long errandId, String runnerId, long expectedVersion) { return 0; }
         @Override public int casSettle(long errandId, long expectedVersion) { return 0; }
         @Override public int casRefundFromDispute(long errandId, long expectedVersion) { return 0; }
         @Override public int casCancel(long errandId, long expectedVersion) { return 0; }

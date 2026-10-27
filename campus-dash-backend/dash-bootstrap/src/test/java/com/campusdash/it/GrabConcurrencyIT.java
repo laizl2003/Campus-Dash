@@ -65,7 +65,7 @@ class GrabConcurrencyIT {
 
     private long publishOneSlotErrand() {
         var result = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY, "bench_取快递到3号楼", 800L, 1));
+                1L, "1001", ErrandType.DELIVERY, "bench_取快递到3号楼", 800L, 1));
         assertEquals(ErrandStatus.PUBLISHED, result.status());
         run.track(result.errandId());
         return result.errandId();
@@ -87,7 +87,7 @@ class GrabConcurrencyIT {
         // 用虚拟线程承载 2000 个并发：抢单是 IO 密集型，虚拟线程能用很少的平台线程支撑
         try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             for (int i = 0; i < concurrency; i++) {
-                long runnerId = 2001L + i;
+                String runnerId = "2001" + i;
                 pool.submit(() -> {
                     ready.countDown();
                     try {
@@ -153,8 +153,8 @@ class GrabConcurrencyIT {
         long errandId = publishOneSlotErrand();
         String requestId = UUID.randomUUID().toString();
 
-        var first = grabUseCase.grab(new GrabErrandUseCase.Command(errandId, 3001L, requestId, 60));
-        var second = grabUseCase.grab(new GrabErrandUseCase.Command(errandId, 3001L, requestId, 60));
+        var first = grabUseCase.grab(new GrabErrandUseCase.Command(errandId, "3001", requestId, 60));
+        var second = grabUseCase.grab(new GrabErrandUseCase.Command(errandId, "3001", requestId, 60));
 
         assertTrue(first.grabbed(), "首次抢单应成功");
         assertTrue(second.grabbed(), "重复请求应返回首次的成功结果");
@@ -169,14 +169,14 @@ class GrabConcurrencyIT {
     @DisplayName("INV-2：同一用户换 requestId 再抢，被 ALREADY_GRABBED 拦住")
     void same_user_cannot_take_two_slots() {
         var result = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.BUY, "bench_两个名额", 1000L, 2));
+                1L, "1001", ErrandType.BUY, "bench_两个名额", 1000L, 2));
         long errandId = result.errandId();
         run.track(errandId);
 
         var first = grabUseCase.grab(new GrabErrandUseCase.Command(
-                errandId, 4001L, UUID.randomUUID().toString(), 60));
+                errandId, "4001", UUID.randomUUID().toString(), 60));
         var second = grabUseCase.grab(new GrabErrandUseCase.Command(
-                errandId, 4001L, UUID.randomUUID().toString(), 60));
+                errandId, "4001", UUID.randomUUID().toString(), 60));
 
         assertTrue(first.grabbed());
         assertFalse(second.grabbed());
@@ -188,8 +188,8 @@ class GrabConcurrencyIT {
     void losers_enter_candidate_queue() {
         long errandId = publishOneSlotErrand();
 
-        grabUseCase.grab(new GrabErrandUseCase.Command(errandId, 5001L, UUID.randomUUID().toString(), 60));
-        var loser = grabUseCase.grab(new GrabErrandUseCase.Command(errandId, 5002L, UUID.randomUUID().toString(), 80));
+        grabUseCase.grab(new GrabErrandUseCase.Command(errandId, "5001", UUID.randomUUID().toString(), 60));
+        var loser = grabUseCase.grab(new GrabErrandUseCase.Command(errandId, "5002", UUID.randomUUID().toString(), 80));
 
         assertFalse(loser.grabbed());
         assertEquals(ErrorCode.SLOT_FULL, loser.code());

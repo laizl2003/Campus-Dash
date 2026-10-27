@@ -23,8 +23,8 @@ public interface FundEventPort {
     boolean publishInTransaction(FundEvent event, LocalWork localWork);
 
     /** 资金事件。bizNo 同时是 MQ 侧的消息 key 与回查依据 */
-    record FundEvent(String bizNo, String type, long errandId, long publisherId,
-                     long runnerId, long amountCents, long commissionCents) {}
+    record FundEvent(String bizNo, String type, long errandId, String publisherId,
+                     String runnerId, long amountCents, long commissionCents) {}
 
     @FunctionalInterface
     interface LocalWork {

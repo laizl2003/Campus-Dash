@@ -16,7 +16,7 @@ public class JdbcNotificationQueryAdapter implements NotificationQueryPort {
     }
 
     @Override
-    public List<NotificationView> list(long userId, int page, int size) {
+    public List<NotificationView> list(String userId, int page, int size) {
         return jdbc.query("""
                 SELECT id, errand_id, type, content, created_at
                   FROM notification
@@ -30,7 +30,7 @@ public class JdbcNotificationQueryAdapter implements NotificationQueryPort {
     }
 
     @Override
-    public int unreadCount(long userId) {
+    public int unreadCount(String userId) {
         Integer n = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM notification WHERE user_id = ? AND read_flag = 0",
                 Integer.class, userId);

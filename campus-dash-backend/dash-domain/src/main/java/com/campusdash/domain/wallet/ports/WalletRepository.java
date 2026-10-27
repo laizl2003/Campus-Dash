@@ -10,7 +10,7 @@ import java.util.Optional;
 
 public interface WalletRepository {
 
-    Optional<WalletAccount> findByOwner(long ownerId, AccountType type);
+    Optional<WalletAccount> findByOwner(String ownerId, AccountType type);
 
     Optional<WalletAccount> findById(long accountId);
 

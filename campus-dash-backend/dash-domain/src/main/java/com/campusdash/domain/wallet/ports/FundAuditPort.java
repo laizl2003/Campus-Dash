@@ -6,6 +6,6 @@ package com.campusdash.domain.wallet.ports;
  */
 public interface FundAuditPort {
 
-    void record(String bizNo, String action, long errandId, long operatorId,
+    void record(String bizNo, String action, long errandId, String operatorId,
                 String detailJson, boolean success, String message);
 }

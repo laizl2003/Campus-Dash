@@ -87,11 +87,11 @@ class CacheDoubleDeleteControlIT {
     @DisplayName("双删接线：写用例提交后登记了延迟约 500ms 的第二次删除")
     void double_delete_is_scheduled_after_commit() {
         var pub = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY,
+                1L, "1001", ErrandType.DELIVERY,
                 "对照_双删接线_" + UUID.randomUUID().toString().substring(0, 6), 1000L, 1));
         long id = pub.errandId();
 
-        grabUseCase.grab(new GrabErrandUseCase.Command(id, 2001L, UUID.randomUUID().toString(), 60));
+        grabUseCase.grab(new GrabErrandUseCase.Command(id, "2001", UUID.randomUUID().toString(), 60));
 
         var records = ((RecordingCacheEvictDelayPort) delayPort).records;
         assertEquals(1, records.size(), "抢单成功后应恰好登记一次延迟双删");
@@ -106,7 +106,7 @@ class CacheDoubleDeleteControlIT {
     @DisplayName("慢读窗口模拟：没有第二次删除时，旧值残留到 TTL")
     void slow_read_window_leaves_stale_without_second_delete() {
         var pub = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY,
+                1L, "1001", ErrandType.DELIVERY,
                 "对照_慢读窗口_" + UUID.randomUUID().toString().substring(0, 6), 1000L, 1));
         long id = pub.errandId();
 
@@ -115,7 +115,7 @@ class CacheDoubleDeleteControlIT {
         assertTrue(staleJson.contains("\"status\":\"PUBLISHED\""));
 
         // 2. 写提交：DB 变 LOCKED，afterCommit 第一次删除生效
-        grabUseCase.grab(new GrabErrandUseCase.Command(id, 2001L, UUID.randomUUID().toString(), 60));
+        grabUseCase.grab(new GrabErrandUseCase.Command(id, "2001", UUID.randomUUID().toString(), 60));
 
         // 3. 慢读完成：把第 1 步读到的旧值写回缓存（发生在第一次删除之后）
         cache.put(id, staleJson);

@@ -21,7 +21,7 @@ public class NotificationController {
     @GetMapping
     public Result<List<Map<String, Object>>> list(@RequestParam(defaultValue = "0") int page,
                                                   @RequestParam(defaultValue = "20") int size) {
-        long userId = CurrentUser.get();
+        String userId = CurrentUser.get();
         return Result.ok(queryUseCase.list(userId, page, size).stream()
                 .map(v -> Map.<String, Object>of(
                         "id", v.id(), "errandId", v.errandId(), "type", v.type(),

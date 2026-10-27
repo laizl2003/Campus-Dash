@@ -32,7 +32,7 @@ public class PickUpErrandUseCase {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void pickUp(long errandId, long runnerId) {
+    public void pickUp(long errandId, String runnerId) {
         Errand errand = errandRepository.findById(errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ERRAND_NOT_FOUND, "id=" + errandId));
         long versionBefore = errand.version();

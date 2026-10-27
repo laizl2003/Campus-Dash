@@ -34,7 +34,7 @@ public class WsAuthHandshakeInterceptor implements HandshakeInterceptor {
                                    WebSocketHandler wsHandler, Map<String, Object> attributes) {
         if (request instanceof ServletServerHttpRequest servletRequest) {
             String token = servletRequest.getServletRequest().getParameter("token");
-            Optional<Long> userId = authPort.resolve(token);
+            Optional<String> userId = authPort.resolve(token);
             if (userId.isPresent()) {
                 attributes.put(WsHandler.ATTR_USER_ID, userId.get());
                 return true;

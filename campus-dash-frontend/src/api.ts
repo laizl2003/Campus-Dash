@@ -16,7 +16,8 @@ const USER_KEY = 'dash_user';
 
 let token: string | null = localStorage.getItem(ACCESS_KEY);
 let refreshToken: string | null = localStorage.getItem(REFRESH_KEY);
-let currentUserId: number | null = null;
+// 用户 id 现在是字符串：注册用户是 UUID，仲裁账号是 001，演示账号是 "1001"
+let currentUserId: string | null = null;
 try { currentUserId = token ? JSON.parse(localStorage.getItem(USER_KEY) || 'null') : null; } catch { /* 无效本地身份按未登录处理。 */ }
 
 // 会话代号：登录、登出、切换身份都 +1。请求发出时记下代号，
@@ -47,42 +48,120 @@ try {
   });
 } catch { /* 非浏览器环境（Node 验证脚本）忽略 */ }
 
-async function requestTokens(userId: number): Promise<TokenPair> {
-  const resp = await fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId }),
-  });
-  if (!resp.ok) throw new Error('登录服务暂时不可用，请确认服务已启动后重试');
-  const body = (await resp.json()) as ApiResult<{ token?: string; accessToken?: string; refreshToken?: string }>;
-  if (body.code !== 'OK') throw new Error(body.message);
-  const accessToken = body.data?.accessToken ?? body.data?.token;
+/** 登录后的身份：userId 来自后端查库结果，前端只做展示 */
+export interface Profile {
+  userId: string;
+  username: string;
+  role: string;
+}
+
+async function postJson<T>(path: string, payload: unknown): Promise<T> {
+  let resp: Response;
+  try {
+    resp = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error('连接不到服务，请确认后端已启动');
+  }
+  let body: ApiResult<T>;
+  try {
+    body = (await resp.json()) as ApiResult<T>;
+  } catch {
+    throw new Error('服务返回了非 JSON 内容，请检查代理配置');
+  }
+  if (body.code !== 'OK') throw new BizError(body.code, body.message);
+  return body.data;
+}
+
+/** 取一张图形验证码：答案只在服务端，这里拿到的是 captchaId 与 data URL */
+export async function captchaImage(): Promise<{ captchaId: string; image: string; expireSeconds: number }> {
+  const resp = await fetch('/api/auth/captcha');
+  if (!resp.ok) throw new Error('验证码加载失败，请重试');
+  const body = (await resp.json()) as ApiResult<{ captchaId: string; image: string; expireSeconds: number }>;
+  if (body.code !== 'OK') throw new BizError(body.code, body.message);
+  return body.data;
+}
+
+export interface RegisterInput {
+  username: string;
+  phone: string;
+  password: string;
+  confirmPassword: string;
+  captchaId: string;
+  captchaCode: string;
+}
+
+/** 注册：成功后不会自动登录，由调用方切回登录表单 */
+export async function registerAccount(input: RegisterInput): Promise<{ userId: string; username: string }> {
+  const data = await postJson<{ userId: string; username: string }>('/api/auth/register', input);
+  return { userId: String(data.userId), username: data.username };
+}
+
+export interface LoginInput {
+  username: string;
+  password: string;
+  captchaId: string;
+  captchaCode: string;
+}
+
+/** 正门登录：用户名 + 密码 + 验证码，成功后 userId 来自数据库 */
+export async function login(input: LoginInput): Promise<Profile> {
+  const data = await postJson<{
+    token?: string; accessToken?: string; refreshToken?: string;
+    userId?: string; username?: string; role?: string;
+  }>('/api/auth/login', input);
+  const accessToken = data.accessToken ?? data.token;
   if (!accessToken) throw new Error('登录响应缺少 access token');
-  return { accessToken, refreshToken: body.data?.refreshToken ?? null };
-}
-
-/** 并发抢单演示用的一次性身份：不写入本地会话。
- *  它也会拿到 refresh token，但演示结束后身份即丢弃，这里不保存，7 天后由服务端 TTL 清理。 */
-export async function issueToken(userId: number): Promise<string> {
-  return (await requestTokens(userId)).accessToken;
-}
-
-export async function login(userId: number): Promise<string> {
-  const pair = await requestTokens(userId);
   const previousRefresh = refreshToken;
-  applyTokens(pair);
-  currentUserId = userId;
+  applyTokens({ accessToken, refreshToken: data.refreshToken ?? null });
+  currentUserId = String(data.userId);
   sessionEpoch++;
-  localStorage.setItem(USER_KEY, JSON.stringify(userId));
-  // 切换演示身份时顺手撤销上一条 refresh，否则它会在 Redis 里活满 7 天
-  if (previousRefresh && previousRefresh !== pair.refreshToken) revokeQuietly(previousRefresh, null);
-  return pair.accessToken;
+  localStorage.setItem(USER_KEY, JSON.stringify(currentUserId));
+  if (previousRefresh && previousRefresh !== (data.refreshToken ?? null)) revokeQuietly(previousRefresh, null);
+  return {
+    userId: currentUserId,
+    username: data.username ?? input.username,
+    role: data.role ?? 'user',
+  };
+}
+
+/** 演示身份直登：调用后门的 userId 分支，只给本地演示/压测用 */
+export async function loginAs(userId: string): Promise<Profile> {
+  const data = await postJson<{ token?: string; accessToken?: string; refreshToken?: string; userId?: string }>(
+    '/api/auth/login',
+    { userId },
+  );
+  const accessToken = data.accessToken ?? data.token;
+  if (!accessToken) throw new Error('登录响应缺少 access token');
+  applyTokens({ accessToken, refreshToken: data.refreshToken ?? null });
+  currentUserId = String(data.userId ?? userId);
+  sessionEpoch++;
+  localStorage.setItem(USER_KEY, JSON.stringify(currentUserId));
+  return { userId: currentUserId, username: currentUserId, role: 'user' };
+}
+
+async function requestTokens(userId: string | number): Promise<TokenPair> {
+  const data = await postJson<{ token?: string; accessToken?: string; refreshToken?: string }>(
+    '/api/auth/login',
+    { userId: String(userId) },
+  );
+  const accessToken = data.accessToken ?? data.token;
+  if (!accessToken) throw new Error('登录响应缺少 access token');
+  return { accessToken, refreshToken: data.refreshToken ?? null };
+}
+
+/** 并发抢单演示用的一次性身份：不写入本地会话。 */
+export async function issueToken(userId: string | number): Promise<string> {
+  return (await requestTokens(userId)).accessToken;
 }
 
 /** 并发抢单演示后恢复原身份：token、refresh 与模块内 userId 一起恢复，
  *  只写 localStorage 不恢复模块变量的话 getUserId() 会返回错的值（实测踩过）。
  *  演示身份没有 refresh token，第三个参数省略时按 null 处理。 */
-export function restoreIdentity(access: string | null, userId: number | null, refresh: string | null = null) {
+export function restoreIdentity(access: string | null, userId: string | null, refresh: string | null = null) {
   token = access;
   refreshToken = refresh;
   currentUserId = userId;

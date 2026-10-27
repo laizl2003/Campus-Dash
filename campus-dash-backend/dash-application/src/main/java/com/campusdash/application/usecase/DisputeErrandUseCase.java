@@ -32,7 +32,7 @@ public class DisputeErrandUseCase {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void raise(long errandId, long operatorId) {
+    public void raise(long errandId, String operatorId) {
         Errand errand = errandRepository.findById(errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ERRAND_NOT_FOUND, "id=" + errandId));
         ErrandStatus from = errand.status();

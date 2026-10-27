@@ -59,7 +59,7 @@ class OversellControlExperimentIT {
 
     private long publishErrand(String title) {
         long id = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY, title, 500L, 1)).errandId();
+                1L, "1001", ErrandType.DELIVERY, title, 500L, 1)).errandId();
         run.track(id);
         return id;
     }
@@ -139,7 +139,7 @@ class OversellControlExperimentIT {
             // 错误实现：无条件 UPDATE，没有 status/version 的 CAS 条件
             int affected = jdbc.update(
                     "UPDATE errand SET status = 'LOCKED', grabber_id = ?, version = version + 1 WHERE id = ?",
-                    2001L + idx, errandId);
+                    "2001" + idx, errandId);
             return affected > 0;
         });
 

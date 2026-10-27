@@ -75,7 +75,7 @@ public class ErrandController {
 
     @PostMapping
     public Result<PublishErrandUseCase.Result> publish(@RequestBody PublishRequest req) {
-        long userId = CurrentUser.get();
+        String userId = CurrentUser.get();
         var cmd = new PublishErrandUseCase.Command(
                 req.campusId() == null ? 1L : req.campusId(),
                 userId,
@@ -93,7 +93,7 @@ public class ErrandController {
                                @RequestParam(defaultValue = "0") int page,
                                @RequestParam(defaultValue = "20") int size,
                                @RequestParam(required = false) String cursor) {
-        long viewer = CurrentUser.get();
+        String viewer = CurrentUser.get();
         if (cursor != null) {
             var cursorPage = queryUseCase.listByCursor(campusId, status, cursor, size);
             return Result.ok(Map.of(
@@ -110,7 +110,7 @@ public class ErrandController {
     public Result<List<Map<String, Object>>> mine(@RequestParam(defaultValue = "PUBLISHED_BY_ME") String role,
                                                   @RequestParam(defaultValue = "0") int page,
                                                   @RequestParam(defaultValue = "20") int size) {
-        long userId = CurrentUser.get();
+        String userId = CurrentUser.get();
         List<Errand> list = "GRABBED_BY_ME".equals(role)
                 ? queryUseCase.myGrabbed(userId, page, size)
                 : queryUseCase.myPublished(userId, page, size);
@@ -127,7 +127,7 @@ public class ErrandController {
      */
     @GetMapping("/{errandId}")
     public Result<Map<String, Object>> detail(@PathVariable long errandId) {
-        long viewer = CurrentUser.get();
+        String viewer = CurrentUser.get();
         var cachedJson = detailUseCase.detailJson(errandId);
         if (cachedJson.isEmpty()) {
             return Result.fail(ErrorCode.ERRAND_NOT_FOUND);
@@ -156,7 +156,7 @@ public class ErrandController {
     @PostMapping("/{errandId}/grab")
     public Result<GrabErrandUseCase.Result> grab(@PathVariable long errandId,
                                                  @RequestHeader(value = "X-Request-Id", required = false) String requestId) {
-        long runnerId = CurrentUser.get();
+        String runnerId = CurrentUser.get();
         var cmd = new GrabErrandUseCase.Command(
                 errandId, runnerId,
                 requestId == null ? UUID.randomUUID().toString() : requestId,
@@ -214,7 +214,7 @@ public class ErrandController {
     }
 
     /** 统一的任务卡片：列表与详情共用，保证 availableActions 处处一致 */
-    private Map<String, Object> toCard(Errand e, long viewer) {
+    private Map<String, Object> toCard(Errand e, String viewer) {
         var resolved = actionResolver.resolve(e, viewer);
         Map<String, Object> card = new LinkedHashMap<>();
         card.put("id", e.id());

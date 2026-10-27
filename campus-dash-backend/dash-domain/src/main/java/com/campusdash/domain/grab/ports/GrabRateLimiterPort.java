@@ -12,5 +12,5 @@ public interface GrabRateLimiterPort {
      * @return true 表示允许继续进入信用校验、Redis Lua 和数据库 CAS；
      *         false 表示热点限流命中，应快速失败。
      */
-    boolean tryPass(long errandId, long runnerId);
+    boolean tryPass(long errandId, String runnerId);
 }

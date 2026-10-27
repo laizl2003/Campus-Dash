@@ -32,7 +32,7 @@ public class CampusDashShardingPolicy {
         return "campus_" + mod(campusId);
     }
 
-    public String routeUserTable(String table, long userId) {
+    public String routeUserTable(String table, String userId) {
         if (!USER_TABLES.contains(table)) {
             throw new IllegalArgumentException("不是用户维度表: " + table);
         }
@@ -41,5 +41,10 @@ public class CampusDashShardingPolicy {
 
     private int mod(long value) {
         return Math.floorMod(value, shardCount);
+    }
+
+    /** 用户 id 是字符串（UUID/001/1001），用稳定的字符串哈希取模 */
+    private int mod(String userId) {
+        return Math.floorMod(userId.hashCode(), shardCount);
     }
 }

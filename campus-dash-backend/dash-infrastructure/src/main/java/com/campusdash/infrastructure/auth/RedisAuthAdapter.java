@@ -33,19 +33,19 @@ public class RedisAuthAdapter implements AuthPort {
     }
 
     @Override
-    public String login(long userId) {
+    public String login(String userId) {
         String token = UUID.randomUUID().toString().replace("-", "");
         redis.opsForValue().set(PREFIX + token, String.valueOf(userId), ttl);
         return token;
     }
 
     @Override
-    public Optional<Long> resolve(String token) {
+    public Optional<String> resolve(String token) {
         if (token == null || token.isBlank()) {
             return Optional.empty();
         }
         String userId = redis.opsForValue().get(PREFIX + token);
-        return userId == null ? Optional.empty() : Optional.of(Long.parseLong(userId));
+        return userId == null ? Optional.empty() : Optional.of(userId);
     }
 
     @Override

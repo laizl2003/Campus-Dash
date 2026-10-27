@@ -31,7 +31,7 @@ public class ConfirmErrandUseCase {
         this.notifier = notifier;
     }
 
-    public record Command(long errandId, long runnerId) {}
+    public record Command(long errandId, String runnerId) {}
 
     @Transactional(rollbackFor = Exception.class)
     public void confirm(Command cmd) {

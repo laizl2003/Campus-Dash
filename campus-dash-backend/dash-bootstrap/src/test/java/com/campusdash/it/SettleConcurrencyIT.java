@@ -36,8 +36,8 @@ class SettleConcurrencyIT {
     private static final long BASE = 900_000_000_000L;
     private static final long REWARD = 2000L;
     private static final int COUNT = 500;
-    private static final long RUNNER = 2001L;
-    private static final long PUBLISHER = 1001L;
+    private static final String RUNNER = "2001";
+    private static final String PUBLISHER = "1001";
 
     @Autowired SettleErrandUseCase settleUseCase;
     @Autowired WalletRepository walletRepository;
@@ -120,7 +120,7 @@ class SettleConcurrencyIT {
         seed(COUNT);
         long totalBefore = snapshotTotal();
         long runnerBefore = walletRepository.findByOwner(RUNNER, AccountType.USER).orElseThrow().available().cents();
-        long commissionBefore = walletRepository.findByOwner(-2L, AccountType.COMMISSION).orElseThrow().available().cents();
+        long commissionBefore = walletRepository.findByOwner("-2", AccountType.COMMISSION).orElseThrow().available().cents();
 
         // 这里刻意不用"CountDownLatch 对齐瞬时释放"（S1 抢单那套）。
         // 原因有两个：一是数据库连接池只有 20，500 个线程同时发起也会立刻排队，
@@ -184,7 +184,7 @@ class SettleConcurrencyIT {
         // 期望 50000 实际 50100，多的 100 是 ApiEndpointIT 全链路测试结算的佣金）
         long runnerDelta = walletRepository.findByOwner(RUNNER, AccountType.USER).orElseThrow().available().cents()
                 - runnerBefore;
-        long commissionDelta = walletRepository.findByOwner(-2L, AccountType.COMMISSION).orElseThrow().available().cents()
+        long commissionDelta = walletRepository.findByOwner("-2", AccountType.COMMISSION).orElseThrow().available().cents()
                 - commissionBefore;
         // 成功结算数以 DB 流水为准，不用客户端计数器：
         // 客户端响应超时会让"结算成功但计数器没记上"（钱到账了但客户端没收到响应），

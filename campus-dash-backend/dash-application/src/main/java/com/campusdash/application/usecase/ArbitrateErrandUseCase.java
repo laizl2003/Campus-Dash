@@ -45,7 +45,7 @@ public class ArbitrateErrandUseCase {
     private final CreditRepository creditRepository;
     private final SnowflakeIdGenerator idGenerator;
     private final RealtimeNotifier notifier;
-    private final long arbitratorId;
+    private final String arbitratorId;
 
     public ArbitrateErrandUseCase(ErrandRepository errandRepository,
                                   WalletRepository walletRepository,
@@ -57,7 +57,7 @@ public class ArbitrateErrandUseCase {
                                   CreditRepository creditRepository,
                                   SnowflakeIdGenerator idGenerator,
                                   RealtimeNotifier notifier,
-                                  @Value("${dash.auth.arbitrator-id:9001}") long arbitratorId) {
+                                  @Value("${dash.auth.arbitrator-id:9001}") String arbitratorId) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.refundUseCase = refundUseCase;
@@ -76,8 +76,8 @@ public class ArbitrateErrandUseCase {
 
     public enum Result { SETTLED_TO_RUNNER, REFUNDED_TO_PUBLISHER, ALREADY_DONE, CONFLICT }
 
-    public Result arbitrate(long errandId, Favor favor, long operatorId) {
-        if (operatorId != arbitratorId) {
+    public Result arbitrate(long errandId, Favor favor, String operatorId) {
+        if (!arbitratorId.equals(operatorId)) {
             throw new BizException(ErrorCode.UNAUTHORIZED, "只有仲裁员可以裁决，actor=" + operatorId);
         }
         Errand errand = errandRepository.findById(errandId)
@@ -126,7 +126,7 @@ public class ArbitrateErrandUseCase {
 
         String bizNo = LedgerEntry.settleBizNo(errandId);
         var event = new FundEventPort.FundEvent(bizNo, "ARBITRATED", errandId, errand.publisherId(),
-                errand.grabberId() == null ? 0L : errand.grabberId(), escrow.amount().cents(), 0);
+                errand.grabberId() == null ? "" : errand.grabberId(), escrow.amount().cents(), 0);
 
         boolean committed = fundEventPort.publishInTransaction(event,
                 () -> settleStep.settleFromDispute(errandId, errand, escrow, bizNo, operatorId));

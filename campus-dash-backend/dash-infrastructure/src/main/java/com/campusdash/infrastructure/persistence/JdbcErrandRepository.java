@@ -31,12 +31,12 @@ public class JdbcErrandRepository implements ErrandRepository {
     private static final RowMapper<Errand> MAPPER = (rs, n) -> Errand.rehydrate(
             rs.getLong("id"),
             rs.getLong("campus_id"),
-            rs.getLong("publisher_id"),
+            rs.getString("publisher_id"),
             ErrandType.valueOf(rs.getString("type")),
             rs.getString("title"),
             Money.ofCents(rs.getLong("reward_amount")),
             rs.getInt("slot_total"),
-            rs.getObject("grabber_id") == null ? null : rs.getLong("grabber_id"),
+            rs.getObject("grabber_id") == null ? null : rs.getString("grabber_id"),
             ErrandStatus.valueOf(rs.getString("status")),
             rs.getInt("slot_taken"),
             rs.getInt("round"),
@@ -74,7 +74,7 @@ public class JdbcErrandRepository implements ErrandRepository {
      * slot_taken + 1 有 CHECK 约束兜底，即使代码写错也不会超过 slot_total。
      */
     @Override
-    public int casLockForRunner(long errandId, long runnerId, long expectedVersion) {
+    public int casLockForRunner(long errandId, String runnerId, long expectedVersion) {
         return jdbc.update("""
                 UPDATE errand
                    SET status = 'LOCKED',
@@ -100,7 +100,7 @@ public class JdbcErrandRepository implements ErrandRepository {
 
     /** 确认接单：条件里带 grabber_id，保证只有当前抢中者本人能确认 */
     @Override
-    public int casAccept(long errandId, long runnerId, long expectedVersion) {
+    public int casAccept(long errandId, String runnerId, long expectedVersion) {
         return jdbc.update("""
                 UPDATE errand
                    SET status = 'ACCEPTED', version = version + 1
@@ -118,7 +118,7 @@ public class JdbcErrandRepository implements ErrandRepository {
      * slot_taken 不动：名额还是那一个，只是占用者换人。
      */
     @Override
-    public int casTransferToNext(long errandId, long nextRunnerId, long expectedVersion, int expectedRound) {
+    public int casTransferToNext(long errandId, String nextRunnerId, long expectedVersion, int expectedRound) {
         return jdbc.update("""
                 UPDATE errand
                    SET grabber_id = ?,
@@ -161,7 +161,7 @@ public class JdbcErrandRepository implements ErrandRepository {
     }
 
     @Override
-    public int casPickUp(long errandId, long runnerId, long expectedVersion) {
+    public int casPickUp(long errandId, String runnerId, long expectedVersion) {
         return jdbc.update("""
                 UPDATE errand
                    SET status = 'PICKED_UP', version = version + 1
@@ -171,7 +171,7 @@ public class JdbcErrandRepository implements ErrandRepository {
 
     /** 送达：写 delivered_at 供自动结算扫描定位，用 NOW(3) 让时间以数据库为准 */
     @Override
-    public int casDeliver(long errandId, long runnerId, long expectedVersion) {
+    public int casDeliver(long errandId, String runnerId, long expectedVersion) {
         return jdbc.update("""
                 UPDATE errand
                    SET status = 'DELIVERED', delivered_at = NOW(3), version = version + 1
@@ -245,7 +245,7 @@ public class JdbcErrandRepository implements ErrandRepository {
     }
 
     @Override
-    public void appendStatusLog(long errandId, ErrandStatus from, ErrandStatus to, int round, long operatorId) {
+    public void appendStatusLog(long errandId, ErrandStatus from, ErrandStatus to, int round, String operatorId) {
         jdbc.update("""
                 INSERT INTO errand_status_log (campus_id, errand_id, from_status, to_status, round, operator_id)
                 VALUES ((SELECT campus_id FROM errand WHERE id = ?), ?, ?, ?, ?, ?)

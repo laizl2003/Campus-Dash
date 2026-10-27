@@ -26,7 +26,7 @@ public class CreditController {
 
     @GetMapping("/self")
     public Result<Map<String, Object>> self() {
-        long userId = CurrentUser.get();
+        String userId = CurrentUser.get();
         List<Map<String, Object>> events = queryUseCase.myEvents(userId).stream()
                 .map(e -> Map.<String, Object>of(
                         "type", e.type().name(),

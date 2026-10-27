@@ -15,12 +15,12 @@ public class QueryWalletUseCase {
         this.queryPort = queryPort;
     }
 
-    public WalletQueryPort.BalanceView balance(long userId) {
+    public WalletQueryPort.BalanceView balance(String userId) {
         return queryPort.findBalance(userId)
                 .orElse(new WalletQueryPort.BalanceView(0, 0));
     }
 
-    public List<WalletQueryPort.LedgerView> ledger(long userId, int page, int size) {
+    public List<WalletQueryPort.LedgerView> ledger(String userId, int page, int size) {
         return queryPort.ledger(userId, Math.max(page, 0), Math.min(Math.max(size, 1), 50));
     }
 }

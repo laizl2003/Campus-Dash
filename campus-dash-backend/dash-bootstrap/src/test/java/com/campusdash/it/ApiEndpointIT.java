@@ -28,9 +28,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ApiEndpointIT {
 
-    static final long PUB = 1001L;
-    static final long RUNNER = 2001L;
-    static final long ARBITRATOR = 9001L;
+    static final String PUB = "1001";
+    static final String RUNNER = "2001";
+    static final String ARBITRATOR = "9001";
 
     @Autowired TestRestTemplate rest;
     @Autowired JdbcTemplate jdbc;
@@ -55,7 +55,7 @@ class ApiEndpointIT {
     }
 
     @SuppressWarnings("unchecked")
-    private String login(TestRestTemplate rest, long userId) {
+    private String login(TestRestTemplate rest, String userId) {
         var resp = rest.postForEntity("/api/auth/login",
                 Map.of("userId", userId), Map.class);
         assertEquals(200, resp.getStatusCode().value());
@@ -119,6 +119,11 @@ class ApiEndpointIT {
         // 钱包：发单人余额减少（托管转移走）
         var wallet = data(rest.exchange("/api/wallet", HttpMethod.GET, bearer(pubToken), Map.class));
         assertTrue(Long.parseLong(String.valueOf(wallet.get("availableCents"))) < 100000);
+
+        // 抢单前把跑腿信用分归位：前面的流转类用例会把同一批演示账号的信用分扣到阈值以下，
+        // 这类共享数据漂移不该让"完整生命周期"用例失败
+        jdbc.update("INSERT INTO credit_score (user_id, score, version) VALUES (?, 60, 0) "
+                + "ON DUPLICATE KEY UPDATE score = 60", RUNNER);
 
         // 抢单
         var grabResp = rest.exchange("/api/errands/" + errandId + "/grab", HttpMethod.POST,
@@ -249,9 +254,9 @@ class ApiEndpointIT {
     }
 
     @SuppressWarnings("unchecked")
-    private void assertActions(long id, long viewerTokenUser, List<String> expected) {
-        String token = viewerTokenUser == PUB ? pubToken
-                : viewerTokenUser == ARBITRATOR ? arbitratorToken : runnerToken;
+    private void assertActions(long id, String viewerTokenUser, List<String> expected) {
+        String token = PUB.equals(viewerTokenUser) ? pubToken
+                : ARBITRATOR.equals(viewerTokenUser) ? arbitratorToken : runnerToken;
         var resp = rest.exchange("/api/errands/" + id, HttpMethod.GET, bearer(token), Map.class);
         Map<String, Object> card = data(resp);
         List<String> actions = ((List<?>) card.get("availableActions")).stream()

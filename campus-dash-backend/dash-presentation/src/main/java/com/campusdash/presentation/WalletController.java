@@ -20,7 +20,7 @@ public class WalletController {
 
     @GetMapping
     public Result<Map<String, Object>> balance() {
-        long userId = CurrentUser.get();
+        String userId = CurrentUser.get();
         var b = queryUseCase.balance(userId);
         return Result.ok(Map.of("availableCents", b.availableCents(), "frozenCents", b.frozenCents()));
     }
@@ -28,7 +28,7 @@ public class WalletController {
     @GetMapping("/ledger")
     public Result<List<Map<String, Object>>> ledger(@RequestParam(defaultValue = "0") int page,
                                                     @RequestParam(defaultValue = "20") int size) {
-        long userId = CurrentUser.get();
+        String userId = CurrentUser.get();
         return Result.ok(queryUseCase.ledger(userId, page, size).stream()
                 .map(v -> Map.<String, Object>of(
                         "time", v.time().toString(), "direction", v.direction(),

@@ -11,6 +11,6 @@ public interface NotificationRepository {
      *
      * @return true 表示新插入，false 表示已存在（重复消费）
      */
-    boolean insertIfAbsent(long id, String msgKey, long userId, long errandId,
+    boolean insertIfAbsent(long id, String msgKey, String userId, long errandId,
                            String type, String content);
 }

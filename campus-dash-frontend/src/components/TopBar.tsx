@@ -11,7 +11,7 @@ const NAV = [
   { path: '/credit', label: '信用中心', icon: 'shield' },
   { path: '/notifications', label: '消息中心', icon: 'bell' },
 ];
-interface Props { route: string; userId: number; onSwitch: (id: number) => void; onLogout: () => void; switching: boolean }
+interface Props { route: string; userId: string; onSwitch: (id: string) => void; onLogout: () => void; switching: boolean }
 export default function TopBar({ route, userId, onSwitch, onLogout, switching }: Props) {
   const [unread, setUnread] = useState<number | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
@@ -54,7 +54,7 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
     window.addEventListener('keydown', onKey); window.addEventListener('resize', onResize);
     return () => { window.cancelAnimationFrame(focusFrame); document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); menuRef.current?.focus(); };
   }, [open]);
-  const current = IDENTITIES.find(i => i.userId === userId);
+  const current = IDENTITIES.find(i => String(i.userId) === userId);
   const userName = displayUserName(userId);
   const title = NAV.find(n => n.path === route)?.label ?? (route === '/publish' ? '发布任务' : '任务详情');
   return <>
@@ -68,7 +68,7 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
       <div className="nav-label">我的工作台</div>
       <nav>{NAV.map(n => <a key={n.path} href={`#${n.path}`} onClick={() => setOpen(false)} className={`nav-item ${route === n.path ? 'active' : ''}`} aria-current={route === n.path ? 'page' : undefined}><Icon name={n.icon} size={18}/>{n.label}{n.path === '/notifications' && unread !== null && unread > 0 && <span className="nav-count">{unread > 99 ? '99+' : unread}</span>}</a>)}</nav>
       <div className="sidebar-guide"><Icon name="spark" size={23}/><strong>顺路，帮个小忙。</strong><p>一份刚好的委托，<br/>连接校园里的你和我。</p><a href="#/square" onClick={() => setOpen(false)}>看看大家需要什么<Icon name="arrow-right" size={13}/></a></div>
-      <div className="sidebar-bottom"><a href="#/wallet" className="sidebar-wallet" onClick={() => setOpen(false)}><span><Icon name="wallet" size={16}/>可用余额</span><strong>{balance === null ? '—' : yuan(balance)}</strong></a><div className="profile"><span className="avatar" title={userName}>{userName.slice(0, 1)}</span><label className="profile-select"><span className="sr-only">切换演示身份</span><select aria-label="切换演示身份" value={userId} disabled={switching} onChange={e => onSwitch(Number(e.target.value))}>{IDENTITIES.map(i => <option key={i.userId} value={i.userId}>{i.name} · {i.userId}</option>)}</select><small>{current?.role ?? '校园同学'} · 演示身份</small></label><button className="icon-button logout-button" title="退出登录" aria-label="退出登录" onClick={onLogout} disabled={switching}><Icon name="logout" size={16}/></button></div></div>
+      <div className="sidebar-bottom"><a href="#/wallet" className="sidebar-wallet" onClick={() => setOpen(false)}><span><Icon name="wallet" size={16}/>可用余额</span><strong>{balance === null ? '—' : yuan(balance)}</strong></a><div className="profile"><span className="avatar" title={userName}>{userName.slice(0, 1)}</span><label className="profile-select"><span className="sr-only">切换演示身份</span><select aria-label="切换演示身份" value={userId} disabled={switching} onChange={e => onSwitch(e.target.value)}>{IDENTITIES.map(i => <option key={i.userId} value={i.userId}>{i.name} · {i.userId}</option>)}</select><small>{current?.role ?? '校园同学'} · 演示身份</small></label><button className="icon-button logout-button" title="退出登录" aria-label="退出登录" onClick={onLogout} disabled={switching}><Icon name="logout" size={16}/></button></div></div>
     </aside>
     <header className="topbar"><div className="topbar-left"><button ref={menuRef} className="icon-button mobile-menu" aria-expanded={open} aria-label="打开导航" onClick={() => setOpen(true)}><Icon name="menu"/></button><span className="breadcrumb">工作台 <span>/</span> <strong>{title}</strong></span></div><div className="topbar-right"><span className="environment-label">演示环境</span><span className="topbar-campus"><Icon name="pin" size={14}/>校园服务站</span><a className="icon-button notification-button" href="#/notifications" aria-label={`消息中心${unread ? `，${unread}条未读` : ''}`}><Icon name="bell" size={18}/>{!!unread && <i/>}</a><span className="topbar-avatar" title={`${userName} · ${current?.role ?? '校园同学'}`} aria-label={userName}>{userName.slice(0, 1)}</span></div></header>
   </>;

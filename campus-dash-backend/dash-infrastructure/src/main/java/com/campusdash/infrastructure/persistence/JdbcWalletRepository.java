@@ -24,14 +24,14 @@ public class JdbcWalletRepository implements WalletRepository {
 
     private static final RowMapper<WalletAccount> MAPPER = (rs, n) -> new WalletAccount(
             rs.getLong("id"),
-            rs.getLong("owner_id"),
+            rs.getString("owner_id"),
             AccountType.valueOf(rs.getString("owner_type")),
             Money.ofCents(rs.getLong("available")),
             Money.ofCents(rs.getLong("frozen")),
             rs.getLong("version"));
 
     @Override
-    public Optional<WalletAccount> findByOwner(long ownerId, AccountType type) {
+    public Optional<WalletAccount> findByOwner(String ownerId, AccountType type) {
         List<WalletAccount> list = jdbc.query(
                 "SELECT * FROM wallet_account WHERE owner_id = ? AND owner_type = ?",
                 MAPPER, ownerId, type.name());
@@ -112,7 +112,7 @@ public class JdbcWalletRepository implements WalletRepository {
                   FROM escrow_order WHERE campus_id = ? AND errand_id = ?
                 """, (rs, n) -> new EscrowOrder(
                         rs.getLong("id"), rs.getLong("campus_id"),
-                        rs.getLong("errand_id"), rs.getLong("publisher_id"),
+                        rs.getLong("errand_id"), rs.getString("publisher_id"),
                         Money.ofCents(rs.getLong("amount")),
                         EscrowOrder.EscrowStatus.valueOf(rs.getString("status"))), campusId, errandId);
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));

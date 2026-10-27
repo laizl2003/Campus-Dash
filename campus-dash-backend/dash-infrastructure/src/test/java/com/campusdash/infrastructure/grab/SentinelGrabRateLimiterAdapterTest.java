@@ -15,11 +15,11 @@ class SentinelGrabRateLimiterAdapterTest {
         SentinelGrabRateLimiterAdapter limiter = new SentinelGrabRateLimiterAdapter(
                 true, 2, resourceName());
 
-        assertTrue(limiter.tryPass(10001L, 2001L));
-        assertTrue(limiter.tryPass(10001L, 2002L));
-        assertFalse(limiter.tryPass(10001L, 2003L));
+        assertTrue(limiter.tryPass(10001, "2001"));
+        assertTrue(limiter.tryPass(10001, "2002"));
+        assertFalse(limiter.tryPass(10001, "2003"));
 
-        assertTrue(limiter.tryPass(10002L, 2004L), "不同任务应按独立热点参数计数");
+        assertTrue(limiter.tryPass(10002, "2004"), "不同任务应按独立热点参数计数");
     }
 
     @Test
@@ -28,8 +28,8 @@ class SentinelGrabRateLimiterAdapterTest {
         SentinelGrabRateLimiterAdapter limiter = new SentinelGrabRateLimiterAdapter(
                 false, 1, resourceName());
 
-        assertTrue(limiter.tryPass(10001L, 2001L));
-        assertTrue(limiter.tryPass(10001L, 2002L));
+        assertTrue(limiter.tryPass(10001, "2001"));
+        assertTrue(limiter.tryPass(10001, "2002"));
     }
 
     private static String resourceName() {

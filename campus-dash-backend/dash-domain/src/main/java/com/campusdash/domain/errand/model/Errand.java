@@ -19,13 +19,13 @@ public class Errand {
 
     private final long id;
     private final long campusId;
-    private final long publisherId;
+    private final String publisherId;
     private final ErrandType type;
     private final String title;
     private final Money reward;
     private final int slotTotal;
 
-    private Long grabberId;
+    private String grabberId;
     private ErrandStatus status;
     private int slotTaken;
     private int round;
@@ -33,13 +33,13 @@ public class Errand {
     private Instant lockedAt;
     private Instant deliveredAt;
 
-    /** 系统操作者标识：自动结算、超时流转等无人工触发的动作用它 */
-    public static final long SYSTEM_OPERATOR = -1L;
+    /** 系统操作者标识：自动结算、超时流转等无人工触发的动作用它。用户 id 现在是字符串 */
+    public static final String SYSTEM_OPERATOR = "-1";
 
     private final List<ErrandStatusChanged> changes = new ArrayList<>();
 
-    private Errand(long id, long campusId, long publisherId, ErrandType type, String title,
-                   Money reward, int slotTotal, Long grabberId, ErrandStatus status,
+    private Errand(long id, long campusId, String publisherId, ErrandType type, String title,
+                   Money reward, int slotTotal, String grabberId, ErrandStatus status,
                    int slotTaken, int round, long version, Instant lockedAt, Instant deliveredAt) {
         this.id = id;
         this.campusId = campusId;
@@ -58,7 +58,7 @@ public class Errand {
     }
 
     /** 新建草稿：此时还没托管资金，所以不能是 PUBLISHED */
-    public static Errand draft(long id, long campusId, long publisherId, ErrandType type,
+    public static Errand draft(long id, long campusId, String publisherId, ErrandType type,
                                String title, Money reward, int slotTotal) {
         if (reward.isZero()) {
             throw new IllegalArgumentException("悬赏金额必须大于 0");
@@ -71,8 +71,8 @@ public class Errand {
     }
 
     /** 从存储重建聚合，不做业务校验（数据已经是既成事实） */
-    public static Errand rehydrate(long id, long campusId, long publisherId, ErrandType type,
-                                   String title, Money reward, int slotTotal, Long grabberId,
+    public static Errand rehydrate(long id, long campusId, String publisherId, ErrandType type,
+                                   String title, Money reward, int slotTotal, String grabberId,
                                    ErrandStatus status, int slotTaken, int round, long version,
                                    Instant lockedAt) {
         return new Errand(id, campusId, publisherId, type, title, reward, slotTotal, grabberId,
@@ -80,8 +80,8 @@ public class Errand {
     }
 
     /** 从存储重建（带送达时间），自动结算扫描需要 deliveredAt */
-    public static Errand rehydrate(long id, long campusId, long publisherId, ErrandType type,
-                                   String title, Money reward, int slotTotal, Long grabberId,
+    public static Errand rehydrate(long id, long campusId, String publisherId, ErrandType type,
+                                   String title, Money reward, int slotTotal, String grabberId,
                                    ErrandStatus status, int slotTaken, int round, long version,
                                    Instant lockedAt, Instant deliveredAt) {
         return new Errand(id, campusId, publisherId, type, title, reward, slotTotal, grabberId,
@@ -117,7 +117,7 @@ public class Errand {
      * 抢中：PUBLISHED -> LOCKED。
      * 名额与并发裁决由 Redis Lua + DB CAS 完成，这里只维护聚合内的一致性。
      */
-    public void lockBy(long runnerId, long expectedVersion, Instant now) {
+    public void lockBy(String runnerId, long expectedVersion, Instant now) {
         if (!status.grabbable()) {
             throw new BizException(ErrorCode.ERRAND_NOT_GRABBABLE, "status=" + status);
         }
@@ -134,8 +134,8 @@ public class Errand {
      * 抢中者确认接单：LOCKED -> ACCEPTED。
      * 确认成功后这一轮的超时消息就作废了——靠 version 递增让消息的 CAS 失败。
      */
-    public void acceptByRunner(long runnerId, long expectedVersion) {
-        if (this.grabberId == null || this.grabberId != runnerId) {
+    public void acceptByRunner(String runnerId, long expectedVersion) {
+        if (!isCurrentRunner(runnerId)) {
             throw new BizException(ErrorCode.NOT_CURRENT_GRABBER,
                     "errandId=" + id + " grabber=" + grabberId + " actor=" + runnerId);
         }
@@ -151,7 +151,7 @@ public class Errand {
      *
      * slotTaken 不变：名额还是那一个，只是占用者换人了。
      */
-    public void transferToNextRunner(long nextRunnerId, long expectedVersion, Instant now) {
+    public void transferToNextRunner(String nextRunnerId, long expectedVersion, Instant now) {
         if (this.status != ErrandStatus.LOCKED) {
             throw new BizException(ErrorCode.ILLEGAL_STATE_TRANSITION,
                     "只有 LOCKED 才能流转，当前=" + status);
@@ -179,7 +179,7 @@ public class Errand {
     }
 
     /** 跑腿取货：ACCEPTED -> PICKED_UP。只有当前跑腿本人能操作 */
-    public void pickUp(long runnerId, long expectedVersion) {
+    public void pickUp(String runnerId, long expectedVersion) {
         requireCurrentRunner(runnerId);
         transitTo(ErrandStatus.PICKED_UP, expectedVersion);
     }
@@ -189,7 +189,7 @@ public class Errand {
      * 送达后进入"等发单人确认"窗口，超过 autoSettleSeconds 未确认则自动结算——
      * 否则跑腿的钱会被无限期拖着，这是平台必须给跑腿的保障。
      */
-    public void deliver(long runnerId, long expectedVersion, Instant now) {
+    public void deliver(String runnerId, long expectedVersion, Instant now) {
         requireCurrentRunner(runnerId);
         transitTo(ErrandStatus.DELIVERED, expectedVersion);
         this.deliveredAt = now;
@@ -199,8 +199,8 @@ public class Errand {
      * 结算：DELIVERED -> SETTLED（发单人确认完成，或自动结算）。
      * operatorId 为 SYSTEM_OPERATOR 时表示自动结算，不校验身份。
      */
-    public void settle(long operatorId, long expectedVersion) {
-        if (operatorId != SYSTEM_OPERATOR && operatorId != publisherId) {
+    public void settle(String operatorId, long expectedVersion) {
+        if (!SYSTEM_OPERATOR.equals(operatorId) && !publisherId.equals(operatorId)) {
             throw new BizException(ErrorCode.NOT_PUBLISHER,
                     "errandId=" + id + " publisher=" + publisherId + " actor=" + operatorId);
         }
@@ -212,8 +212,8 @@ public class Errand {
      * 已经有人抢中（LOCKED 及之后）就不能单方面取消了，只能走争议仲裁——
      * 否则跑腿已经在跑了却被无偿取消。
      */
-    public void cancelByPublisher(long operatorId, long expectedVersion) {
-        if (operatorId != publisherId) {
+    public void cancelByPublisher(String operatorId, long expectedVersion) {
+        if (!publisherId.equals(operatorId)) {
             throw new BizException(ErrorCode.NOT_PUBLISHER,
                     "errandId=" + id + " publisher=" + publisherId + " actor=" + operatorId);
         }
@@ -226,9 +226,9 @@ public class Errand {
     }
 
     /** 发起争议：ACCEPTED/PICKED_UP/DELIVERED -> DISPUTED。双方都可发起，托管资金原地不动 */
-    public void raiseDispute(long operatorId, long expectedVersion) {
-        boolean isParty = operatorId == publisherId
-                || (grabberId != null && grabberId == operatorId);
+    public void raiseDispute(String operatorId, long expectedVersion) {
+        boolean isParty = publisherId.equals(operatorId)
+                || (grabberId != null && grabberId.equals(operatorId));
         if (!isParty) {
             throw new BizException(ErrorCode.NOT_CURRENT_GRABBER,
                     "只有发单人或当前跑腿能发起争议，actor=" + operatorId);
@@ -254,11 +254,16 @@ public class Errand {
         }
     }
 
-    private void requireCurrentRunner(long runnerId) {
-        if (this.grabberId == null || this.grabberId != runnerId) {
+    private void requireCurrentRunner(String runnerId) {
+        if (!isCurrentRunner(runnerId)) {
             throw new BizException(ErrorCode.NOT_CURRENT_GRABBER,
                     "errandId=" + id + " grabber=" + grabberId + " actor=" + runnerId);
         }
+    }
+
+    /** 字符串 id 必须用 equals 比较；== 比的是引用，UUID 一定不相等 */
+    private boolean isCurrentRunner(String runnerId) {
+        return grabberId != null && grabberId.equals(runnerId);
     }
 
     /** 判断是否已过自动结算窗口，供兜底扫描使用 */
@@ -281,13 +286,13 @@ public class Errand {
 
     public long id() { return id; }
     public long campusId() { return campusId; }
-    public long publisherId() { return publisherId; }
+    public String publisherId() { return publisherId; }
     public ErrandType type() { return type; }
     public String title() { return title; }
     public Money reward() { return reward; }
     public int slotTotal() { return slotTotal; }
     public int slotTaken() { return slotTaken; }
-    public Long grabberId() { return grabberId; }
+    public String grabberId() { return grabberId; }
     public ErrandStatus status() { return status; }
     public int round() { return round; }
     public long version() { return version; }

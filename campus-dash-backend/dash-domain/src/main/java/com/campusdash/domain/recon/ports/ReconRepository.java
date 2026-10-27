@@ -24,7 +24,7 @@ public interface ReconRepository {
 
     int countDiffs(LocalDate date);
 
-    record AccountDiff(long accountId, long ownerId, long snapshotTotal, long ledgerNet) {}
+    record AccountDiff(long accountId, String ownerId, long snapshotTotal, long ledgerNet) {}
 
     record EscrowDiff(long errandId, String escrowStatus, String reason) {}
 }

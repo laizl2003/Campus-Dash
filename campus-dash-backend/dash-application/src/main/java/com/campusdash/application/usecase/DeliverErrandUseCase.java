@@ -51,7 +51,7 @@ public class DeliverErrandUseCase {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void deliver(long errandId, long runnerId) {
+    public void deliver(long errandId, String runnerId) {
         Errand errand = errandRepository.findById(errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ERRAND_NOT_FOUND, "id=" + errandId));
         // 领域校验

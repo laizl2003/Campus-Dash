@@ -31,7 +31,7 @@ public class GrabTransactionalStep {
      * @return true 抢中，false 并发冲突（CAS 失败或撞唯一索引）
      */
     @Transactional(rollbackFor = Exception.class)
-    public boolean lockAndRecord(long campusId, long errandId, long runnerId, long expectedVersion,
+    public boolean lockAndRecord(long campusId, long errandId, String runnerId, long expectedVersion,
                                  int seq, int round, long recordId, ErrandStatus fromStatus) {
         int affected = errandRepository.casLockForRunner(errandId, runnerId, expectedVersion);
         if (affected == 0) {

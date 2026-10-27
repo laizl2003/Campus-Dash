@@ -12,10 +12,10 @@ import com.campusdash.shared.Money;
  * HELD 是唯一可变状态：RELEASED 与 REFUNDED 都是终态，
  * 这保证了"一笔托管的钱只会有一个去向"，不会既结算又退款。
  */
-public record EscrowOrder(long id, long campusId, long errandId, long publisherId,
+public record EscrowOrder(long id, long campusId, long errandId, String publisherId,
                           Money amount, EscrowStatus status) {
 
-    public static EscrowOrder held(long id, long campusId, long errandId, long publisherId, Money amount) {
+    public static EscrowOrder held(long id, long campusId, long errandId, String publisherId, Money amount) {
         return new EscrowOrder(id, campusId, errandId, publisherId, amount, EscrowStatus.HELD);
     }
 

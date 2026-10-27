@@ -35,7 +35,7 @@ public class RedisGrabSlotAdapter implements GrabSlotPort {
     }
 
     @Override
-    public SlotOutcome tryAcquire(long errandId, long runnerId, String requestId) {
+    public SlotOutcome tryAcquire(long errandId, String runnerId, String requestId) {
         Long code = redis.execute(grabScript,
                 List.of(slotKey(errandId), grabbedKey(errandId), idemKey(errandId, requestId)),
                 String.valueOf(runnerId), String.valueOf(IDEM_TTL_SECONDS));
@@ -47,7 +47,7 @@ public class RedisGrabSlotAdapter implements GrabSlotPort {
     }
 
     @Override
-    public void rollback(long errandId, long runnerId, String requestId) {
+    public void rollback(long errandId, String runnerId, String requestId) {
         redis.execute(rollbackScript,
                 List.of(slotKey(errandId), grabbedKey(errandId), idemKey(errandId, requestId)),
                 String.valueOf(runnerId));

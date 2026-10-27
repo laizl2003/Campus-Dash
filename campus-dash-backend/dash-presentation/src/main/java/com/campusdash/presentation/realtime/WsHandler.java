@@ -29,7 +29,7 @@ public class WsHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
-        Long userId = (Long) session.getAttributes().get(ATTR_USER_ID);
+        String userId = (String) session.getAttributes().get(ATTR_USER_ID);
         if (userId == null) {
             // 握手拦截器已挡掉未认证连接，这里是双保险
             try {
@@ -51,7 +51,7 @@ public class WsHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        Long userId = (Long) session.getAttributes().get(ATTR_USER_ID);
+        String userId = (String) session.getAttributes().get(ATTR_USER_ID);
         if (userId != null) {
             registry.remove(userId, session);
         }

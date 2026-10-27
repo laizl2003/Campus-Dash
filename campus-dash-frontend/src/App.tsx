@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router';
-import { getUserId, login, logout } from './api';
+import { getUserId, loginAs, logout } from './api';
 import TopBar from './components/TopBar';
 import Icon from './components/Icon';
-import CampusArt from './components/CampusArt';
-import { IDENTITIES } from './identities';
 import Square from './pages/Square';
 import Detail from './pages/Detail';
 import Publish from './pages/Publish';
@@ -12,12 +10,14 @@ import Mine from './pages/Mine';
 import Wallet from './pages/Wallet';
 import Notifications from './pages/Notifications';
 import Credit from './pages/Credit';
+import AuthPage from './pages/AuthPage';
 import { connectWs, disconnectWs } from './ws';
 
 export default function App() {
   const route = useHashRoute();
-  const [userId, setUserId] = useState<number | null>(getUserId());
-  const [loginBusy, setLoginBusy] = useState<number | null>(null);
+  // userId 现在是字符串：UUID / 001 / 演示账号 "1001"
+  const [userId, setUserId] = useState<string | null>(getUserId());
+  const [loginBusy, setLoginBusy] = useState<string | null>(null);
   const loginLock = useRef(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
@@ -27,12 +27,12 @@ export default function App() {
     return () => window.removeEventListener('dash:notice', onNotice);
   }, []);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(null), 4500); return () => window.clearTimeout(timer); }, [toast]);
-  const switchIdentity = async (id: number) => {
+  const switchIdentity = async (id: string) => {
     if (loginLock.current) return;
     loginLock.current = true;
     setLoginBusy(id); setError('');
-    try { await login(id); setUserId(id); }
-    catch (e) { setError(e instanceof Error ? e.message : '登录失败，请重试'); }
+    try { const profile = await loginAs(id); setUserId(profile.userId); }
+    catch (e) { setError(e instanceof Error ? e.message : '切换身份失败，请重试'); }
     finally { setLoginBusy(null); loginLock.current = false; }
   };
   useEffect(() => {
@@ -45,18 +45,7 @@ export default function App() {
   }, [userId]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [route]);
 
-  if (userId === null) return <div className="login-page">
-    <section className="login-story">
-      <a className="brand" href="#/square"><span className="brand-mark"><Icon name="package" size={24}/></span><span>CampusDash<small>校园里的顺路好帮手</small></span></a>
-      <div className="login-story-body"><span className="eyebrow">A LITTLE HELP, A BETTER DAY</span><h1>校园里的小事，<br/><em>交给顺路的同学。</em></h1><p>取件、带饭、买东西。把一件小事托付出去，<br/>让你的时间留给更重要的生活。</p><CampusArt/><div className="login-benefits"><span><Icon name="shield" size={16}/>悬赏资金托管</span><span><Icon name="clock" size={16}/>任务进度可追踪</span><span><Icon name="users" size={16}/>校园互助</span></div></div>
-      <div className="login-copyright">CAMPUSDASH · 让每一次顺路，都有意义</div>
-    </section>
-    <section className="login-side"><div className="login-card"><span className="soft-label">体验工作台</span><h2>从一个身份开始</h2><p className="login-description">选择角色，体验一次完整的校园委托。</p>
-      <div className="identity-list">{IDENTITIES.map(it => <button key={it.userId} className={`identity-btn${it.userId === 2001 ? ' identity-btn-personal' : ''}`} disabled={loginBusy !== null} onClick={() => void switchIdentity(it.userId)}><span className="identity-icon" aria-hidden="true">{it.userId === 2001 ? it.name : <Icon name={it.icon}/>}</span><span className="identity-copy"><strong>{it.name}<small>{it.userId === 2001 ? `${it.role} · ` : ''}#{it.userId}</small></strong><span>{loginBusy === it.userId ? '正在进入工作台…' : it.desc}</span></span><Icon name="arrow-right" size={20}/></button>)}</div>
-      {error && <div className="banner warn" role="alert">{error}</div>}
-      <div className="login-note"><Icon name="info" size={16}/><p>当前为项目演示环境。角色切换用于体验发布、接单与争议处理，数据由已连接的后端服务提供。</p></div>
-    </div></section>
-  </div>;
+  if (userId === null) return <AuthPage onAuthed={profile => setUserId(profile.userId)} />;
 
   let page;
   const path = route.split('?')[0];

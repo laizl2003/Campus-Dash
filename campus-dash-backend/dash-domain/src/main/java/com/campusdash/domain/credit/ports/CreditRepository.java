@@ -15,9 +15,9 @@ import java.util.Optional;
 public interface CreditRepository {
 
     /** 查分数；用户没有记录时返回初始分 60（不落库，首次事件时才创建） */
-    int scoreOf(long userId);
+    int scoreOf(String userId);
 
-    Optional<CreditScore> find(long userId);
+    Optional<CreditScore> find(String userId);
 
     /**
      * 应用信用事件：插入事件流水 + 更新分数快照。
@@ -26,10 +26,10 @@ public interface CreditRepository {
     boolean applyEvent(CreditEvent event);
 
     /** 最近 N 天的事件（信用分页展示用） */
-    List<CreditEvent> recentEvents(long userId, int days, int limit);
+    List<CreditEvent> recentEvents(String userId, int days, int limit);
 
     /** 窗口内事件的分值总和（每日校准 job 用） */
-    int windowDelta(long userId, int windowDays);
+    int windowDelta(String userId, int windowDays);
 
     /**
      * 按最近 windowDays 的事件重算信用分快照。

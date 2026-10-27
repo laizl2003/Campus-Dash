@@ -61,12 +61,12 @@ public class JwtAuthAdapter implements RefreshTokenPort {
     }
 
     @Override
-    public String login(long userId) {
+    public String login(String userId) {
         return issueAccessToken(userId);
     }
 
     @Override
-    public TokenPair loginWithRefresh(long userId) {
+    public TokenPair loginWithRefresh(String userId) {
         return new TokenPair(issueAccessToken(userId), issueRefreshToken(userId));
     }
 
@@ -82,12 +82,10 @@ public class JwtAuthAdapter implements RefreshTokenPort {
         if (userIdText == null) {
             return Optional.empty();
         }
-        long userId;
-        try {
-            userId = Long.parseLong(userIdText);
-        } catch (NumberFormatException e) {
-            // 映射值被写坏时按失效处理，不能让脏数据变成 500
-            log.warn("refresh token 映射值非法，按失效处理 value={}", userIdText);
+        // 现在 userId 就是字符串（UUID / 001 / 1001），不再解析成 long
+        String userId = userIdText;
+        if (userId.isBlank()) {
+            log.warn("refresh token 映射值为空，按失效处理");
             return Optional.empty();
         }
         return Optional.of(new TokenPair(issueAccessToken(userId), issueRefreshToken(userId)));
@@ -100,7 +98,7 @@ public class JwtAuthAdapter implements RefreshTokenPort {
         }
     }
 
-    private String issueAccessToken(long userId) {
+    private String issueAccessToken(String userId) {
         Date now = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(userId))
@@ -111,7 +109,7 @@ public class JwtAuthAdapter implements RefreshTokenPort {
                 .compact();
     }
 
-    private String issueRefreshToken(long userId) {
+    private String issueRefreshToken(String userId) {
         String token = UUID.randomUUID().toString().replace("-", "");
         redis.opsForValue().set(REFRESH_PREFIX + token, String.valueOf(userId),
                 Duration.ofMinutes(refreshTtlMinutes));
@@ -119,7 +117,7 @@ public class JwtAuthAdapter implements RefreshTokenPort {
     }
 
     @Override
-    public Optional<Long> resolve(String token) {
+    public Optional<String> resolve(String token) {
         if (token == null || token.isBlank()) {
             return Optional.empty();
         }
@@ -131,7 +129,8 @@ public class JwtAuthAdapter implements RefreshTokenPort {
             if (jti != null && Boolean.TRUE.equals(redis.hasKey(REVOKED_PREFIX + jti))) {
                 return Optional.empty();
             }
-            return Optional.of(Long.parseLong(claims.getSubject()));
+            // sub 就是登录时查库得到的 user_id（UUID / 001 / 1001），原样返回
+            return Optional.of(claims.getSubject());
         } catch (JwtException | IllegalArgumentException e) {
             // 签名伪造 / 过期 / 格式错误：一律视为无效
             return Optional.empty();

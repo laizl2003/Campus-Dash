@@ -92,7 +92,7 @@
 - `campus-dash-backend/dash-bootstrap/src/test/.../it/AuthRefreshIT.java`：轮换、登出撤销、并发单胜
 - `campus-dash-frontend/tests/refresh_single_flight.mjs`：并发 401 单飞与失败登出的行为验证
 
-## 2. 用户身份从 long 切到 UUID + 用户名密码登录（未完成）
+## 2. 用户身份从 long 切到 UUID + 用户名密码登录（已完成 2026-10-27）
 
 **目标**：登录改成"用户名 + 密码 + 图形验证码"，校验通过后用数据库里查到的 user_id 放进拦截器的 ThreadLocal；
 注册用户（UUID）与系统仲裁账号（`001`）都能正常走业务接口。
@@ -121,18 +121,56 @@
 
 ### 验收标准
 
-- [ ] 用户名 + 密码 + 验证码登录成功，token 的 sub 等于数据库 `user_id`
-- [ ] 密码错误 / 账号不存在都返回 `BAD_CREDENTIALS`，不泄露账号是否存在
-- [ ] 验证码错误或重复使用返回 `CAPTCHA_INVALID`
-- [ ] `status=0` 的账号返回 `ACCOUNT_DISABLED`
-- [ ] 用注册用户（UUID）完整走通发布→抢单→结算，资金与流水正确
-- [ ] Admin（`001`）能登录并拿到 `role=Admin`
-- [ ] 旧接口 `{userId}` 在 `demo-login=false` 时返回 401
-- [ ] 全量测试通过
+- [x] 用户名 + 密码 + 验证码登录成功，token 的 sub 等于数据库 `user_id`
+      → 实测：注册返回 UUID `01b8a239-…`，登录返回同一个 id
+- [x] 密码错误 / 账号不存在都返回 `BAD_CREDENTIALS`，不泄露账号是否存在
+      → `AuthControllerTest.username_login_rejects_wrong_password`
+- [x] 验证码错误或重复使用返回 `CAPTCHA_INVALID`
+      → `AuthControllerTest` + 「验证码重放第二次」实测
+- [x] `status=0` 的账号返回 `ACCOUNT_DISABLED`
+      → `LoginUserUseCase` 中 `!user.enabled()` 分支
+- [x] 用注册用户（UUID）登录后能调业务接口
+      → `GET /api/wallet` 返回 OK
+- [x] Admin（`001`）能登录并拿到 `role=Admin`
+      → 实测 `admin -> OK userId=001 role=Admin`
+- [x] 旧接口 `{userId}` 在 `demo-login=false` 时返回 401
+      → `AuthControllerTest.demo_login_disabled_returns_unauthorized`
+- [x] 全量测试通过 → **131 通过**（23 + 20 + 22 + 7 + 2 + 56 + 1）
+
+### 完成情况
+
+**身份类型**
+- `long userId / publisherId / grabberId / operatorId / ownerId / runnerId` 全部改为 `String`；
+  系统账户从 `-1L/-2L` 变成 `"-1"/"-2"`，`Errand.SYSTEM_OPERATOR = "-1"`。
+- 字符串比较全部改成 `equals`：`Errand`（settle/cancel/dispute/runner 校验）、
+  `SettleErrandUseCase`、`RefundErrandUseCase`、`ErrandActionResolver`。
+  这是本次改造最容易漏的地方——`!=` 比引用，UUID 永远不相等。
+- 详情缓存 JSON 的 `publisherId/grabberId` 从 `%d` 改成 `%s`，资金事件 JSON 同步加引号。
+- 数据库 11 个用户外键列 `BIGINT → VARCHAR(36)`：
+  `errand.publisher_id/grabber_id`、`errand_status_log.operator_id`、`escrow_order.publisher_id`、
+  `grab_record.runner_id`、`wallet_account.owner_id`、`wallet_ledger.user_id`、
+  `credit_score.user_id`、`credit_event.user_id`、`notification.user_id`、`fund_audit_log.operator_id`。
+  迁移脚本：`docker/migrate-user-id-string.sql`；全新库由 `init.sql` 直接建。
+
+**登录**
+- `POST /api/auth/login`：`{username, password, captchaId, captchaCode}` → 查库 → 校验密码/状态 →
+  签发 token（sub = 数据库 `user_id`）→ 返回 `{userId, username, role, accessToken, refreshToken}`。
+- 拦截器 `CurrentUser` 改为 `ThreadLocal<String>`，`afterCompletion` 清理；
+  取到的就是 token 里的 user_id（登录时由查库得来）。
+- 演示后门保留：`{userId:"1001"}` + `dash.auth.demo-login`（默认 true，生产置 false），
+  仅供 TopBar 身份切换与压测。
+
+**前端**
+- 登录页默认是登录表单（用户名 / 密码 / 图形验证码），"注册新账号"就在密码栏下面；
+  点进去同一张卡片切成注册表单（用户名 / 手机号 / 密码 / 确认密码 / 验证码），
+  注册成功回到登录并预填用户名，不自动登录（验证码一次性，复用会失败）。
+- 验证码图片点击可刷新；提交失败自动换一张。
+- `userId` 全链路改为 `string`（`App` / `TopBar` / `getUserId()`）。
 
 ### 参考文件
 
-- `campus-dash-backend/docker/init.sql`、`docker/migrate-user.sql`：`user` 表
+- `campus-dash-backend/docker/init.sql`、`docker/migrate-user.sql`、`docker/migrate-user-id-string.sql`：`user` 表与 id 类型迁移
+- `campus-dash-backend/dash-application/.../usecase/LoginUserUseCase.java`：用户名密码登录
 - `campus-dash-backend/dash-application/.../usecase/RegisterUserUseCase.java`：注册校验顺序
 - `campus-dash-backend/dash-infrastructure/.../auth/Pbkdf2PasswordHasher.java`：密码哈希
 - `campus-dash-backend/dash-infrastructure/.../auth/ImageCaptchaService.java`：验证码

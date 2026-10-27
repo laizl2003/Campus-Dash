@@ -25,13 +25,13 @@ import com.campusdash.shared.Money;
 public class WalletAccount {
 
     private final long id;
-    private final long ownerId;
+    private final String ownerId;
     private final AccountType type;
     private Money available;
     private Money frozen;
     private long version;
 
-    public WalletAccount(long id, long ownerId, AccountType type, Money available, Money frozen, long version) {
+    public WalletAccount(long id, String ownerId, AccountType type, Money available, Money frozen, long version) {
         this.id = id;
         this.ownerId = ownerId;
         this.type = type;
@@ -66,7 +66,7 @@ public class WalletAccount {
     }
 
     public long id() { return id; }
-    public long ownerId() { return ownerId; }
+    public String ownerId() { return ownerId; }
     public AccountType type() { return type; }
     public Money available() { return available; }
     public Money frozen() { return frozen; }

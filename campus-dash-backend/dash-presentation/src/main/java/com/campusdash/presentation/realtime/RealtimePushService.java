@@ -34,7 +34,7 @@ public class RealtimePushService implements RealtimeNotifier {
     }
 
     @Override
-    public void errandStatusChanged(long errandId, long publisherId, Long grabberId,
+    public void errandStatusChanged(long errandId, String publisherId, String grabberId,
                                     String status, int round) {
         String msg = String.format(
                 "{\"type\":\"errand.status\",\"payload\":{\"errandId\":\"%d\",\"status\":\"%s\",\"round\":%d}}",
@@ -46,7 +46,7 @@ public class RealtimePushService implements RealtimeNotifier {
     }
 
     @Override
-    public void notificationArrived(long userId, long errandId, String type, String content) {
+    public void notificationArrived(String userId, long errandId, String type, String content) {
         String msg = String.format(
                 "{\"type\":\"notification.new\",\"payload\":{\"errandId\":\"%d\",\"noticeType\":\"%s\",\"content\":\"%s\"}}",
                 errandId, type, escape(content));
@@ -54,14 +54,14 @@ public class RealtimePushService implements RealtimeNotifier {
     }
 
     @Override
-    public void creditChanged(long userId, int newScore, int delta, String reason) {
+    public void creditChanged(String userId, int newScore, int delta, String reason) {
         String msg = String.format(
                 "{\"type\":\"credit.changed\",\"payload\":{\"score\":%d,\"delta\":%d,\"reason\":\"%s\"}}",
                 newScore, delta, escape(reason));
         push(userId, msg);
     }
 
-    private void push(long userId, String json) {
+    private void push(String userId, String json) {
         for (WebSocketSession session : registry.of(userId)) {
             if (!session.isOpen()) {
                 continue;

@@ -55,7 +55,7 @@ class CacheConsistencyIT {
 
     private long publish(String title) {
         var r = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY, title, 1000L, 1));
+                1L, "1001", ErrandType.DELIVERY, title, 1000L, 1));
         return r.errandId();
     }
 
@@ -157,7 +157,7 @@ class CacheConsistencyIT {
         assertTrue(before.contains("\"status\":\"PUBLISHED\""));
 
         // 抢单：PUBLISHED -> LOCKED，写用例在 afterCommit 失效缓存
-        grabUseCase.grab(new GrabErrandUseCase.Command(id, 2001L, UUID.randomUUID().toString(), 60));
+        grabUseCase.grab(new GrabErrandUseCase.Command(id, "2001", UUID.randomUUID().toString(), 60));
 
         var after = detailUseCase.detailJson(id).orElseThrow();
         assertTrue(after.contains("\"status\":\"LOCKED\""),

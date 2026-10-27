@@ -20,11 +20,11 @@ public class QueryCreditUseCase {
         this.rankingPort = rankingPort;
     }
 
-    public int myScore(long userId) {
+    public int myScore(String userId) {
         return creditRepository.scoreOf(userId);
     }
 
-    public List<CreditEvent> myEvents(long userId) {
+    public List<CreditEvent> myEvents(String userId) {
         return creditRepository.recentEvents(userId, CreditEventType.WINDOW_DAYS, 50);
     }
 

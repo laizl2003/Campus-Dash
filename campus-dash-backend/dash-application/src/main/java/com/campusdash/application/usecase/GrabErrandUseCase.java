@@ -82,8 +82,8 @@ public class GrabErrandUseCase {
      * 客户端传的分值不可信（伪造高分就能绕过资格门槛、垄断流转机会）。
      * 保留该参数只为兼容既有调用，新代码请用三参构造器。
      */
-    public record Command(long errandId, long runnerId, String requestId, int creditScore) {
-        public Command(long errandId, long runnerId, String requestId) {
+    public record Command(long errandId, String runnerId, String requestId, int creditScore) {
+        public Command(long errandId, String runnerId, String requestId) {
             this(errandId, runnerId, requestId, 0);
         }
     }

@@ -53,7 +53,7 @@ class AuthRefreshIT {
     @DisplayName("JWT refresh token 刷新后轮换，旧 refresh token 立即失效")
     void refresh_token_rotates_and_old_token_is_invalidated() {
         Map<String, Object> login = data(rest.postForEntity("/api/auth/login",
-                Map.of("userId", 7101L), Map.class).getBody());
+                Map.of("userId", "7101"), Map.class).getBody());
 
         String accessToken = String.valueOf(login.get("accessToken"));
         String refreshToken = String.valueOf(login.get("refreshToken"));
@@ -78,7 +78,7 @@ class AuthRefreshIT {
     @SuppressWarnings("unchecked")
     void logout_revokes_refresh_token() {
         Map<String, Object> login = data(rest.postForEntity("/api/auth/login",
-                Map.of("userId", 7102L), Map.class).getBody());
+                Map.of("userId", "7102"), Map.class).getBody());
         String accessToken = String.valueOf(login.get("accessToken"));
         String refreshToken = String.valueOf(login.get("refreshToken"));
 
@@ -98,7 +98,7 @@ class AuthRefreshIT {
     @DisplayName("同一 refresh token 并发提交只有一次成功")
     void concurrent_refresh_on_same_token_has_single_winner() throws Exception {
         Map<String, Object> login = data(rest.postForEntity("/api/auth/login",
-                Map.of("userId", 7103L), Map.class).getBody());
+                Map.of("userId", "7103"), Map.class).getBody());
         String refreshToken = String.valueOf(login.get("refreshToken"));
 
         int threads = 8;

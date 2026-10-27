@@ -68,9 +68,9 @@ class TimeoutTransferIT {
         jdbc.update("DELETE FROM credit_score WHERE user_id BETWEEN 2001 AND 2050");
     }
 
-    private long publishAndGrab(long firstRunner) {
+    private long publishAndGrab(String firstRunner) {
         long errandId = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY, "bench_超时流转", 600L, 1)).errandId();
+                1L, "1001", ErrandType.DELIVERY, "bench_超时流转", 600L, 1)).errandId();
         run.track(errandId);
         var r = grabUseCase.grab(new GrabErrandUseCase.Command(
                 errandId, firstRunner, UUID.randomUUID().toString(), 60));
@@ -81,10 +81,10 @@ class TimeoutTransferIT {
     @Test
     @DisplayName("超时未确认：流转给候选队列下一位，round+1，名额不变")
     void timeout_transfers_to_next_candidate() {
-        long errandId = publishAndGrab(2001L);
+        long errandId = publishAndGrab("2001");
         // 2002 抢不到，进候选队列
         var loser = grabUseCase.grab(new GrabErrandUseCase.Command(
-                errandId, 2002L, UUID.randomUUID().toString(), 60));
+                errandId, "2002", UUID.randomUUID().toString(), 60));
         assertFalse(loser.grabbed());
         assertEquals(1L, candidateQueue.size(errandId));
 
@@ -94,7 +94,7 @@ class TimeoutTransferIT {
         assertEquals(TimeoutTransferUseCase.Outcome.TRANSFERRED, outcome);
         var after = errandRepository.findById(errandId).orElseThrow();
         assertEquals(ErrandStatus.LOCKED, after.status(), "流转后仍是 LOCKED");
-        assertEquals(2002L, after.grabberId(), "抢中者应换成候选人");
+        assertEquals("2002", after.grabberId(), "抢中者应换成候选人");
         assertEquals(before.round() + 1, after.round(), "round 必须自增");
         assertEquals(1, after.slotTaken(), "名额不变，只是占用者换人");
         assertEquals(0L, candidateQueue.size(errandId), "候选人已被弹出");
@@ -103,7 +103,7 @@ class TimeoutTransferIT {
     @Test
     @DisplayName("候选队列为空：任务回退 PUBLISHED，Redis 名额归还")
     void timeout_reverts_when_no_candidate() {
-        long errandId = publishAndGrab(2011L);
+        long errandId = publishAndGrab("2011");
         assertEquals(0L, candidateQueue.size(errandId));
         assertEquals(0L, grabSlotPort.remainingSlot(errandId), "抢中后名额已扣为 0");
 
@@ -120,19 +120,19 @@ class TimeoutTransferIT {
 
         // 回退后新的跑腿确实能抢到
         var regrab = grabUseCase.grab(new GrabErrandUseCase.Command(
-                errandId, 2012L, UUID.randomUUID().toString(), 60));
+                errandId, "2012", UUID.randomUUID().toString(), 60));
         assertTrue(regrab.grabbed(), "回退后应可被重新抢单");
     }
 
     @Test
     @DisplayName("已确认的任务不会被流转：version 变了，超时消息的 CAS 必然失败")
     void confirmed_errand_is_not_transferred() {
-        long errandId = publishAndGrab(2021L);
+        long errandId = publishAndGrab("2021");
         grabUseCase.grab(new GrabErrandUseCase.Command(
-                errandId, 2022L, UUID.randomUUID().toString(), 60));
+                errandId, "2022", UUID.randomUUID().toString(), 60));
 
         var beforeConfirm = errandRepository.findById(errandId).orElseThrow();
-        confirmUseCase.confirm(new ConfirmErrandUseCase.Command(errandId, 2021L));
+        confirmUseCase.confirm(new ConfirmErrandUseCase.Command(errandId, "2021"));
 
         // 用确认之前的 round 模拟"迟到的超时消息"
         var outcome = timeoutUseCase.handleTimeout(errandId, beforeConfirm.round());
@@ -140,15 +140,15 @@ class TimeoutTransferIT {
 
         var after = errandRepository.findById(errandId).orElseThrow();
         assertEquals(ErrandStatus.ACCEPTED, after.status(), "已确认的任务状态不该被改动");
-        assertEquals(2021L, after.grabberId());
+        assertEquals("2021", after.grabberId());
     }
 
     @Test
     @DisplayName("幂等：同一条超时消息重复投递 5 次，只流转一次")
     void duplicate_timeout_message_transfers_once() {
-        long errandId = publishAndGrab(2031L);
-        var firstLoser = grabUseCase.grab(new GrabErrandUseCase.Command(errandId, 2032L, UUID.randomUUID().toString(), 60));
-        var secondLoser = grabUseCase.grab(new GrabErrandUseCase.Command(errandId, 2033L, UUID.randomUUID().toString(), 60));
+        long errandId = publishAndGrab("2031");
+        var firstLoser = grabUseCase.grab(new GrabErrandUseCase.Command(errandId, "2032", UUID.randomUUID().toString(), 60));
+        var secondLoser = grabUseCase.grab(new GrabErrandUseCase.Command(errandId, "2033", UUID.randomUUID().toString(), 60));
         assertEquals(com.campusdash.shared.ErrorCode.SLOT_FULL, firstLoser.code());
         assertEquals(com.campusdash.shared.ErrorCode.SLOT_FULL, secondLoser.code());
 
@@ -170,9 +170,9 @@ class TimeoutTransferIT {
     @Test
     @DisplayName("旧轮次消息重放：round 不匹配直接丢弃（version CAS 之外的第二道保险）")
     void stale_round_message_is_discarded() {
-        long errandId = publishAndGrab(2041L);
-        grabUseCase.grab(new GrabErrandUseCase.Command(errandId, 2042L, UUID.randomUUID().toString(), 60));
-        grabUseCase.grab(new GrabErrandUseCase.Command(errandId, 2043L, UUID.randomUUID().toString(), 60));
+        long errandId = publishAndGrab("2041");
+        grabUseCase.grab(new GrabErrandUseCase.Command(errandId, "2042", UUID.randomUUID().toString(), 60));
+        grabUseCase.grab(new GrabErrandUseCase.Command(errandId, "2043", UUID.randomUUID().toString(), 60));
 
         int round0 = errandRepository.findById(errandId).orElseThrow().round();
         assertEquals(TimeoutTransferUseCase.Outcome.TRANSFERRED,
@@ -194,10 +194,10 @@ class TimeoutTransferIT {
         AtomicInteger transferWin = new AtomicInteger();
 
         for (int i = 0; i < rounds; i++) {
-            long runner = 2101L + i;
+            String runner = "2101" + i;
             long errandId = publishAndGrab(runner);
             grabUseCase.grab(new GrabErrandUseCase.Command(
-                    errandId, 2201L + i, UUID.randomUUID().toString(), 60));
+                    errandId, "2201" + i, UUID.randomUUID().toString(), 60));
             int round = errandRepository.findById(errandId).orElseThrow().round();
 
             CountDownLatch fire = new CountDownLatch(1);
@@ -259,11 +259,11 @@ class TimeoutTransferIT {
     @Test
     @DisplayName("防无限流转：轮次达上限后直接回退，不再逐个试候选人")
     void max_rounds_reached_triggers_revert() {
-        long errandId = publishAndGrab(2401L);
+        long errandId = publishAndGrab("2401");
         // 造 6 个候选人，超过 max-transfer-rounds=3
         for (int i = 0; i < 6; i++) {
             grabUseCase.grab(new GrabErrandUseCase.Command(
-                    errandId, 2410L + i, UUID.randomUUID().toString(), 60));
+                    errandId, "2410" + i, UUID.randomUUID().toString(), 60));
         }
 
         TimeoutTransferUseCase.Outcome last = null;
@@ -285,7 +285,7 @@ class TimeoutTransferIT {
     @Test
     @DisplayName("本地消息表：抢单后登记了超时消息，msg_key 带 round")
     void timeout_message_is_enqueued_with_round() {
-        long errandId = publishAndGrab(2301L);
+        long errandId = publishAndGrab("2301");
 
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM local_message WHERE msg_key = ?",

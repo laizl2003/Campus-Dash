@@ -27,7 +27,7 @@ public class RedisCreditRankingAdapter implements CreditRankingPort {
     }
 
     @Override
-    public void update(long campusId, long userId, int score) {
+    public void update(long campusId, String userId, int score) {
         try {
             redis.opsForZSet().add(KEY_PREFIX + campusId, String.valueOf(userId), score);
         } catch (RuntimeException ignored) {
@@ -43,7 +43,7 @@ public class RedisCreditRankingAdapter implements CreditRankingPort {
                     redis.opsForZSet().reverseRangeWithScores(KEY_PREFIX + campusId, 0, limit - 1L);
             if (tuples != null) {
                 for (var t : tuples) {
-                    result.add(new Entry(Long.parseLong(t.getValue()), t.getScore().intValue()));
+                    result.add(new Entry(t.getValue(), t.getScore().intValue()));
                 }
             }
         } catch (RuntimeException ignored) {

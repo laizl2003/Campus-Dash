@@ -9,7 +9,7 @@ import java.util.Optional;
  */
 public interface RefreshTokenPort extends AuthPort {
 
-    TokenPair loginWithRefresh(long userId);
+    TokenPair loginWithRefresh(String userId);
 
     Optional<TokenPair> refresh(String refreshToken);
 

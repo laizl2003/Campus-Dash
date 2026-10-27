@@ -15,11 +15,11 @@ public class QueryNotificationUseCase {
         this.queryPort = queryPort;
     }
 
-    public List<NotificationQueryPort.NotificationView> list(long userId, int page, int size) {
+    public List<NotificationQueryPort.NotificationView> list(String userId, int page, int size) {
         return queryPort.list(userId, Math.max(page, 0), Math.min(Math.max(size, 1), 50));
     }
 
-    public int unread(long userId) {
+    public int unread(String userId) {
         return queryPort.unreadCount(userId);
     }
 }

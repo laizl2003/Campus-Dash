@@ -37,8 +37,8 @@ class AuthModeIT {
         @Test
         @DisplayName("Session：token 依赖服务端映射，映射丢失即失效")
         void session_depends_on_server_state() {
-            String token = authPort.login(7001);
-            assertEquals(7001, authPort.resolve(token).orElseThrow());
+            String token = authPort.login("7001");
+            assertEquals("7001", authPort.resolve(token).orElseThrow());
 
             // 模拟服务端状态丢失：删掉会话映射（等价于 Redis 清空/换实例）
             redis.delete("auth:token:" + token);
@@ -49,7 +49,7 @@ class AuthModeIT {
         @Test
         @DisplayName("Session：登出立即失效")
         void session_logout_invalidates_immediately() {
-            String token = authPort.login(7002);
+            String token = authPort.login("7002");
             authPort.logout(token);
             assertTrue(authPort.resolve(token).isEmpty());
         }
@@ -70,8 +70,8 @@ class AuthModeIT {
         @Test
         @DisplayName("JWT：无状态，服务端不存会话映射，状态丢失后仍有效")
         void jwt_is_stateless() {
-            String token = authPort.login(7003);
-            assertEquals(7003, authPort.resolve(token).orElseThrow());
+            String token = authPort.login("7003");
+            assertEquals("7003", authPort.resolve(token).orElseThrow());
 
             // JWT 的 token 格式是自包含的（三段式），服务端没有 auth:token: 映射
             assertTrue(token.chars().filter(c -> c == '.').count() == 2,
@@ -80,17 +80,17 @@ class AuthModeIT {
                     "JWT 模式不应写入会话映射");
 
             // 与 Session 的对照：即使"服务端状态丢失"，JWT 依然有效
-            assertEquals(7003, authPort.resolve(token).orElseThrow(),
+            assertEquals("7003", authPort.resolve(token).orElseThrow(),
                     "JWT 无状态：不依赖服务端映射，状态丢失后仍有效");
         }
 
         @Test
         @DisplayName("JWT：吊销难——登出靠黑名单，未吊销前 token 始终合法")
         void jwt_revocation_needs_blacklist() {
-            String token = authPort.login(7004);
+            String token = authPort.login("7004");
 
             // 登出前：有效
-            assertEquals(7004, authPort.resolve(token).orElseThrow());
+            assertEquals("7004", authPort.resolve(token).orElseThrow());
 
             // 登出 = 把 jti 加入黑名单
             authPort.logout(token);
@@ -106,7 +106,7 @@ class AuthModeIT {
         @Test
         @DisplayName("JWT：伪造签名的 token 被拒绝")
         void jwt_rejects_forged_signature() {
-            String token = authPort.login(7005);
+            String token = authPort.login("7005");
             // 篡改 payload 段（改 userId），签名不再匹配
             String[] parts = token.split("\\.");
             String forged = parts[0] + "." + parts[1] + "x." + parts[2];

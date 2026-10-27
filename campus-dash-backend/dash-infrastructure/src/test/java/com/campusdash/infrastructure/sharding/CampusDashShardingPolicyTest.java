@@ -27,10 +27,11 @@ class CampusDashShardingPolicyTest {
     void routesUserTablesByUserShard() {
         CampusDashShardingPolicy policy = new CampusDashShardingPolicy(4);
 
-        assertEquals("user_2", policy.routeUserTable("wallet_account", 10L));
-        assertEquals("user_2", policy.routeUserTable("wallet_ledger", 10L));
-        assertEquals("user_2", policy.routeUserTable("credit_score", 10L));
-        assertEquals("user_2", policy.routeUserTable("credit_event", 10L));
+        // 同一个用户在所有用户维度表上必须路由到同一片（id 现在是字符串，用其稳定哈希取模）
+        String shard = policy.routeUserTable("wallet_account", "user-10");
+        assertEquals(shard, policy.routeUserTable("wallet_ledger", "user-10"));
+        assertEquals(shard, policy.routeUserTable("credit_score", "user-10"));
+        assertEquals(shard, policy.routeUserTable("credit_event", "user-10"));
     }
 
     @Test

@@ -102,10 +102,10 @@ public class GetErrandDetailUseCase {
         return String.format(
                 "{\"id\":\"%d\",\"title\":\"%s\",\"status\":\"%s\",\"type\":\"%s\","
                         + "\"rewardCents\":%d,\"slotTotal\":%d,\"slotTaken\":%d,"
-                        + "\"publisherId\":\"%d\",\"grabberId\":\"%d\",\"round\":%d,\"version\":%d}",
+                        + "\"publisherId\":\"%s\",\"grabberId\":\"%s\",\"round\":%d,\"version\":%d}",
                 e.id(), escape(e.title()), e.status().name(), e.type().name(),
                 e.reward().cents(), e.slotTotal(), e.slotTaken(),
-                e.publisherId(), e.grabberId() == null ? -1L : e.grabberId(),
+                e.publisherId(), e.grabberId() == null ? "" : e.grabberId(),
                 e.round(), e.version());
     }
 

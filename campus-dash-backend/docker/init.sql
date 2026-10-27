@@ -5,8 +5,8 @@ SET NAMES utf8mb4;
 CREATE TABLE IF NOT EXISTS errand (
   id            BIGINT       NOT NULL COMMENT '雪花 ID',
   campus_id     BIGINT       NOT NULL COMMENT '校区 ID，P6 分片键',
-  publisher_id  BIGINT       NOT NULL COMMENT '发单人',
-  grabber_id    BIGINT       NULL     COMMENT '当前抢中者',
+  publisher_id  VARCHAR(36)       NOT NULL COMMENT '发单人',
+  grabber_id    VARCHAR(36)       NULL     COMMENT '当前抢中者',
   type          VARCHAR(16)  NOT NULL COMMENT 'DELIVERY/BUY/QUEUE/OTHER',
   title         VARCHAR(64)  NOT NULL,
   reward_amount BIGINT       NOT NULL COMMENT '悬赏金额，单位分',
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS errand_status_log (
   from_status VARCHAR(16) NOT NULL,
   to_status   VARCHAR(16) NOT NULL,
   round       INT         NOT NULL DEFAULT 0,
-  operator_id BIGINT      NOT NULL,
+  operator_id VARCHAR(36)      NOT NULL,
   created_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (id),
   KEY idx_campus_errand_log (campus_id, errand_id, id),
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS grab_record (
   id         BIGINT      NOT NULL,
   campus_id  BIGINT      NOT NULL COMMENT '校区 ID，P6 与 errand 绑定分片',
   errand_id  BIGINT      NOT NULL,
-  runner_id  BIGINT      NOT NULL,
+  runner_id  VARCHAR(36)      NOT NULL,
   seq        INT         NOT NULL COMMENT '第几个名额，从 1 开始；候选记录为 0',
   round      INT         NOT NULL DEFAULT 0,
   result     VARCHAR(16) NOT NULL COMMENT 'GRABBED/CANDIDATE/EXPIRED',
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS grab_record (
 
 CREATE TABLE IF NOT EXISTS wallet_account (
   id         BIGINT      NOT NULL,
-  owner_id   BIGINT      NOT NULL COMMENT '用户 ID；系统户用固定值',
+  owner_id   VARCHAR(36)      NOT NULL COMMENT '用户 ID；系统户用固定值',
   owner_type VARCHAR(16) NOT NULL COMMENT 'USER/ESCROW/COMMISSION',
   available  BIGINT      NOT NULL DEFAULT 0 COMMENT '可用余额，单位分',
   frozen     BIGINT      NOT NULL DEFAULT 0 COMMENT '冻结余额，单位分',
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS wallet_ledger (
   id            BIGINT      NOT NULL,
   biz_no        VARCHAR(64) NOT NULL COMMENT '业务幂等号，如 escrow:{errandId}',
   account_id    BIGINT      NOT NULL,
-  user_id       BIGINT      NOT NULL COMMENT 'P6 分片键',
+  user_id       VARCHAR(36)      NOT NULL COMMENT 'P6 分片键',
   direction     VARCHAR(8)  NOT NULL COMMENT 'DEBIT/CREDIT',
   amount        BIGINT      NOT NULL COMMENT '单位分，恒为正',
   balance_after BIGINT      NOT NULL COMMENT '记账后余额，对账追溯用',
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS escrow_order (
   id           BIGINT      NOT NULL,
   campus_id    BIGINT      NOT NULL COMMENT '校区 ID，P6 与 errand 绑定分片',
   errand_id    BIGINT      NOT NULL,
-  publisher_id BIGINT      NOT NULL,
+  publisher_id VARCHAR(36)      NOT NULL,
   amount       BIGINT      NOT NULL COMMENT '单位分',
   status       VARCHAR(16) NOT NULL COMMENT 'HELD/RELEASED/REFUNDED',
   created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS fund_audit_log (
   biz_no     VARCHAR(64)  NOT NULL COMMENT '与 wallet_ledger.biz_no 对应',
   action     VARCHAR(24)  NOT NULL COMMENT 'ESCROW/SETTLE/REFUND/ARBITRATE',
   errand_id  BIGINT       NOT NULL,
-  operator_id BIGINT      NOT NULL,
+  operator_id VARCHAR(36)      NOT NULL,
   detail     JSON         NULL COMMENT '金额分配明细',
   result     VARCHAR(16)  NOT NULL COMMENT 'SUCCESS/FAILED',
   message    VARCHAR(255) NULL,
@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS fund_audit_log (
 CREATE TABLE IF NOT EXISTS notification (
   id          BIGINT      NOT NULL,
   msg_key     VARCHAR(96) NOT NULL COMMENT '消费幂等键',
-  user_id     BIGINT      NOT NULL COMMENT '接收人',
+  user_id     VARCHAR(36)      NOT NULL COMMENT '接收人',
   errand_id   BIGINT      NOT NULL,
   type        VARCHAR(24) NOT NULL COMMENT 'SETTLED/REFUNDED/ARBITRATED',
   content     VARCHAR(255) NOT NULL,
@@ -248,7 +248,7 @@ CREATE TABLE IF NOT EXISTS sync_diff (
 -- 信用分快照：当前分数。由业务事务内直接更新（与资金动作同事务，无中间态），
 -- 每日 job 按 30 天滑动窗口重算校准（过期事件的贡献被移除）。
 CREATE TABLE IF NOT EXISTS credit_score (
-  user_id    BIGINT      NOT NULL,
+  user_id    VARCHAR(36)      NOT NULL,
   score      INT         NOT NULL DEFAULT 60 COMMENT '当前信用分，初始 60',
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   version    BIGINT      NOT NULL DEFAULT 0,
@@ -260,7 +260,7 @@ CREATE TABLE IF NOT EXISTS credit_score (
 CREATE TABLE IF NOT EXISTS credit_event (
   id         BIGINT      NOT NULL,
   biz_no     VARCHAR(96) NOT NULL COMMENT '幂等键：settle:{errandId} / revert:{errandId}:{round} 等',
-  user_id    BIGINT      NOT NULL,
+  user_id    VARCHAR(36)      NOT NULL,
   type       VARCHAR(32) NOT NULL COMMENT 'SETTLE/GRAB_TIMEOUT_REVERT/CANCEL_AFTER_GRAB/DELIVERY_LATE/DISPUTE_LOSE',
   delta      INT         NOT NULL COMMENT '分数变化，可负',
   ref_type   VARCHAR(16) NOT NULL COMMENT '关联业务类型',

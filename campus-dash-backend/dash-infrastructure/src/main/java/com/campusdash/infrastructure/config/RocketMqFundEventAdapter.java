@@ -158,8 +158,8 @@ public class RocketMqFundEventAdapter implements FundEventPort, AutoCloseable {
 
     private String toJson(FundEvent e) {
         return String.format(
-                "{\"bizNo\":\"%s\",\"type\":\"%s\",\"errandId\":%d,\"publisherId\":%d,"
-                        + "\"runnerId\":%d,\"amountCents\":%d,\"commissionCents\":%d}",
+                "{\"bizNo\":\"%s\",\"type\":\"%s\",\"errandId\":%d,\"publisherId\":\"%s\","
+                        + "\"runnerId\":\"%s\",\"amountCents\":%d,\"commissionCents\":%d}",
                 e.bizNo(), e.type(), e.errandId(), e.publisherId(),
                 e.runnerId(), e.amountCents(), e.commissionCents());
     }

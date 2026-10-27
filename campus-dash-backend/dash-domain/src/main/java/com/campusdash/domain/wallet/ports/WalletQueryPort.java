@@ -13,10 +13,10 @@ import java.util.Optional;
 public interface WalletQueryPort {
 
     /** 余额 */
-    Optional<BalanceView> findBalance(long ownerId);
+    Optional<BalanceView> findBalance(String ownerId);
 
     /** 流水分页。走 idx_account_time(account_id, created_at) */
-    List<LedgerView> ledger(long ownerId, int page, int size);
+    List<LedgerView> ledger(String ownerId, int page, int size);
 
     record BalanceView(long availableCents, long frozenCents) {}
 

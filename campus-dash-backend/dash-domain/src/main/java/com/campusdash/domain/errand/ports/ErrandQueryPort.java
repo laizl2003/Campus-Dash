@@ -28,10 +28,10 @@ public interface ErrandQueryPort {
     List<CursorItem> listByCursor(long campusId, String status, Instant beforeCreatedAt, Long beforeId, int size);
 
     /** 我发布的。走 idx_publisher */
-    List<Errand> listByPublisher(long publisherId, int page, int size);
+    List<Errand> listByPublisher(String publisherId, int page, int size);
 
     /** 我抢中的（历史所有轮次都算）。走 grab_record.idx_runner 反查 */
-    List<Errand> listByRunner(long runnerId, int page, int size);
+    List<Errand> listByRunner(String runnerId, int page, int size);
 
     /** 状态时间线：事件溯源的展示面 */
     List<StatusChange> statusLog(long campusId, long errandId);
@@ -43,9 +43,9 @@ public interface ErrandQueryPort {
     List<Long> sampleIds(int limit);
 
     /** 跑腿在途任务数（已接单未送达）：抢单资格校验用 */
-    int countOngoingByRunner(long runnerId);
+    int countOngoingByRunner(String runnerId);
 
-    record StatusChange(Instant time, String from, String to, int round, long operatorId) {}
+    record StatusChange(Instant time, String from, String to, int round, String operatorId) {}
 
     record CursorItem(Errand errand, Instant createdAt) {}
 }

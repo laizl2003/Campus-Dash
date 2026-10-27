@@ -10,10 +10,10 @@ import java.util.List;
  */
 public interface CreditRankingPort {
 
-    void update(long campusId, long userId, int score);
+    void update(long campusId, String userId, int score);
 
     /** Top N：返回 userId 与分数，按分数降序 */
     List<Entry> top(long campusId, int limit);
 
-    record Entry(long userId, int score) {}
+    record Entry(String userId, int score) {}
 }

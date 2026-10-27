@@ -22,21 +22,21 @@ public interface ErrandRepository {
      * @return 影响行数。0 表示状态已被别人改掉（抢单失败），1 表示抢中。
      *         用 affectedRows 判定而不是先查后改，是为了让判断和更新成为数据库层的一个原子动作。
      */
-    int casLockForRunner(long errandId, long runnerId, long expectedVersion);
+    int casLockForRunner(long errandId, String runnerId, long expectedVersion);
 
     /** 发布：DRAFT -> PUBLISHED，同样用 CAS 保证不会重复发布 */
     int casPublish(long errandId, long expectedVersion);
 
-    void appendStatusLog(long errandId, ErrandStatus from, ErrandStatus to, int round, long operatorId);
+    void appendStatusLog(long errandId, ErrandStatus from, ErrandStatus to, int round, String operatorId);
 
     /** 跑腿确认接单：LOCKED -> ACCEPTED，只有当前抢中者本人能确认 */
-    int casAccept(long errandId, long runnerId, long expectedVersion);
+    int casAccept(long errandId, String runnerId, long expectedVersion);
 
     /**
      * 超时流转给下一位：LOCKED -> LOCKED，round+1。
      * 条件里带 round 是幂等的关键——旧轮次的消息 CAS 必然失败。
      */
-    int casTransferToNext(long errandId, long nextRunnerId, long expectedVersion, int expectedRound);
+    int casTransferToNext(long errandId, String nextRunnerId, long expectedVersion, int expectedRound);
 
     /** 候选队列空，回退重新开放：LOCKED -> PUBLISHED，名额还回去 */
     int casRevertToPublished(long errandId, long expectedVersion, int expectedRound);
@@ -45,10 +45,10 @@ public interface ErrandRepository {
     List<Errand> findConfirmTimeout(long timeoutSeconds, int limit);
 
     /** 跑腿取货：ACCEPTED -> PICKED_UP */
-    int casPickUp(long errandId, long runnerId, long expectedVersion);
+    int casPickUp(long errandId, String runnerId, long expectedVersion);
 
     /** 跑腿送达：PICKED_UP -> DELIVERED，同时写 delivered_at（自动结算扫描要用） */
-    int casDeliver(long errandId, long runnerId, long expectedVersion);
+    int casDeliver(long errandId, String runnerId, long expectedVersion);
 
     /**
      * 结算：DELIVERED -> SETTLED。

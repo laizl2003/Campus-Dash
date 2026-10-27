@@ -17,7 +17,7 @@ public class JdbcWalletQueryAdapter implements WalletQueryPort {
     }
 
     @Override
-    public Optional<BalanceView> findBalance(long ownerId) {
+    public Optional<BalanceView> findBalance(String ownerId) {
         List<BalanceView> list = jdbc.query("""
                 SELECT available, frozen FROM wallet_account
                  WHERE owner_id = ? AND owner_type = 'USER'
@@ -26,7 +26,7 @@ public class JdbcWalletQueryAdapter implements WalletQueryPort {
     }
 
     @Override
-    public List<LedgerView> ledger(long ownerId, int page, int size) {
+    public List<LedgerView> ledger(String ownerId, int page, int size) {
         // user_id 是流水归属人（比如托管流水归属发单人），不是账户 owner——
         // 用 account_id 关联会漏掉"发单人名下的托管借"这类流水
         return jdbc.query("""

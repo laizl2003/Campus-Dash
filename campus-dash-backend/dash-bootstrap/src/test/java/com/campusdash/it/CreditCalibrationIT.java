@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @SpringBootTest(properties = {"dash.mq.enabled=false"})
 class CreditCalibrationIT {
 
-    static final long USER = 7201L;
+    static final String USER = "7201";
 
     @Autowired JdbcTemplate jdbc;
     @Autowired CreditRepository creditRepository;

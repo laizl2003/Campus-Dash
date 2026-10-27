@@ -16,13 +16,13 @@ import java.util.concurrent.CopyOnWriteArraySet;
 @Component
 public class WsSessionRegistry {
 
-    private final ConcurrentHashMap<Long, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
 
-    public void add(long userId, WebSocketSession session) {
+    public void add(String userId, WebSocketSession session) {
         sessions.computeIfAbsent(userId, k -> new CopyOnWriteArraySet<>()).add(session);
     }
 
-    public void remove(long userId, WebSocketSession session) {
+    public void remove(String userId, WebSocketSession session) {
         Set<WebSocketSession> set = sessions.get(userId);
         if (set != null) {
             set.remove(session);
@@ -32,7 +32,7 @@ public class WsSessionRegistry {
         }
     }
 
-    public Set<WebSocketSession> of(long userId) {
+    public Set<WebSocketSession> of(String userId) {
         return sessions.getOrDefault(userId, Set.of());
     }
 

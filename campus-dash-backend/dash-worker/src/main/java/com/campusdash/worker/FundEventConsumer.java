@@ -70,8 +70,8 @@ public class FundEventConsumer {
                     String tag = msg.getTag().orElse("UNKNOWN");
                     try {
                         long errandId = extractLong(body, "errandId");
-                        long publisherId = extractLong(body, "publisherId");
-                        long runnerId = extractLong(body, "runnerId");
+                        String publisherId = extractString(body, "publisherId");
+                        String runnerId = extractString(body, "runnerId");
                         long amount = extractLong(body, "amountCents");
 
                         // 发单人视角与跑腿视角的文案不同——同一事件对双方语义不一样，
@@ -86,7 +86,7 @@ public class FundEventConsumer {
                                 msgKey + ":pub", publisherId, errandId, tag, pubContent);
 
                         // 结算类事件同时通知跑腿
-                        if (runnerId > 0 && ("SETTLED".equals(tag) || "ARBITRATED".equals(tag))) {
+                        if (!runnerId.isEmpty() && ("SETTLED".equals(tag) || "ARBITRATED".equals(tag))) {
                             String runnerContent = String.format("任务结算完成，你获得 %d 分", amount);
                             notificationRepository.insertIfAbsent(idGenerator.nextId(),
                                     msgKey + ":runner", runnerId, errandId, tag, runnerContent);
@@ -107,6 +107,21 @@ public class FundEventConsumer {
         if (consumer != null) {
             consumer.close();
         }
+    }
+
+    /** publisherId / runnerId 现在是字符串（UUID 或数字串），不能再按数字解析 */
+    private static String extractString(String json, String field) {
+        String needle = "\"" + field + "\":\"";
+        int start = json.indexOf(needle);
+        if (start < 0) {
+            throw new IllegalArgumentException("消息体缺少字段 " + field + ": " + json);
+        }
+        int from = start + needle.length();
+        int to = json.indexOf('"', from);
+        if (to < 0) {
+            throw new IllegalArgumentException("消息体字段未闭合 " + field + ": " + json);
+        }
+        return json.substring(from, to);
     }
 
     private static long extractLong(String json, String field) {

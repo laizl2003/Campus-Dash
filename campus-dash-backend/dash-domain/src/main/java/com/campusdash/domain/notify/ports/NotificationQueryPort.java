@@ -6,9 +6,9 @@ import java.util.List;
 /** 站内消息读端口。消费落库在 NotificationRepository，读取在这里 */
 public interface NotificationQueryPort {
 
-    List<NotificationView> list(long userId, int page, int size);
+    List<NotificationView> list(String userId, int page, int size);
 
-    int unreadCount(long userId);
+    int unreadCount(String userId);
 
     record NotificationView(long id, long errandId, String type, String content, Instant time) {}
 }

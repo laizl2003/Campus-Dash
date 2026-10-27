@@ -15,13 +15,13 @@ public interface GrabSlotPort {
      * 原子完成：任务可抢校验 + 名额扣减 + 抢中者写入 + 幂等去重。
      * 这四步必须在一个 Redis Lua 脚本里完成，中间不能被其他客户端插入。
      */
-    SlotOutcome tryAcquire(long errandId, long runnerId, String requestId);
+    SlotOutcome tryAcquire(long errandId, String runnerId, String requestId);
 
     /**
      * 回滚名额。当 Lua 占位成功但 DB 落库失败时调用，防止名额永久泄漏。
      * 必须在事务外执行——事务已经回滚了，这是补偿动作。
      */
-    void rollback(long errandId, long runnerId, String requestId);
+    void rollback(long errandId, String runnerId, String requestId);
 
     /** 任务发布时初始化名额，供抢单判定使用 */
     void initSlot(long errandId, int slotTotal, long ttlSeconds);

@@ -58,7 +58,7 @@ class CacheCheckIT {
     @DisplayName("正常情况：缓存与 DB 一致，校验零差异")
     void no_diff_when_consistent() {
         var pub = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY,
+                1L, "1001", ErrandType.DELIVERY,
                 "校验_正常_" + UUID.randomUUID().toString().substring(0, 6), 1000L, 1));
         detailUseCase.detailJson(pub.errandId()); // 回填缓存
 
@@ -71,7 +71,7 @@ class CacheCheckIT {
     @DisplayName("脏缓存：检出差异、落 sync_diff、删缓存修正")
     void dirty_cache_detected_and_fixed() {
         var pub = publishUseCase.publish(new PublishErrandUseCase.Command(
-                1L, 1001L, ErrandType.DELIVERY,
+                1L, "1001", ErrandType.DELIVERY,
                 "校验_脏_" + UUID.randomUUID().toString().substring(0, 6), 1000L, 1));
         long id = pub.errandId();
         detailUseCase.detailJson(id); // 回填正确缓存

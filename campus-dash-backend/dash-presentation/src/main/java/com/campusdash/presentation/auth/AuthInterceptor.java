@@ -10,15 +10,10 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import java.util.Optional;
 
 /**
- * 认证拦截器：解析 Bearer token 得到当前用户。
+ * 认证拦截器：把 token 换成 userId，写进 ThreadLocal。
  *
- * 后门开关 dash.auth.allow-header-identity：
- *   - 默认 false：只认 token，X-User-Id 无效
- *   - test profile 与集成测试设为 true：保留 X-User-Id 直传，
- *     否则 P1 的 SpikeLoadClient 压测（2000 并发 × 每人先登录一次）会被登录流程拖垮。
- *
- * 这个开关必须只出现在非生产配置里——谁把它开进生产，
- * 等于任何人带个 Header 就能冒充任何人。
+ * 正门只认 Bearer token；X-User-Id 后门默认关闭，仅压测/本地调试可开。
+ * 请求结束必须 clear()，否则 Tomcat 复用线程时下一个请求会拿到上一个用户的身份。
  */
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
@@ -34,25 +29,21 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest req, HttpServletResponse resp, Object handler) {
-        Long userId = null;
+        String userId = null;
 
-        // 后门：测试与压测直传 X-User-Id
+        // 后门：测试与压测直传 X-User-Id（生产必须关闭）
         if (allowHeaderIdentity) {
             String header = req.getHeader("X-User-Id");
             if (header != null && !header.isBlank()) {
-                try {
-                    userId = Long.parseLong(header);
-                } catch (NumberFormatException ignored) {
-                    // 无效头忽略，继续走 token 路径
-                }
+                userId = header.trim();
             }
         }
 
-        // 正门：Bearer token
+        // 正门：Bearer token。token 的 sub 就是登录时查库得到的 user_id
         if (userId == null) {
             String auth = req.getHeader("Authorization");
             if (auth != null && auth.startsWith("Bearer ")) {
-                Optional<Long> resolved = authPort.resolve(auth.substring(7).trim());
+                Optional<String> resolved = authPort.resolve(auth.substring(7).trim());
                 userId = resolved.orElse(null);
             }
         }
@@ -61,7 +52,12 @@ public class AuthInterceptor implements HandlerInterceptor {
             resp.setStatus(401);
             return false;
         }
-        req.setAttribute(CurrentUser.ATTR, userId);
+        CurrentUser.set(userId);
         return true;
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest req, HttpServletResponse resp, Object handler, Exception ex) {
+        CurrentUser.clear();
     }
 }

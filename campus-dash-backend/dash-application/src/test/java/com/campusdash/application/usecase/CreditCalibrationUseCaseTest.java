@@ -37,10 +37,10 @@ class CreditCalibrationUseCaseTest {
             return 7;
         }
 
-        @Override public int scoreOf(long userId) { return 60; }
-        @Override public Optional<CreditScore> find(long userId) { return Optional.empty(); }
+        @Override public int scoreOf(String userId) { return 60; }
+        @Override public Optional<CreditScore> find(String userId) { return Optional.empty(); }
         @Override public boolean applyEvent(CreditEvent event) { return false; }
-        @Override public List<CreditEvent> recentEvents(long userId, int days, int limit) { return List.of(); }
-        @Override public int windowDelta(long userId, int windowDays) { return 0; }
+        @Override public List<CreditEvent> recentEvents(String userId, int days, int limit) { return List.of(); }
+        @Override public int windowDelta(String userId, int windowDays) { return 0; }
     }
 }

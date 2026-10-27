@@ -74,11 +74,12 @@ class JwtAuthAdapterTest {
     }
 
     @Test
-    @DisplayName("Redis 里的映射值被写坏时按失效处理，不抛异常")
-    void refresh_rejects_corrupt_redis_value() {
-        when(values.getAndDelete("auth:jwt:refresh:bad")).thenReturn("not-a-number");
+    @DisplayName("Redis 里的映射值为空白时按失效处理，不抛异常")
+    void refresh_rejects_blank_redis_value() {
+        // userId 现在是字符串，"不是数字"不再等于非法；只有空白视为脏数据
+        when(values.getAndDelete("auth:jwt:refresh:blank")).thenReturn("   ");
 
-        assertTrue(adapter.refresh("bad").isEmpty());
+        assertTrue(adapter.refresh("blank").isEmpty());
     }
 
     @Test
@@ -92,7 +93,7 @@ class JwtAuthAdapterTest {
     @Test
     @DisplayName("被拉黑的 jti 即使签名与有效期都合法也拒绝")
     void resolve_rejects_blacklisted_jti() {
-        String token = adapter.login(1001L);
+        String token = adapter.login("1001");
         when(redis.hasKey(startsWith("auth:jwt:revoked:"))).thenReturn(true);
 
         assertTrue(adapter.resolve(token).isEmpty());
@@ -101,16 +102,16 @@ class JwtAuthAdapterTest {
     @Test
     @DisplayName("正常签发的 access token 可以解析出 userId")
     void resolve_returns_user_for_valid_token() {
-        String token = adapter.login(1001L);
+        String token = adapter.login("1001");
         when(redis.hasKey(anyString())).thenReturn(false);
 
-        assertEquals(Optional.of(1001L), adapter.resolve(token));
+        assertEquals(Optional.of("1001"), adapter.resolve(token));
     }
 
     @Test
     @DisplayName("登出把 jti 写入黑名单，TTL 取 token 剩余有效期")
     void logout_blacklists_jti_with_remaining_ttl() {
-        String token = adapter.login(1001L);
+        String token = adapter.login("1001");
 
         adapter.logout(token);
 
