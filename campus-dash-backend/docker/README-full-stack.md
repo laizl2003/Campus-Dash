@@ -107,7 +107,24 @@ rmqbroker ──healthy──→ mq-init ──completed──→ app ──heal
    nginx 的 `/ws` 必须带 `Upgrade` 和 `Connection "upgrade"`，
    `proxy_read_timeout` 要大于前端 30 秒心跳，否则空闲连接会被 nginx 掐断。
 
-## 常用命令
+## 日常：用 start.ps1（推荐）
+
+仓库根目录的 `start.ps1` 把"构建 + 重建镜像 + 启动 + 健康检查"收成一条命令：
+
+```powershell
+.\start.ps1              # 前后端都构建（默认）
+.\start.ps1 -Build web   # 只构建前端
+.\start.ps1 -Build api   # 只构建后端
+.\start.ps1 -Build none  # 不构建，只重启
+.\start.ps1 -Status      # 只读：容器状态 + /api/health
+.\start.ps1 -Logs        # 启动后跟随日志
+.\start.ps1 -Down        # 停止（保留数据卷；加 -Purge 连数据一起删）
+.\start.ps1 -StartDocker # Docker 没起时自动拉起 Docker Desktop
+```
+
+实测耗时：只重启 **12 秒**，只改前端 **约 15 秒**，前后端全量 **约 45 秒**，冷启动（先 `-Down`）**约 90 秒**。
+
+## 手动命令（不用脚本时）
 
 ```bash
 # 只看应用日志
@@ -116,16 +133,27 @@ docker logs -f dash-worker
 
 # 改了后端代码：重新打包 + 重建 app（worker 复用同一个镜像）
 mvn -pl dash-bootstrap,dash-worker -am package -DskipTests
-docker compose -f docker-compose.yaml -f docker-compose.full.yaml up -d --build app worker
+docker compose -f docker-compose.yaml -f docker-compose.full.yaml build app
+docker compose -f docker-compose.yaml -f docker-compose.full.yaml up -d app worker web
 
 # 改了前端：重新构建 + 重建 web
 cd campus-dash-frontend && npm run build
 cd ../campus-dash-backend/docker
-docker compose -f docker-compose.yaml -f docker-compose.full.yaml up -d --build web
+docker compose -f docker-compose.yaml -f docker-compose.full.yaml build web
+docker compose -f docker-compose.yaml -f docker-compose.full.yaml up -d app worker web
 
 # 停止（保留 MySQL 数据卷）
 docker compose -f docker-compose.yaml -f docker-compose.full.yaml down
 ```
+
+## mq-init 的两个细节
+
+1. **快路径**：broker 没重建时 topic 还在，脚本里先 `topicList` 判断，命中就直接退出，
+   避免每次 `up` 白等十几秒。
+2. **先等路由再建 topic**：容器 healthy 只代表进程活着，namesrv 里可能还没有路由，
+   此时第一条 `updateTopic` 会报 `Make sure the specified clusterName exists`。
+   脚本会先 `clusterList` 轮询，建完再用 `topicList` 校验、失败重试一次
+   （`mqadmin` 出错时退出码也可能是 0，不能只看退出码）。
 
 ## 验收清单
 

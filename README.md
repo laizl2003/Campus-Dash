@@ -40,6 +40,25 @@ campus-dash/
 
 ## 快速开始
 
+### 0. 一条命令（推荐）
+
+在仓库根目录：
+
+```powershell
+.\start.ps1              # 重新打包前后端 + 重建镜像 + 重启 + 等健康
+.\start.ps1 -Build web   # 只改了前端，跳过 Maven
+.\start.ps1 -Build api   # 只改了后端
+.\start.ps1 -Build none  # 不构建，只重启
+.\start.ps1 -Status      # 看容器状态与健康检查
+.\start.ps1 -Logs        # 跟随 app / worker / web 日志
+.\start.ps1 -Down        # 停止（保留数据库）
+```
+
+首次运行前需要 Docker Desktop 已启动（或加 `-StartDocker` 让脚本自己拉起）。
+脚本会把访问地址打印出来：**http://localhost:8088**。
+
+下面是手动分步的做法，便于理解每一步在做什么。
+
 **推荐用AI（启动提示词如下）**：
 > 在编程助手中打开该工程目录，可以使用以下提示：帮我启动这个项目。先阅读 README 和现有配置，检查环境与端口。安装缺失依赖，启动前后端，检查健康接口并完成一次页面请求。缺少配置时说明需要配置哪些字段。最后告诉我访问地址和停止服务的方法。
 

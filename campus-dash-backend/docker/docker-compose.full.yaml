@@ -30,16 +30,55 @@ services:
       - |
         set -e
         cd /home/rocketmq/rocketmq-*/bin
-        # 注意：compose 会把 $t 当变量插值（会警告并替换成空串），
-        # 想交给容器内 shell 展开必须写成 $$t
-        for t in errand-confirm-timeout errand-auto-settle errand-cache-evict; do
-          sh mqadmin updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t "$$t" -a +message.type=DELAY
+
+        # 1. 等 broker 注册到 namesrv。
+        #    容器 healthy 只代表进程活着，路由还没发布；不等的话第一条 updateTopic 会报
+        #    "Make sure the specified clusterName exists"
+        for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+          if sh mqadmin clusterList -n rmqnamesrv:9876 2>/dev/null | grep -q DefaultCluster; then
+            break
+          fi
+          sleep 3
         done
-        sh mqadmin updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t errand-fund-event -a +message.type=TRANSACTION
-        for g in dash-timeout-consumer dash-autosettle-consumer dash-fund-event-consumer dash-fund-event-push dash-cache-evict-consumer; do
-          sh mqadmin updateSubGroup -n rmqnamesrv:9876 -c DefaultCluster -g "$$g"
+
+        # 2. 快路径：broker 没重建时 topic 还在，直接退出（每次 up 少等十几秒）
+        if sh mqadmin topicList -n rmqnamesrv:9876 2>/dev/null | grep -qx 'errand-fund-event'; then
+          echo "topics already exist, skip init"
+          exit 0
+        fi
+
+        # 3. 建 topic / 消费组。
+        #    注意：compose 会把单个美元符号加变量名当插值（注释里也会，并告警），
+        #    想交给容器内 shell 展开必须写成两个美元符号。
+        #    mqadmin 失败时退出码也可能是 0，所以下面还要用 topicList 校验。
+        create_all() {
+          for t in errand-confirm-timeout errand-auto-settle errand-cache-evict; do
+            sh mqadmin updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t "$$t" -a +message.type=DELAY >/dev/null 2>&1 || true
+          done
+          sh mqadmin updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t errand-fund-event -a +message.type=TRANSACTION >/dev/null 2>&1 || true
+          for g in dash-timeout-consumer dash-autosettle-consumer dash-fund-event-consumer dash-fund-event-push dash-cache-evict-consumer; do
+            sh mqadmin updateSubGroup -n rmqnamesrv:9876 -c DefaultCluster -g "$$g" >/dev/null 2>&1 || true
+          done
+        }
+
+        create_all
+
+        # 4. 校验 + 重试一次
+        for round in 1 2; do
+          missing=''
+          for t in errand-confirm-timeout errand-auto-settle errand-cache-evict errand-fund-event; do
+            sh mqadmin topicList -n rmqnamesrv:9876 2>/dev/null | grep -qx "$$t" || missing="$$missing $$t"
+          done
+          if [ -z "$$missing" ]; then
+            echo "mq init done"
+            exit 0
+          fi
+          echo "missing topics:$$missing, retry"
+          create_all
         done
-        echo "mq init done"
+
+        echo "mq init failed"
+        exit 1
 
   app:
     build:
