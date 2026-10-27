@@ -203,7 +203,6 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
         </div>}
 
         {notice && <div className="banner ok" role="status">{notice}</div>}
-        {error && <div className="banner warn" role="alert">{error}</div>}
 
         {/* 登录态只让 Tab 在三个输入框之间走：其余控件用鼠标点，或用回车提交 */}
         <button className="btn btn-primary auth-submit" disabled={busy} type="submit"
@@ -242,14 +241,16 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
         </div>}
       </div>}
     </div></section>
-    {disabledNotice && <div className="floating-notice" role="alertdialog" aria-live="assertive" aria-label="账户已被禁用">
+    {(disabledNotice || error) && <div className="floating-notice" role="alertdialog" aria-live="assertive"
+         aria-label={disabledNotice ? '账户已被禁用' : '操作失败'}>
       <div className="floating-notice-card">
         <span className="floating-notice-icon">!</span>
         <div className="floating-notice-body">
-          <strong>该账户已被禁用</strong>
-          <p>{disabledNotice}，请联系平台管理员启用后再登录。</p>
+          <strong>{disabledNotice ? '该账户已被禁用' : '操作失败'}</strong>
+          <p>{disabledNotice ? `${disabledNotice}，请联系平台管理员启用后再登录。` : error}</p>
         </div>
-        <button type="button" className="floating-notice-close" aria-label="关闭提示" onClick={() => setDisabledNotice('')}>×</button>
+        <button type="button" className="floating-notice-close" aria-label="关闭提示"
+                onClick={() => { setDisabledNotice(''); setError(''); }}>×</button>
       </div>
     </div>}
   </div>;
