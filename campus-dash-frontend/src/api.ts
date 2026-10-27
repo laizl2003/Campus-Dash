@@ -325,7 +325,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown, retried 
   if (!resp.ok) throw new BizError('HTTP_ERROR', '服务暂时不可用，请稍后重试');
   // 后端所有 long 都序列化为 string；仅金额转安全整数，ID 保留原始字符串。
   const result = JSON.parse(await resp.text(), (key, value) => {
-    if (['rewardCents', 'amountCents', 'availableCents', 'frozenCents'].includes(key)) {
+    if (['rewardCents', 'amountCents', 'availableCents', 'frozenCents', 'discountCents', 'paidCents'].includes(key)) {
       const amount = Number(value);
       if (!Number.isSafeInteger(amount)) throw new BizError('INVALID_AMOUNT', '金额数据超出可显示范围');
       return amount;
@@ -368,8 +368,10 @@ export const api = {
     request<ErrandCard[]>(`/api/errands/mine?role=${role}`),
   detail: (id: string) => request<ErrandCard>(`/api/errands/${id}`),
   timeline: (id: string) => request<StatusChange[]>(`/api/errands/${id}/timeline`),
-  publish: (req: { title: string; rewardCents: number; slotTotal: number; type?: string }) =>
-    request<{ errandId: string; status: string }>('/api/errands', 'POST', req),
+  publish: (req: { title: string; rewardCents: number; slotTotal: number; type?: string; voucherId?: number | null }) =>
+    request<{
+      errandId: string; status: string; frozenCents: number; discountCents: number; paidCents: number;
+    }>('/api/errands', 'POST', req),
   grab: (id: string) =>
     request<{ code: string; grabbed: boolean }>(`/api/errands/${id}/grab`, 'POST'),
   action: (id: string, name: 'confirm' | 'pickup' | 'deliver' | 'settle' | 'cancel' | 'dispute') =>

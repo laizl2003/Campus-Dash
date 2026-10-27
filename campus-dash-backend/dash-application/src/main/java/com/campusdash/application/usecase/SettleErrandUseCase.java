@@ -11,6 +11,8 @@ import com.campusdash.domain.wallet.model.*;
 import com.campusdash.domain.wallet.ports.FundAuditPort;
 import com.campusdash.domain.wallet.ports.FundEventPort;
 import com.campusdash.domain.wallet.ports.FundEventPort.FundEvent;
+import com.campusdash.domain.voucher.model.VoucherUse;
+import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.ports.WalletRepository;
 import com.campusdash.shared.BizException;
 import com.campusdash.shared.ErrorCode;
@@ -42,6 +44,8 @@ public class SettleErrandUseCase {
     private static final Logger log = LoggerFactory.getLogger(SettleErrandUseCase.class);
     private static final String ESCROW_ACCOUNT_OWNER = "-1";
     private static final String COMMISSION_ACCOUNT_OWNER = "-2";
+    /** 平台营销户：承担优惠券补贴（1-β）D */
+    private static final String MARKETING_ACCOUNT_OWNER = "-4";
 
     private final ErrandRepository errandRepository;
     private final WalletRepository walletRepository;
@@ -54,6 +58,7 @@ public class SettleErrandUseCase {
     private final CreditRankingPort creditRankingPort;
     private final TransactionTemplate transactionTemplate;
     private final RealtimeNotifier notifier;
+    private final VoucherRepository voucherRepository;
 
     public SettleErrandUseCase(ErrandRepository errandRepository,
                                WalletRepository walletRepository,
@@ -65,7 +70,8 @@ public class SettleErrandUseCase {
                                CreditRankingPort creditRankingPort,
                                TransactionTemplate transactionTemplate,
                                RealtimeNotifier notifier,
-                               @Value("${dash.settle.commission-rate:0.05}") double commissionRate) {
+                               VoucherRepository voucherRepository,
+                               @Value("${dash.settle.commission-rate:0.08}") double commissionRate) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.auditPort = auditPort;
@@ -76,6 +82,7 @@ public class SettleErrandUseCase {
         this.creditRankingPort = creditRankingPort;
         this.transactionTemplate = transactionTemplate;
         this.notifier = notifier;
+        this.voucherRepository = voucherRepository;
         this.commissionRate = commissionRate;
     }
 
@@ -105,12 +112,23 @@ public class SettleErrandUseCase {
         EscrowOrder escrow = walletRepository.findEscrowByErrandId(errand.campusId(), errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ESCROW_NOT_FOUND, "errandId=" + errandId));
 
-        // 计算佣金（向下取整，余数归跑腿）
-        long totalCents = escrow.amount().cents();
-        long commissionCents = (long) Math.floor(totalCents * commissionRate);
-        long runnerCents = totalCents - commissionCents;
+        // 托管里是"实付 P"；券面 D 由历史锁定记录还原，悬赏 R = P + D
+        VoucherUse voucher = voucherRepository.findUseByErrand(errandId).orElse(null);
+        long paidCents = escrow.amount().cents();
+        long discountCents = voucher == null ? 0L : voucher.discountCents();
+        long runnerBearCents = voucher == null ? 0L : voucher.runnerBearCents();
+        long rewardCents = paidCents + discountCents;
+
+        // 佣金按悬赏 R 计算（向下取整，余数归跑腿）；跑腿再承担 βD，其余由营销户补贴
+        long commissionCents = (long) Math.floor(rewardCents * commissionRate);
+        long runnerCents = rewardCents - commissionCents - runnerBearCents;
+        long subsidyCents = discountCents - runnerBearCents;
+        if (runnerCents < 0) {
+            throw new BizException(ErrorCode.INVALID_AMOUNT, "优惠券分摊后跑腿实收为负");
+        }
         Money runnerAmount = Money.ofCents(runnerCents);
         Money commissionAmount = Money.ofCents(commissionCents);
+        Money subsidyAmount = Money.ofCents(subsidyCents);
 
         String bizNo = LedgerEntry.settleBizNo(errandId);
         FundEvent event = new FundEvent(bizNo, "SETTLED", errandId, errand.publisherId(),
@@ -122,7 +140,7 @@ public class SettleErrandUseCase {
         boolean committed = fundEventPort.publishInTransaction(event, () ->
                 Boolean.TRUE.equals(transactionTemplate.execute(status -> {
                     boolean settled = doSettle(errandId, errand, escrow,
-                            runnerAmount, commissionAmount, bizNo, operatorId);
+                            runnerAmount, commissionAmount, subsidyAmount, bizNo, operatorId);
                     // 返回 false 本身不会触发 Spring 回滚，必须撤销此前成功的 CAS。
                     if (!settled) status.setRollbackOnly();
                     return settled;
@@ -159,7 +177,8 @@ public class SettleErrandUseCase {
      * 不依赖 @Transactional 代理——lambda 自调用场景下代理不可靠。
      */
     boolean doSettle(long errandId, Errand errand, EscrowOrder escrow,
-                     Money runnerAmount, Money commissionAmount, String bizNo, String operatorId) {
+                     Money runnerAmount, Money commissionAmount, Money subsidyAmount,
+                     String bizNo, String operatorId) {
         // 闸门 1：托管单状态 CAS
         int escrowUpdated = walletRepository.casEscrowStatus(errand.campusId(), errandId,
                 EscrowOrder.EscrowStatus.HELD, EscrowOrder.EscrowStatus.RELEASED);
@@ -186,6 +205,10 @@ public class SettleErrandUseCase {
                 .orElseThrow();
         WalletAccount commissionAccount = walletRepository.findByOwner(COMMISSION_ACCOUNT_OWNER, AccountType.COMMISSION)
                 .orElseThrow();
+        WalletAccount marketingAccount = subsidyAmount.cents() > 0
+                ? walletRepository.findByOwner(MARKETING_ACCOUNT_OWNER, AccountType.MARKETING)
+                    .orElseThrow(() -> new BizException(ErrorCode.ACCOUNT_NOT_FOUND, "营销户缺失"))
+                : null;
 
         // 托管户扣减
         if (walletRepository.casDebit(escrowAccount.id(), escrow.amount()) != 1) return false;
@@ -193,6 +216,12 @@ public class SettleErrandUseCase {
         if (walletRepository.casCredit(runnerAccount.id(), runnerAmount) != 1) return false;
         if (commissionAmount.cents() > 0
                 && walletRepository.casCredit(commissionAccount.id(), commissionAmount) != 1) return false;
+        // 平台补贴从营销户出；余额不足说明演示预算耗尽，按冲突回滚
+        if (marketingAccount != null
+                && walletRepository.casDebit(marketingAccount.id(), subsidyAmount) != 1) {
+            log.warn("营销户余额不足，回滚结算 errandId={} subsidy={}", errandId, subsidyAmount.cents());
+            return false;
+        }
 
         // 流水（闸门 3：bizNo 唯一索引）
         walletRepository.insertLedger(new LedgerEntry(
@@ -212,6 +241,13 @@ public class SettleErrandUseCase {
                     commissionAccount.available().plus(commissionAmount),
                     LedgerEntry.RefType.SETTLE, errandId));
         }
+        if (marketingAccount != null) {
+            walletRepository.insertLedger(new LedgerEntry(
+                    idGenerator.nextId(), bizNo, marketingAccount.id(), MARKETING_ACCOUNT_OWNER,
+                    LedgerEntry.Direction.DEBIT, subsidyAmount,
+                    marketingAccount.available().minus(subsidyAmount),
+                    LedgerEntry.RefType.SETTLE, errandId));
+        }
 
         // 信用事件与资金动作同事务：结算成功则跑腿 +2 分，无中间态（P5 验收标准第 5 条）。
         // biz_no 唯一索引保证重复结算不重复计分
@@ -219,6 +255,8 @@ public class SettleErrandUseCase {
                 idGenerator.nextId(), CreditEvent.settleBizNo(errandId), errand.grabberId(),
                 CreditEventType.SETTLE, CreditEventType.SETTLE.delta(), "ERRAND", errandId,
                 java.time.Instant.now()));
+        // 券从 locked 变 used；没有券时是 no-op
+        voucherRepository.markUsedByErrand(errandId);
         return true;
     }
 }

@@ -6,8 +6,12 @@ import com.campusdash.domain.credit.ports.CreditRepository;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.model.ErrandStatus;
 import com.campusdash.domain.errand.ports.ErrandRepository;
+import com.campusdash.domain.voucher.model.VoucherUse;
+import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.*;
 import com.campusdash.domain.wallet.ports.WalletRepository;
+import com.campusdash.shared.BizException;
+import com.campusdash.shared.ErrorCode;
 import com.campusdash.shared.Money;
 import com.campusdash.shared.SnowflakeIdGenerator;
 import org.slf4j.Logger;
@@ -30,22 +34,26 @@ public class ArbitrateSettleStep {
     private static final Logger log = LoggerFactory.getLogger(ArbitrateSettleStep.class);
     private static final String ESCROW_ACCOUNT_OWNER = "-1";
     private static final String COMMISSION_ACCOUNT_OWNER = "-2";
+    private static final String MARKETING_ACCOUNT_OWNER = "-4";
 
     private final ErrandRepository errandRepository;
     private final WalletRepository walletRepository;
     private final SnowflakeIdGenerator idGenerator;
     private final CreditRepository creditRepository;
+    private final VoucherRepository voucherRepository;
     private final double commissionRate;
 
     public ArbitrateSettleStep(ErrandRepository errandRepository,
                               WalletRepository walletRepository,
                               SnowflakeIdGenerator idGenerator,
                               CreditRepository creditRepository,
-                              @Value("${dash.settle.commission-rate:0.05}") double commissionRate) {
+                              VoucherRepository voucherRepository,
+                              @Value("${dash.settle.commission-rate:0.08}") double commissionRate) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.idGenerator = idGenerator;
         this.creditRepository = creditRepository;
+        this.voucherRepository = voucherRepository;
         this.commissionRate = commissionRate;
     }
 
@@ -66,10 +74,21 @@ public class ArbitrateSettleStep {
         errandRepository.appendStatusLog(errandId, ErrandStatus.DISPUTED, ErrandStatus.SETTLED,
                 errand.round(), operatorId);
 
-        long total = escrow.amount().cents();
-        long commissionCents = (long) Math.floor(total * commissionRate);
-        Money runnerAmount = Money.ofCents(total - commissionCents);
+        // 与正常结算同一套拆账：托管里是实付 P，券面 D 由锁定记录还原
+        VoucherUse voucher = voucherRepository.findUseByErrand(errandId).orElse(null);
+        long paidCents = escrow.amount().cents();
+        long discountCents = voucher == null ? 0L : voucher.discountCents();
+        long runnerBearCents = voucher == null ? 0L : voucher.runnerBearCents();
+        long rewardCents = paidCents + discountCents;
+        long commissionCents = (long) Math.floor(rewardCents * commissionRate);
+        long runnerCents = rewardCents - commissionCents - runnerBearCents;
+        long subsidyCents = discountCents - runnerBearCents;
+        if (runnerCents < 0) {
+            throw new BizException(ErrorCode.INVALID_AMOUNT, "优惠券分摊后跑腿实收为负");
+        }
+        Money runnerAmount = Money.ofCents(runnerCents);
         Money commissionAmount = Money.ofCents(commissionCents);
+        Money subsidyAmount = Money.ofCents(subsidyCents);
 
         WalletAccount escrowAccount = walletRepository
                 .findByOwner(ESCROW_ACCOUNT_OWNER, AccountType.ESCROW).orElseThrow();
@@ -77,11 +96,16 @@ public class ArbitrateSettleStep {
                 .findByOwner(errand.grabberId(), AccountType.USER).orElseThrow();
         WalletAccount commissionAccount = walletRepository
                 .findByOwner(COMMISSION_ACCOUNT_OWNER, AccountType.COMMISSION).orElseThrow();
+        WalletAccount marketingAccount = subsidyCents > 0
+                ? walletRepository.findByOwner(MARKETING_ACCOUNT_OWNER, AccountType.MARKETING).orElseThrow()
+                : null;
 
         if (walletRepository.casDebit(escrowAccount.id(), escrow.amount()) != 1) return rollbackConflict();
         if (walletRepository.casCredit(runnerAccount.id(), runnerAmount) != 1) return rollbackConflict();
         if (commissionCents > 0
                 && walletRepository.casCredit(commissionAccount.id(), commissionAmount) != 1) return rollbackConflict();
+        if (marketingAccount != null
+                && walletRepository.casDebit(marketingAccount.id(), subsidyAmount) != 1) return rollbackConflict();
 
         // 闸门 3：bizNo 唯一索引
         walletRepository.insertLedger(new LedgerEntry(
@@ -102,10 +126,18 @@ public class ArbitrateSettleStep {
                     LedgerEntry.RefType.SETTLE, errandId));
         }
         // 仲裁支持跑腿：跑腿无过错，按正常结算计分（同事务）
+        if (marketingAccount != null) {
+            walletRepository.insertLedger(new LedgerEntry(
+                    idGenerator.nextId(), bizNo, marketingAccount.id(), MARKETING_ACCOUNT_OWNER,
+                    LedgerEntry.Direction.DEBIT, subsidyAmount,
+                    marketingAccount.available().minus(subsidyAmount),
+                    LedgerEntry.RefType.SETTLE, errandId));
+        }
         creditRepository.applyEvent(new CreditEvent(
                 idGenerator.nextId(), CreditEvent.settleBizNo(errandId), errand.grabberId(),
                 CreditEventType.SETTLE, CreditEventType.SETTLE.delta(), "ERRAND", errandId,
                 java.time.Instant.now()));
+        voucherRepository.markUsedByErrand(errandId);
         return true;
     }
 

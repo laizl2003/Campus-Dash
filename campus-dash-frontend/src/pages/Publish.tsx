@@ -34,7 +34,9 @@ export default function Publish() {
   const [balance, setBalance] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [published, setPublished] = useState<{ id: string; title: string; rewardCents: number } | null>(null);
+  const [published, setPublished] = useState<{ id: string; title: string; rewardCents: number; paidCents: number; discountCents: number } | null>(null);
+  const [vouchers, setVouchers] = useState<{ voucherId: string; type: number; thresholdCents?: number; discountCents?: number; status: string }[]>([]);
+  const [voucherId, setVoucherId] = useState<number | null>(null);
   const submitting = useRef(false);
   const rewardCents = parseReward(reward);
   const category = CATEGORIES.find((item) => item.type === type)!;
@@ -42,8 +44,20 @@ export default function Publish() {
   useEffect(() => {
     let active = true;
     api.wallet().then((wallet) => { if (active) setBalance(wallet.availableCents); }).catch(() => {});
+    api.myVouchers()
+      .then((list) => { if (active) setVouchers(list.filter((v) => v.status === 'available')); })
+      .catch(() => { /* 券加载失败不影响发布 */ });
     return () => { active = false; };
   }, []);
+
+  // 只有达到门槛的券可选；改小悬赏后要自动取消已选但不达标的券
+  const eligibleVouchers = vouchers.filter((v) => Number(v.thresholdCents ?? 0) <= (rewardCents ?? 0));
+  const selectedVoucher = eligibleVouchers.find((v) => v.type === voucherId) ?? null;
+  const discountCents = selectedVoucher ? Number(selectedVoucher.discountCents ?? 0) : 0;
+  const paidCents = rewardCents === null ? null : Math.max(0, rewardCents - discountCents);
+  useEffect(() => {
+    if (voucherId !== null && !eligibleVouchers.some((v) => v.type === voucherId)) setVoucherId(null);
+  }, [voucherId, eligibleVouchers]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -55,8 +69,14 @@ export default function Publish() {
     submitting.current = true;
     setBusy(true);
     try {
-      const result = await api.publish({ title: title.trim(), rewardCents, slotTotal: 1, type });
-      setPublished({ id: result.errandId, title: title.trim(), rewardCents });
+      const result = await api.publish({
+        title: title.trim(), rewardCents, slotTotal: 1, type, voucherId,
+      });
+      setPublished({
+        id: result.errandId, title: title.trim(), rewardCents,
+        paidCents: Number(result.paidCents ?? result.frozenCents ?? rewardCents),
+        discountCents: Number(result.discountCents ?? 0),
+      });
       window.dispatchEvent(new Event('dash:changed'));
       api.wallet().then((wallet) => setBalance(wallet.availableCents)).catch(() => {});
     } catch (err) {
@@ -75,7 +95,8 @@ export default function Publish() {
         <span className="eyebrow">READY TO GO</span>
         <h2>任务已发布，等一位顺路的同学</h2>
         <p>{published.title}</p>
-        <div className="task-success-reward"><span>已托管悬赏</span><strong>{yuan(published.rewardCents)}</strong></div>
+        <div className="task-success-reward"><span>已托管实付</span><strong>{yuan(published.paidCents)}</strong></div>
+        {published.discountCents > 0 && <p className="muted">已使用优惠券减 {yuan(published.discountCents)}，悬赏仍为 {yuan(published.rewardCents)}。</p>}
         <p className="muted">完成后确认结算，悬赏会转入跑腿同学的钱包。</p>
         <div className="task-success-actions"><a className="btn btn-primary" href={`#/detail/${published.id}`}>查看任务进度 <Icon name="arrow-right" size={16} /></a><button className="btn btn-ghost" onClick={() => { setPublished(null); setTitle(''); }}>再发一个任务</button></div>
         <span className="task-order-id">任务编号 {published.id}</span>
@@ -107,6 +128,19 @@ export default function Publish() {
               <div className="task-reward-input"><span>¥</span><input id="task-reward" type="text" inputMode="decimal" value={reward} onChange={(event) => { setReward(event.target.value); setError(null); }} autoComplete="off" aria-describedby="task-reward-hint" /><span>元</span></div>
               <div className="task-price-presets">{[5, 10, 15, 20, 30].map((amount) => <button type="button" className={rewardCents === amount * 100 ? 'is-selected' : ''} key={amount} onClick={() => { setReward(String(amount)); setError(null); }}>¥{amount}</button>)}</div>
               <div className="task-balance-line" id="task-reward-hint"><span><Icon name="wallet" size={15} /> {balance === null ? '发布时将校验钱包余额' : `钱包可用 ${yuan(balance)}`}</span><a href="#/wallet">查看钱包 <Icon name="arrow-right" size={13} /></a></div>
+              <div className="task-voucher-picker">
+                <label htmlFor="task-voucher"><Icon name="ticket" size={15} /> 优惠券</label>
+                <select id="task-voucher" value={voucherId ?? ''} onChange={(event) => setVoucherId(event.target.value ? Number(event.target.value) : null)}>
+                  <option value="">不使用优惠券</option>
+                  {eligibleVouchers.map((voucher) => <option key={voucher.voucherId} value={voucher.type}>
+                    满{Number(voucher.thresholdCents ?? 0) / 100}减{Number(voucher.discountCents ?? 0) / 100}（减 {yuan(Number(voucher.discountCents ?? 0))}）
+                  </option>)}
+                </select>
+                {eligibleVouchers.length === 0 && <small>暂无满足当前悬赏门槛的可用券</small>}
+              </div>
+              {selectedVoucher && <div className="task-pay-line">
+                实付 <strong>{yuan(paidCents ?? 0)}</strong><span>已减 {yuan(discountCents)}</span>
+              </div>}
             </div>
           </fieldset>
           {error && <div className="banner warn" role="alert">{error}</div>}

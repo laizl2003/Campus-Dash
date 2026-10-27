@@ -2,6 +2,7 @@ package com.campusdash.domain.voucher.ports;
 
 import com.campusdash.domain.voucher.model.Voucher;
 import com.campusdash.domain.voucher.model.VoucherStock;
+import com.campusdash.domain.voucher.model.VoucherUse;
 
 import java.time.Instant;
 import java.util.List;
@@ -36,4 +37,19 @@ public interface VoucherRepository {
     int markExpired(long voucherId);
 
     int markUsed(long voucherId);
+
+    /**
+     * 发布任务时锁定券：只有"本人 + available + 未过期"才能锁定。
+     * 返回 1 表示锁定成功；0 表示已被用掉/过期/不属于本人。
+     */
+    int lockForErrand(long voucherId, String userId, long errandId, long runnerBearCents);
+
+    /** 按订单查锁定的券（结算/退款用） */
+    Optional<VoucherUse> findUseByErrand(long errandId);
+
+    /** 订单取消/退款时把券退回可用（有效期不变） */
+    int restoreByErrand(long errandId);
+
+    /** 订单结算完成，把 locked 标记为 used */
+    int markUsedByErrand(long errandId);
 }

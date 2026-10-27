@@ -8,6 +8,7 @@ import com.campusdash.domain.errand.model.ErrandType;
 import com.campusdash.domain.errand.ports.ErrandCachePort;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.domain.notify.ports.RealtimeNotifier;
+import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.*;
 import com.campusdash.domain.wallet.ports.FundAuditPort;
 import com.campusdash.domain.wallet.ports.FundEventPort;
@@ -249,18 +250,27 @@ class FundOperationSafetyTest {
             return operation.equals(failAt) ? 0 : 1;
         }
 
+        /** 本测试不涉及优惠券：所有查询返回空，写入为 no-op */
+        VoucherRepository vouchers() {
+            return stub(VoucherRepository.class, (method, args) -> {
+                if (method.equals("findUseByErrand")) return Optional.empty();
+                if (method.equals("markUsedByErrand") || method.equals("restoreByErrand")) return 0;
+                throw new AssertionError("意外优惠券仓储调用：" + method);
+            });
+        }
+
         SettleErrandUseCase settle() {
             return new SettleErrandUseCase(errands, wallets, audit, fund, ids, cache, credit,
-                    noop(CreditRankingPort.class), new TransactionTemplate(tx), notifier, 0.05);
+                    noop(CreditRankingPort.class), new TransactionTemplate(tx), notifier, vouchers(), 0.05);
         }
 
         RefundErrandUseCase refund() {
             return new RefundErrandUseCase(errands, wallets, audit, fund, ids, cache,
-                    new TransactionTemplate(tx), notifier);
+                    new TransactionTemplate(tx), notifier, vouchers());
         }
 
         ArbitrateErrandUseCase arbitrate() {
-            ArbitrateSettleStep target = new ArbitrateSettleStep(errands, wallets, ids, credit, 0.05);
+            ArbitrateSettleStep target = new ArbitrateSettleStep(errands, wallets, ids, credit, vouchers(), 0.05);
             ProxyFactory proxy = new ProxyFactory(target);
             proxy.addAdvice(new TransactionInterceptor(tx, new AnnotationTransactionAttributeSource()));
             return new ArbitrateErrandUseCase(errands, wallets, refund(), (ArbitrateSettleStep) proxy.getProxy(),

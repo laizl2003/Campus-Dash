@@ -178,3 +178,60 @@
 - `campus-dash-backend/dash-bootstrap/.../bootstrap/AdminAccountInitializer.java`：Admin 种子
 - `campus-dash-backend/docs/注册与验证码.md`：表结构与接口说明
 
+## 3. 管理员后台：优惠券发布与抽成配置（未完成）
+
+**目标**：Admin 登录后有一套管理端页面，可以新增/下架优惠券、调整库存与面额，并在线修改平台抽成比例。
+
+### 现状与差距
+
+- 券的类型、面额、初始库存在 `VoucherType` 枚举里写死，改一次要发版；
+- 佣金率、跑腿承担比例在 `application.yaml`（`dash.settle.commission-rate` / `dash.voucher.runner-bear-ratio`），需要重启；
+- 前端只有用户侧页面，Admin 登录后仍是普通广场。
+
+### 实现步骤
+
+1. 券定义落库：`voucher_type` 表（type / threshold / discount / 描述 / 上下架），`VoucherType` 改为读表 + 本地缓存；
+2. 管理接口（`/api/admin/vouchers`，要求 `role=Admin`）：列表、新增、上下架、改库存；
+3. 配置接口：读写 `commission-rate` 与 `runner-bear-ratio`，落 `sys_config` 表并加缓存，替换 `@Value`；
+4. 管理端前端：路由守卫按 `role` 分流，券列表 + 编辑表单 + 抽成滑块；
+5. 审计：每次改价/改库存写 `fund_audit_log` 或独立 `admin_audit`。
+
+### 验收标准
+
+- [ ] 非 Admin 访问管理接口返回 401/403
+- [ ] 新增一种券后，用户端广场立即出现并可领取
+- [ ] 把某券库存改为 0 后，用户端显示"已领完"
+- [ ] 修改佣金率后，新结算按新比例分账（老订单不受影响）
+- [ ] 所有管理操作有审计记录
+
+### 参考文件
+
+- `campus-dash-backend/dash-domain/.../voucher/model/VoucherType.java`
+- `campus-dash-backend/dash-application/.../usecase/ClaimVoucherUseCase.java`
+- `campus-dash-backend/dash-application/.../usecase/SettleErrandUseCase.java`
+- `campus-dash-backend/dash-bootstrap/src/main/resources/application.yaml`
+
+## 4. 跑腿侧展示"预计实收"（未完成）
+
+**目标**：带券订单在抢单前就告诉跑腿实际到手金额，避免结算时收入低于预期。
+
+### 现状与差距
+
+- 列表/详情只展示悬赏 `reward`，券的 `-0.4D` 由跑腿承担，但没有任何提示。
+
+### 实现步骤
+
+1. 详情/列表接口返回 `discountCents`、`runnerBearCents`、`estimatedRunnerCents`；
+2. 详情页在悬赏下方展示"预计实收 ¥x（含券分摊 -¥y）"；
+3. 卡片上给带券任务加一个小标记。
+
+### 验收标准
+
+- [ ] 带券任务的预计实收与结算后实际到账完全一致
+- [ ] 无券任务不显示额外信息
+
+### 参考文件
+
+- `campus-dash-backend/dash-presentation/.../ErrandController.java`
+- `campus-dash-frontend/src/pages/Detail.tsx`、`components/ErrandCard.tsx`
+

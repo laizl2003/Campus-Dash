@@ -312,10 +312,13 @@ CREATE TABLE IF NOT EXISTS voucher_record (
   user_id      VARCHAR(36) NOT NULL COMMENT '所属用户',
   voucher_type INT         NOT NULL COMMENT '优惠券类型',
   expire_time  DATETIME(3) NOT NULL COMMENT '过期时间',
-  status       VARCHAR(16) NOT NULL COMMENT 'available / used / expired',
+  status       VARCHAR(16) NOT NULL COMMENT 'available / locked / used / expired',
+  used_errand_id BIGINT NULL COMMENT '锁定/使用的订单',
+  runner_bear_cents BIGINT NOT NULL DEFAULT 0 COMMENT '跑腿承担的券面金额',
   created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (voucher_id),
   KEY idx_voucher_user (user_id, status),
+  KEY idx_voucher_errand (used_errand_id),
   KEY idx_voucher_type (voucher_type),
   KEY idx_voucher_expire (expire_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券领取记录';

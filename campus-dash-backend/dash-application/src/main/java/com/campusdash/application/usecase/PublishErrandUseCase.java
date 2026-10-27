@@ -6,6 +6,10 @@ import com.campusdash.domain.errand.model.ErrandType;
 import com.campusdash.domain.errand.ports.ErrandCachePort;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.domain.grab.ports.GrabSlotPort;
+import com.campusdash.domain.voucher.model.Voucher;
+import com.campusdash.domain.voucher.model.VoucherStatus;
+import com.campusdash.domain.voucher.model.VoucherType;
+import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.AccountType;
 import com.campusdash.domain.wallet.model.EscrowOrder;
 import com.campusdash.domain.wallet.model.LedgerEntry;
@@ -15,18 +19,21 @@ import com.campusdash.shared.BizException;
 import com.campusdash.shared.ErrorCode;
 import com.campusdash.shared.Money;
 import com.campusdash.shared.SnowflakeIdGenerator;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
 /**
- * 发布任务用例：一个本地事务内完成资金托管与任务发布。
+ * 发布任务：一个本地事务内完成"用券 → 托管实付 → 任务发布"。
  *
- * 这是模块化单体最大的红利——托管扣款、复式记账、托管单、任务状态
- * 全在同一个数据库事务里，不需要任何分布式事务。
- * 拆微服务后这一段就必须改成 Seata TCC 或 Saga 补偿（见架构文档第 12 节）。
+ * 优惠券在**发布时**锁定并抵扣：
+ *   - 悬赏仍是 R（跑腿看到的金额不变）；
+ *   - 发布者实付 P = R - D，托管账户里只有 P；
+ *   - 结算时按"跑腿承担 βD、平台营销户承担 (1-β)D"拆账。
  *
- * 事务边界画在应用层而不是领域层：领域对象只负责业务规则，
- * 不知道"事务"这个技术概念的存在。
+ * 用券失败（不属于本人/已用/过期/未达门槛）直接抛业务异常，整个发布回滚。
  */
 @Service
 public class PublishErrandUseCase {
@@ -40,37 +47,78 @@ public class PublishErrandUseCase {
     private final GrabSlotPort grabSlotPort;
     private final SnowflakeIdGenerator idGenerator;
     private final ErrandCachePort cache;
+    private final VoucherRepository voucherRepository;
+    private final double runnerBearRatio;
 
     public PublishErrandUseCase(ErrandRepository errandRepository,
                                 WalletRepository walletRepository,
                                 GrabSlotPort grabSlotPort,
                                 SnowflakeIdGenerator idGenerator,
-                                ErrandCachePort cache) {
+                                ErrandCachePort cache,
+                                VoucherRepository voucherRepository,
+                                @Value("${dash.voucher.runner-bear-ratio:0.40}") double runnerBearRatio) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.grabSlotPort = grabSlotPort;
         this.idGenerator = idGenerator;
         this.cache = cache;
+        this.voucherRepository = voucherRepository;
+        this.runnerBearRatio = runnerBearRatio;
     }
 
     public record Command(long campusId, String publisherId, ErrandType type,
-                          String title, long rewardCents, int slotTotal) {}
+                          String title, long rewardCents, int slotTotal, Long voucherId) {
 
-    public record Result(long errandId, ErrandStatus status, long frozenCents) {}
+        /** 兼容不用券的调用方（测试、压测、脚本） */
+        public Command(long campusId, String publisherId, ErrandType type,
+                       String title, long rewardCents, int slotTotal) {
+            this(campusId, publisherId, type, title, rewardCents, slotTotal, null);
+        }
+    }
 
-    /**
-     * rollbackFor 必须显式写 Exception.class：
-     * Spring 默认只对 RuntimeException 回滚，checked 异常不会触发回滚，
-     * 这是 @Transactional 六种失效场景里最常见的一种。
-     */
+    public record Result(long errandId, ErrandStatus status, long frozenCents,
+                         long discountCents, long paidCents) {
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public Result publish(Command cmd) {
         Money reward = Money.ofCents(cmd.rewardCents());
-
-        // 幂等前置检查：一个任务只能托管一次。
-        // 真正的并发安全靠 escrow_order.uk_errand 与 wallet_ledger.uk_biz_direction 唯一索引，
-        // 这里的检查只是为了给出更友好的错误信息。
         long errandId = idGenerator.nextId();
+
+        // 1. 锁定优惠券（如果有），拿到券面减免与跑腿承担部分
+        long discountCents = 0L;
+        long runnerBearCents = 0L;
+        if (cmd.voucherId() != null) {
+            Voucher voucher = voucherRepository.findById(cmd.voucherId())
+                    .orElseThrow(() -> new BizException(ErrorCode.VOUCHER_INVALID, "id=" + cmd.voucherId()));
+            VoucherType type = VoucherType.of(voucher.type())
+                    .orElseThrow(() -> new BizException(ErrorCode.VOUCHER_INVALID, "type=" + voucher.type()));
+            if (!cmd.publisherId().equals(voucher.userId())) {
+                throw new BizException(ErrorCode.VOUCHER_NOT_AVAILABLE, "券不属于当前用户");
+            }
+            if (voucher.status() != VoucherStatus.AVAILABLE
+                    || voucher.expireTime().isBefore(Instant.now())) {
+                throw new BizException(ErrorCode.VOUCHER_NOT_AVAILABLE, "券不可用或已过期");
+            }
+            if (type.thresholdCents() > cmd.rewardCents()) {
+                throw new BizException(ErrorCode.VOUCHER_NOT_AVAILABLE,
+                        "未达到使用门槛，需满" + type.thresholdCents() / 100 + "元");
+            }
+            discountCents = type.discountCents();
+            runnerBearCents = Math.round(discountCents * runnerBearRatio);
+            int locked = voucherRepository.lockForErrand(
+                    cmd.voucherId(), cmd.publisherId(), errandId, runnerBearCents);
+            if (locked != 1) {
+                throw new BizException(ErrorCode.VOUCHER_NOT_AVAILABLE, "券已被使用");
+            }
+        }
+
+        long paidCents = cmd.rewardCents() - discountCents;
+        if (paidCents <= 0) {
+            // 券不能把整单抵成 0（否则托管 0 元，后续结算没有意义）
+            throw new BizException(ErrorCode.INVALID_AMOUNT, "使用优惠券后实付必须大于 0");
+        }
+        Money paid = Money.ofCents(paidCents);
 
         WalletAccount publisherAccount = walletRepository
                 .findByOwner(cmd.publisherId(), AccountType.USER)
@@ -79,31 +127,30 @@ public class PublishErrandUseCase {
                 .findByOwner(ESCROW_ACCOUNT_OWNER, AccountType.ESCROW)
                 .orElseThrow(() -> new BizException(ErrorCode.ACCOUNT_NOT_FOUND, "escrow account missing"));
 
-        // 1. 冻结发单人余额：带条件 CAS，affectedRows=0 即余额不足或并发冲突
-        int frozen = walletRepository.casDebit(publisherAccount.id(), reward);
+        // 2. 扣的是"实付"，不是悬赏全额
+        int frozen = walletRepository.casDebit(publisherAccount.id(), paid);
         if (frozen == 0) {
             throw new BizException(ErrorCode.INSUFFICIENT_BALANCE,
-                    "publisher=" + cmd.publisherId() + " required=" + reward);
+                    "publisher=" + cmd.publisherId() + " required=" + paid);
         }
 
-        // 2. 复式记账：发单人账户借记，托管账户贷记，金额相等
+        // 3. 复式记账：发单人借记 P，托管户贷记 P
         String bizNo = LedgerEntry.escrowBizNo(errandId);
         walletRepository.insertLedger(new LedgerEntry(
                 idGenerator.nextId(), bizNo, publisherAccount.id(), cmd.publisherId(),
-                LedgerEntry.Direction.DEBIT, reward,
-                publisherAccount.available().minus(reward), LedgerEntry.RefType.ESCROW, errandId));
+                LedgerEntry.Direction.DEBIT, paid,
+                publisherAccount.available().minus(paid), LedgerEntry.RefType.ESCROW, errandId));
         walletRepository.insertLedger(new LedgerEntry(
                 idGenerator.nextId(), bizNo, escrowAccount.id(), cmd.publisherId(),
-                LedgerEntry.Direction.CREDIT, reward,
-                escrowAccount.available().plus(reward), LedgerEntry.RefType.ESCROW, errandId));
-        walletRepository.casCredit(escrowAccount.id(), reward);
+                LedgerEntry.Direction.CREDIT, paid,
+                escrowAccount.available().plus(paid), LedgerEntry.RefType.ESCROW, errandId));
+        walletRepository.casCredit(escrowAccount.id(), paid);
 
-        // 3. 托管单置 HELD
+        // 4. 托管单金额 = 实付（结算时据此 + 券面还原出悬赏 R）
         walletRepository.insertEscrow(EscrowOrder.held(
-                idGenerator.nextId(), cmd.campusId(), errandId, cmd.publisherId(), reward));
+                idGenerator.nextId(), cmd.campusId(), errandId, cmd.publisherId(), paid));
 
-        // 4. 任务落库并发布。先 DRAFT 再 CAS 到 PUBLISHED，
-        //    这样状态机的 DRAFT -> PUBLISHED 流转在数据库里也有真实痕迹
+        // 5. 任务落库并发布（悬赏字段仍是 R）
         Errand errand = Errand.draft(errandId, cmd.campusId(), cmd.publisherId(),
                 cmd.type(), cmd.title(), reward, cmd.slotTotal());
         errandRepository.insert(errand);
@@ -117,17 +164,9 @@ public class PublishErrandUseCase {
         errandRepository.appendStatusLog(errandId, ErrandStatus.DRAFT, ErrandStatus.PUBLISHED,
                 0, cmd.publisherId());
 
-        // 5. 初始化 Redis 名额。
-        //    放在事务最后：如果前面任何一步失败，事务回滚，这里根本不会执行，
-        //    也就不会出现"DB 没任务但 Redis 有名额"的脏数据。
-        //    反过来若这一步失败导致事务回滚，Redis 里可能残留名额键，
-        //    但那个任务在 DB 里不存在，抢单时 CAS 必然失败，不会造成资金问题。
         grabSlotPort.initSlot(errandId, cmd.slotTotal(), SLOT_TTL_SECONDS);
-
-        // 6. 登记到布隆过滤器：新任务必须能被详情查询找到。
-        //    不登记的话布隆会判"不存在"，详情接口直接返 404（防穿透误伤真实数据）
         cache.registerExisting(errandId);
 
-        return new Result(errandId, ErrandStatus.PUBLISHED, reward.cents());
+        return new Result(errandId, ErrandStatus.PUBLISHED, paidCents, discountCents, paidCents);
     }
 }

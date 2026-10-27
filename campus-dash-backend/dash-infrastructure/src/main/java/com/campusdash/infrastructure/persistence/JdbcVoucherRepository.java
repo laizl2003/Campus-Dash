@@ -3,6 +3,8 @@ package com.campusdash.infrastructure.persistence;
 import com.campusdash.domain.voucher.model.Voucher;
 import com.campusdash.domain.voucher.model.VoucherStatus;
 import com.campusdash.domain.voucher.model.VoucherStock;
+import com.campusdash.domain.voucher.model.VoucherType;
+import com.campusdash.domain.voucher.model.VoucherUse;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -123,6 +125,47 @@ public class JdbcVoucherRepository implements VoucherRepository {
                 UPDATE voucher_record SET status = 'used'
                  WHERE voucher_id = ? AND status = 'available'
                 """, voucherId);
+    }
+
+    @Override
+    public int lockForErrand(long voucherId, String userId, long errandId, long runnerBearCents) {
+        return jdbc.update("""
+                UPDATE voucher_record
+                   SET status = 'locked', used_errand_id = ?, runner_bear_cents = ?
+                 WHERE voucher_id = ? AND user_id = ? AND status = 'available' AND expire_time > NOW(3)
+                """, errandId, runnerBearCents, voucherId, userId);
+    }
+
+    @Override
+    public Optional<VoucherUse> findUseByErrand(long errandId) {
+        List<VoucherUse> rows = jdbc.query("""
+                SELECT voucher_id, voucher_type, runner_bear_cents
+                  FROM voucher_record
+                 WHERE used_errand_id = ? AND status IN ('locked', 'used')
+                 LIMIT 1
+                """, (rs, n) -> new VoucherUse(
+                        rs.getLong("voucher_id"),
+                        rs.getInt("voucher_type"),
+                        VoucherType.of(rs.getInt("voucher_type")).map(VoucherType::discountCents).orElse(0L),
+                        rs.getLong("runner_bear_cents")), errandId);
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    @Override
+    public int restoreByErrand(long errandId) {
+        return jdbc.update("""
+                UPDATE voucher_record
+                   SET status = 'available', used_errand_id = NULL, runner_bear_cents = 0
+                 WHERE used_errand_id = ? AND status IN ('locked', 'used')
+                """, errandId);
+    }
+
+    @Override
+    public int markUsedByErrand(long errandId) {
+        return jdbc.update("""
+                UPDATE voucher_record SET status = 'used'
+                 WHERE used_errand_id = ? AND status = 'locked'
+                """, errandId);
     }
 
     private static Timestamp timestamp(Instant instant) {

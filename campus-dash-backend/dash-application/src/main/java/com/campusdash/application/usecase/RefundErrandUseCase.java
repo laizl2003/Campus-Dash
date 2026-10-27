@@ -4,6 +4,7 @@ import com.campusdash.domain.notify.ports.RealtimeNotifier;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.model.ErrandStatus;
 import com.campusdash.domain.errand.ports.ErrandRepository;
+import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.*;
 import com.campusdash.domain.wallet.ports.FundAuditPort;
 import com.campusdash.domain.wallet.ports.FundEventPort;
@@ -39,6 +40,7 @@ public class RefundErrandUseCase {
     private final CacheEvictSupport cacheEvict;
     private final TransactionTemplate transactionTemplate;
     private final RealtimeNotifier notifier;
+    private final VoucherRepository voucherRepository;
 
     public RefundErrandUseCase(ErrandRepository errandRepository,
                                WalletRepository walletRepository,
@@ -47,7 +49,8 @@ public class RefundErrandUseCase {
                                SnowflakeIdGenerator idGenerator,
                                CacheEvictSupport cacheEvict,
                                TransactionTemplate transactionTemplate,
-                               RealtimeNotifier notifier) {
+                               RealtimeNotifier notifier,
+                               VoucherRepository voucherRepository) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.auditPort = auditPort;
@@ -56,6 +59,7 @@ public class RefundErrandUseCase {
         this.cacheEvict = cacheEvict;
         this.transactionTemplate = transactionTemplate;
         this.notifier = notifier;
+        this.voucherRepository = voucherRepository;
     }
 
     public enum Result { REFUNDED, ALREADY_REFUNDED, CONFLICT }
@@ -135,6 +139,8 @@ public class RefundErrandUseCase {
                 : errandRepository.casRefundFromDispute(errandId, expectedVersion);
         if (updated == 0) return false;
         errandRepository.appendStatusLog(errandId, from, target, errand.round(), operatorId);
+        // 订单没成交，券要还给用户（有效期不变）；没有券时是 no-op
+        voucherRepository.restoreByErrand(errandId);
 
         WalletAccount escrowAccount = walletRepository.findByOwner(ESCROW_ACCOUNT_OWNER, AccountType.ESCROW).orElseThrow();
         WalletAccount publisherAccount = walletRepository.findByOwner(escrow.publisherId(), AccountType.USER).orElseThrow();

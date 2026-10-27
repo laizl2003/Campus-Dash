@@ -71,7 +71,7 @@ public class ErrandController {
     }
 
     public record PublishRequest(Long campusId, ErrandType type, String title,
-                                 Long rewardCents, Integer slotTotal) {}
+                                 Long rewardCents, Integer slotTotal, Long voucherId) {}
 
     @PostMapping
     public Result<PublishErrandUseCase.Result> publish(@RequestBody PublishRequest req) {
@@ -82,7 +82,8 @@ public class ErrandController {
                 req.type() == null ? ErrandType.DELIVERY : req.type(),
                 req.title(),
                 req.rewardCents(),
-                req.slotTotal() == null ? 1 : req.slotTotal());
+                req.slotTotal() == null ? 1 : req.slotTotal(),
+                req.voucherId());
         return Result.ok(publishUseCase.publish(cmd));
     }
 

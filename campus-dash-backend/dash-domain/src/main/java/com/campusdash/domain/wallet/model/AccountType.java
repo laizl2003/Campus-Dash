@@ -16,5 +16,7 @@ public enum AccountType {
      * 充值/提现这类"钱从系统外进来或出去"的动作，必须有一个对手账户，
      * 否则复式记账的借贷平衡（L1 不变式）会被破坏。
      */
-    EXTERNAL
+    EXTERNAL,
+    /** 平台营销账户（系统户，owner_id = "-4"）：承担优惠券补贴，余额为负代表累计投入 */
+    MARKETING
 }

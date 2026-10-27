@@ -147,3 +147,12 @@
 @media (min-width: 1200px) { .task-facts { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 18px; } }
 
 @media (max-width: 600px) { .panel.task-compose textarea, .panel.task-compose textarea::placeholder { font-size: 16px; } }
+
+/* ── 发布页：优惠券与实付 ─────────────────────────────── */
+.task-voucher-picker { margin-top: 14px; display: grid; gap: 7px; }
+.task-voucher-picker label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #555; }
+.task-voucher-picker select { height: 40px; }
+.task-voucher-picker small { font-size: 11px; color: var(--muted); }
+.task-pay-line { margin-top: 10px; display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: #555; }
+.task-pay-line strong { font-size: 20px; color: var(--accent); }
+.task-pay-line span { font-size: 11px; color: var(--muted); }
