@@ -461,7 +461,13 @@ function SettingsPanel() {
     </section>
 
     <section className="admin-users-card">
-      <div className="admin-list-head"><h2>平台用户 <span>{users?.total ?? '—'}</span></h2></div>
+      <div className="admin-list-head"><h2>平台用户 <span>{users?.total ?? '—'}</span></h2>
+        <div className="admin-pager admin-pager-top">
+          <button type="button" className="btn btn-ghost" disabled={page <= 0 || loadingUsers} onClick={() => setPage(p => Math.max(0, p - 1))}>上一页</button>
+          <span>第 {page + 1} / {totalPages} 页</span>
+          <button type="button" className="btn btn-ghost" disabled={page + 1 >= totalPages || loadingUsers} onClick={() => setPage(p => p + 1)}>下一页</button>
+        </div>
+      </div>
       {loadingUsers && !users ? <div className="admin-empty">正在加载…</div>
         : !users || users.items.length === 0 ? <div className="admin-empty">暂无普通用户</div>
         : <div className="admin-ledger-scroll"><table>
