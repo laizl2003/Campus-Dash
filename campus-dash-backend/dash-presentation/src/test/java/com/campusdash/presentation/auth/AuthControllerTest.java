@@ -115,7 +115,7 @@ class AuthControllerTest {
     private static AuthController controller(AuthPort auth, boolean demo) {
         return new AuthController(auth, new LoginUserUseCase(
                 new EmptyUsers(), new FakeHasher(),
-                new FakeCaptcha(), auth), demo);
+                new FakeCaptcha(), auth), new EmptyUsers(), demo);
     }
 
     /** 带一个学生账号的完整夹具 */
@@ -131,7 +131,7 @@ class AuthControllerTest {
                     UserAccount.ROLE_USER, "", 1L, 60, true, null, "", 0, "");
             users.byName.put("student", student);
             controller = new AuthController(auth,
-                    new LoginUserUseCase(users, new FakeHasher(), captcha, auth), true);
+                    new LoginUserUseCase(users, new FakeHasher(), captcha, auth), users, true);
         }
     }
 

@@ -1,7 +1,9 @@
 package com.campusdash.presentation.auth;
 
 import com.campusdash.application.usecase.LoginUserUseCase;
+import com.campusdash.domain.auth.model.UserAccount;
 import com.campusdash.domain.auth.ports.AuthPort;
+import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.auth.ports.RefreshTokenPort;
 import com.campusdash.shared.ErrorCode;
 import com.campusdash.shared.Result;
@@ -29,13 +31,16 @@ public class AuthController {
 
     private final AuthPort authPort;
     private final LoginUserUseCase loginUseCase;
+    private final UserRepository users;
     private final boolean demoLoginEnabled;
 
     public AuthController(AuthPort authPort,
                           LoginUserUseCase loginUseCase,
+                          UserRepository users,
                           @Value("${dash.auth.demo-login:true}") boolean demoLoginEnabled) {
         this.authPort = authPort;
         this.loginUseCase = loginUseCase;
+        this.users = users;
         this.demoLoginEnabled = demoLoginEnabled;
     }
 
@@ -86,6 +91,24 @@ public class AuthController {
         }
         String token = authPort.login(userId);
         return Result.ok(Map.of("token", token, "userId", userId));
+    }
+
+    /**
+     * 当前登录身份：刷新页面后用它在服务端重新确认 role，
+     * 避免"本地没有 dash_role / 角色被改过"时进错界面。
+     * 走 AuthInterceptor（不在 exclude 列表里），所以 userId 一定是校验过的。
+     */
+    @GetMapping("/me")
+    public Result<Map<String, Object>> me() {
+        String userId = CurrentUser.get();
+        // 演示身份（1001/2001/...）不在 user 表里：按普通用户返回，
+        // 不能用 401 —— 那会让前端的 401 刷新逻辑把演示会话整个登出。
+        UserAccount account = users.findById(userId).orElse(null);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("userId", userId);
+        data.put("username", account == null ? userId : account.username());
+        data.put("role", account == null ? "user" : account.role());
+        return Result.ok(data);
     }
 
     @PostMapping("/refresh")

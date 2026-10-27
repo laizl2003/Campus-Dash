@@ -3,6 +3,21 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-27 · 修复 Admin 登录仍落在 #/square
+
+- **目标**：Admin 登录后必须进管理台，刷新也保持。
+- **原因**：
+  - 入口 `index.html` 没有缓存策略，浏览器按启发式缓存了旧 HTML，页面实际跑的是**没有角色分流**的旧 JS；
+  - 旧会话的 localStorage 里没有 `dash_role`，刷新后前端只能按 `user` 处理。
+- **改动**：
+  - nginx 入口 HTML 加 `Cache-Control: no-cache`，发版后普通刷新即可拿到新 assets 哈希。
+  - 新增 `GET /api/auth/me`：服务端确认 `userId/username/role`；演示身份不在 `user` 表时返回 `role=user`（不能返回 401，否则前端会把演示会话登出）。
+  - `App` 启动时先用 `/me` 校准角色，校准完成前管理路由显示"正在校验管理员身份…"，不再瞬间误判跳广场。
+- **验证**：
+  - `/api/auth/me`：Admin → `role=Admin`；演示 2001 → `role=user`。
+  - 响应头 `Cache-Control: no-cache`；bundle 含 `/api/auth/me` 与 `admin-boot`。
+  - 全量 131 个测试通过。
+
 ## 2026-10-27 · 管理台骨架 + 仲裁工作台（按角色分流）
 
 - **目标**：Admin 登录后进入管理台处理争议；同一登录接口按角色落地，权限由后端兜底。

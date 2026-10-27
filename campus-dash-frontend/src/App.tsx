@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router';
-import { getRole, getUserId, loginAs, logout } from './api';
+import { api, getRole, getUserId, loginAs, logout } from './api';
 import { IDENTITIES } from './identities';
 import TopBar from './components/TopBar';
 import Icon from './components/Icon';
@@ -28,6 +28,8 @@ export default function App() {
   // 角色由后端登录响应给出（Admin / user），只影响落地页与路由守卫；
   // 真正的权限校验在后端 AdminInterceptor。
   const [role, setRole] = useState<string>(getRole());
+  // 刷新页面时先向服务端确认角色：本地 dash_role 可能缺失（旧会话）或被手动改过
+  const [roleReady, setRoleReady] = useState<boolean>(() => getUserId() === null);
   const [loginBusy, setLoginBusy] = useState<string | null>(null);
   const loginLock = useRef(false);
   const [error, setError] = useState('');
@@ -52,6 +54,19 @@ export default function App() {
     finally { setLoginBusy(null); loginLock.current = false; }
   };
   useEffect(() => {
+    if (getUserId() === null) { setRoleReady(true); return; }
+    let active = true;
+    api.me()
+      .then(profile => {
+        if (!active) return;
+        setRole(profile.role);
+        localStorage.setItem('dash_role', profile.role);
+      })
+      .catch(() => { /* 身份查询失败时沿用本地角色，权限仍由后端兜底 */ })
+      .finally(() => { if (active) setRoleReady(true); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
     const onLogout = () => { disconnectWs(); setUserId(null); setRole('user'); };
     window.addEventListener('dash:logout', onLogout);
     return () => window.removeEventListener('dash:logout', onLogout);
@@ -71,7 +86,8 @@ export default function App() {
   let page;
   const path = route.split('?')[0];
   if (path.startsWith('/admin')) {
-    // 路由守卫：非管理员手输 #/admin 会被弹回广场，且不会发出任何管理请求
+    // 路由守卫：先等服务端确认角色，再决定放行还是弹回，避免刷新瞬间误判
+    if (!roleReady) return <div className="admin-boot">正在校验管理员身份…</div>;
     if (role !== 'Admin') return <RedirectToSquare />;
     return <AdminApp />;
   }
