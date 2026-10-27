@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHashRoute } from './router';
-import { api, getRole, getUserId, logout, switchAccount } from './api';
+import { api, getRole, getUserId, getUsername, logout, switchAccount } from './api';
 import TopBar from './components/TopBar';
 import Icon from './components/Icon';
 import Square from './pages/Square';
@@ -83,11 +83,14 @@ export default function App() {
   let page;
   const path = route.split('?')[0];
   // #/login：已登录也能回到登录页（不退出当前会话），用于切换账号或登录其他账号
-  if (path === '/login') return <AuthPage onAuthed={profile => {
-    setUserId(profile.userId);
-    setRole(profile.role);
-    window.location.hash = profile.role === 'Admin' ? '#/admin' : '#/square';
-  }} />;
+  if (path === '/login') return <AuthPage
+    current={userId !== null ? { username: getUsername() ?? userId, role } : null}
+    onResume={() => { window.location.hash = role === 'Admin' ? '#/admin' : '#/square'; }}
+    onAuthed={profile => {
+      setUserId(profile.userId);
+      setRole(profile.role);
+      window.location.hash = profile.role === 'Admin' ? '#/admin' : '#/square';
+    }} />;
   if (path.startsWith('/admin')) {
     // 路由守卫：先等服务端确认角色，再决定放行还是弹回，避免刷新瞬间误判
     if (!roleReady) return <div className="admin-boot">正在校验管理员身份…</div>;

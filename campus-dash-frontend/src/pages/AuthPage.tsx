@@ -9,7 +9,12 @@ import CampusArt from '../components/CampusArt';
  * 默认是登录表单；"注册新账号"就在密码栏下面，点进去同一个卡片切成注册表单，
  * 注册成功后回到登录并预填用户名——不做"注册即登录"，避免验证码被复用。
  */
-export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) => void }) {
+export default function AuthPage({ onAuthed, current, onResume }: {
+  onAuthed: (profile: Profile) => void;
+  /** 已登录时从 #/login 进来：展示"继续以该身份进入"，不需要重新输密码 */
+  current?: { username: string; role: string } | null;
+  onResume?: () => void;
+}) {
   const [mode, setMode] = useState<'login' | 'register' | 'change'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -104,6 +109,13 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
 
     <section className="login-side"><div className="login-card">
       <h2 className="auth-title">{mode === 'login' ? '从一个身份开始' : mode === 'register' ? '创建你的账号' : '修改登录密码'}</h2>
+
+      {current && onResume && <div className="auth-session">
+        <span>当前仍登录为 <strong>{current.username}</strong></span>
+        <button type="button" className="btn" onClick={onResume}>
+          {current.role === 'Admin' ? '返回管理台' : '返回任务广场'}
+        </button>
+      </div>}
 
       <form className="auth-form" onSubmit={submit}>
         <label className="auth-field">
