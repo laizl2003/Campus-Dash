@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 强制下线撤销全部 token（方案二：用户 token 索引）
+
+- **目标**：踢人时一次性撤销该用户全部 access/refresh，旧 token 重新登录后也不复活；不给每次请求增加校验。
+- **改动**：
+  - AuthPort 新增 revokeAllSessions（默认空实现）。
+  - Session：登录写 auth:user_tokens:{userId} 集合，登出移除；踢人遍历集合删除 auth:token:* 并删索引。
+  - JWT：access/refresh 都挂到 auth:jwt:user_tokens:{userId}；踢人时 access 的 jti 加黑名单、refresh 删除，最后删索引。
+  - 强制下线接口先 revokeAllSessions，再打 auth:forced 标记、关 WS、置 login_status=0。
+- **验证**：登录后 SCARD=1；踢人后索引 EXISTS=0、旧 token=401；重新登录后旧 token 仍 401、新 token=200，索引恢复 1 条。
+
+
 ## 2026-10-28 · 登录账号下拉不跳动；管理端在线状态查库
 
 - **目标**：登录页展开本机账号时不顶动页面；Admin 在线状态完全以 user 表为准并跨浏览器及时刷新。

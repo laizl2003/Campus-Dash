@@ -12,6 +12,7 @@ import com.campusdash.domain.wallet.model.AccountType;
 import com.campusdash.domain.wallet.model.EscrowOrder;
 import com.campusdash.domain.wallet.ports.WalletRepository;
 import com.campusdash.domain.admin.ports.AdminUserQueryPort;
+import com.campusdash.domain.auth.ports.AuthPort;
 import com.campusdash.domain.auth.ports.ForceLogoutPort;
 import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.config.ports.PlatformConfigPort;
@@ -59,6 +60,7 @@ public class AdminController {
     private final WsSessionRegistry wsSessionRegistry;
     private final ForceLogoutPort forceLogoutPort;
     private final UserRepository userRepository;
+    private final AuthPort authPort;
 
     public AdminController(QueryErrandListUseCase queryUseCase,
                            ErrandRepository errandRepository,
@@ -69,7 +71,8 @@ public class AdminController {
                            AdminUserQueryPort adminUserQuery,
                            WsSessionRegistry wsSessionRegistry,
                            ForceLogoutPort forceLogoutPort,
-                           UserRepository userRepository) {
+                           UserRepository userRepository,
+                           AuthPort authPort) {
         this.queryUseCase = queryUseCase;
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
@@ -80,6 +83,7 @@ public class AdminController {
         this.wsSessionRegistry = wsSessionRegistry;
         this.forceLogoutPort = forceLogoutPort;
         this.userRepository = userRepository;
+        this.authPort = authPort;
     }
 
     public record ArbitrateRequest(String favor) {
@@ -130,6 +134,8 @@ public class AdminController {
                 // 连接可能已断，忽略
             }
         }
+        // 先撤销该用户全部已签发凭证，再打强制下线标记；成本只发生在这一个动作上
+        authPort.revokeAllSessions(userId);
         forceLogoutPort.force(userId);
         userRepository.markOffline(userId);
         return Result.ok(null);

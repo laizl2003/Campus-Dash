@@ -19,4 +19,8 @@ public interface AuthPort {
 
     /** 登出：删除 token */
     void logout(String token);
+
+    /** 强制下线：撤销该用户已签发的全部 access/refresh 凭证（默认无操作） */
+    default void revokeAllSessions(String userId) {
+    }
 }

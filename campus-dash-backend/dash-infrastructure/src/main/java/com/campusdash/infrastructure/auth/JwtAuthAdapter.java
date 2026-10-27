@@ -44,6 +44,7 @@ public class JwtAuthAdapter implements RefreshTokenPort {
     private static final Logger log = LoggerFactory.getLogger(JwtAuthAdapter.class);
     private static final String REVOKED_PREFIX = "auth:jwt:revoked:";
     private static final String REFRESH_PREFIX = "auth:jwt:refresh:";
+    private static final String USER_TOKENS = "auth:jwt:user_tokens:";
 
     private final SecretKey key;
     private final StringRedisTemplate redis;
@@ -84,6 +85,7 @@ public class JwtAuthAdapter implements RefreshTokenPort {
         }
         // 现在 userId 就是字符串（UUID / 001 / 1001），不再解析成 long
         String userId = userIdText;
+        redis.opsForSet().remove(USER_TOKENS + userId, refreshToken);
         if (userId.isBlank()) {
             log.warn("refresh token 映射值为空，按失效处理");
             return Optional.empty();
@@ -94,26 +96,67 @@ public class JwtAuthAdapter implements RefreshTokenPort {
     @Override
     public void revokeRefresh(String refreshToken) {
         if (refreshToken != null && !refreshToken.isBlank()) {
+            String userId = redis.opsForValue().get(REFRESH_PREFIX + refreshToken);
             redis.delete(REFRESH_PREFIX + refreshToken);
+            if (userId != null) {
+                redis.opsForSet().remove(USER_TOKENS + userId, refreshToken);
+            }
         }
     }
 
     private String issueAccessToken(String userId) {
         Date now = new Date();
-        return Jwts.builder()
+        String token = Jwts.builder()
                 .subject(String.valueOf(userId))
                 .id(UUID.randomUUID().toString())          // jti：吊销黑名单的键
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + ttlMinutes * 60_000))
                 .signWith(key)
                 .compact();
+        remember(userId, token);
+        return token;
+    }
+
+    /** 把凭证挂到 user 索引，强制下线时按索引批量吊销；正常访问不读索引 */
+    private void remember(String userId, String token) {
+        redis.opsForSet().add(USER_TOKENS + userId, token);
+        long minutes = Math.max(ttlMinutes, refreshTtlMinutes) + 60;
+        redis.expire(USER_TOKENS + userId, Duration.ofMinutes(minutes));
     }
 
     private String issueRefreshToken(String userId) {
         String token = UUID.randomUUID().toString().replace("-", "");
         redis.opsForValue().set(REFRESH_PREFIX + token, String.valueOf(userId),
                 Duration.ofMinutes(refreshTtlMinutes));
+        remember(userId, token);
         return token;
+    }
+
+    @Override
+    public void revokeAllSessions(String userId) {
+        String index = USER_TOKENS + userId;
+        var tokens = redis.opsForSet().members(index);
+        if (tokens != null) {
+            for (String token : tokens) {
+                if (token.contains(".")) {
+                    // access JWT：把 jti 加黑名单，TTL 取剩余有效期
+                    try {
+                        Claims claims = Jwts.parser().verifyWith(key).build()
+                                .parseSignedClaims(token).getPayload();
+                        long remainMs = claims.getExpiration().getTime() - System.currentTimeMillis();
+                        if (claims.getId() != null && remainMs > 0) {
+                            redis.opsForValue().set(REVOKED_PREFIX + claims.getId(), "1",
+                                    Duration.ofMillis(remainMs));
+                        }
+                    } catch (JwtException | IllegalArgumentException ignored) {
+                        // 已过期/已损坏，无需处理
+                    }
+                } else {
+                    redis.delete(REFRESH_PREFIX + token);
+                }
+            }
+        }
+        redis.delete(index);
     }
 
     @Override
@@ -147,6 +190,9 @@ public class JwtAuthAdapter implements RefreshTokenPort {
             if (jti != null && remainMs > 0) {
                 // 黑名单 TTL = token 剩余有效期：token 自然过期后黑名单自动清理
                 redis.opsForValue().set(REVOKED_PREFIX + jti, "1", Duration.ofMillis(remainMs));
+            }
+            if (claims.getSubject() != null) {
+                redis.opsForSet().remove(USER_TOKENS + claims.getSubject(), token);
             }
         } catch (JwtException | IllegalArgumentException e) {
             log.debug("登出的 token 已无效，忽略");

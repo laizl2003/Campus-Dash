@@ -22,6 +22,7 @@ import java.util.UUID;
 public class RedisAuthAdapter implements AuthPort {
 
     private static final String PREFIX = "auth:token:";
+    private static final String USER_TOKENS = "auth:user_tokens:";
 
     private final StringRedisTemplate redis;
     private final Duration ttl;
@@ -36,6 +37,9 @@ public class RedisAuthAdapter implements AuthPort {
     public String login(String userId) {
         String token = UUID.randomUUID().toString().replace("-", "");
         redis.opsForValue().set(PREFIX + token, String.valueOf(userId), ttl);
+        // 用户 token 索引：强制下线时一次性删除，平时访问不查它
+        redis.opsForSet().add(USER_TOKENS + userId, token);
+        redis.expire(USER_TOKENS + userId, ttl.plusHours(1));
         return token;
     }
 
@@ -50,6 +54,22 @@ public class RedisAuthAdapter implements AuthPort {
 
     @Override
     public void logout(String token) {
+        String userId = redis.opsForValue().get(PREFIX + token);
         redis.delete(PREFIX + token);
+        if (userId != null) {
+            redis.opsForSet().remove(USER_TOKENS + userId, token);
+        }
+    }
+
+    @Override
+    public void revokeAllSessions(String userId) {
+        String index = USER_TOKENS + userId;
+        var tokens = redis.opsForSet().members(index);
+        if (tokens != null) {
+            for (String token : tokens) {
+                redis.delete(PREFIX + token);
+            }
+        }
+        redis.delete(index);
     }
 }
