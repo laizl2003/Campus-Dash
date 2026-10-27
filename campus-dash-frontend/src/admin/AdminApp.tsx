@@ -260,6 +260,14 @@ function VoucherManager() {
   const [stock, setStock] = useState('100');
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [pendingDelete, setPendingDelete] = useState<{ type: number; description: string } | null>(null);
+  const [toast, setToast] = useState<{ text: string; kind: 'ok' | 'danger' } | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -279,7 +287,8 @@ function VoucherManager() {
     setBusy(true); setError(''); setMessage('');
     try {
       await api.adminCreateVoucher(Math.round(t * 100), Math.round(d * 100), Math.round(s));
-      setMessage('已新增优惠券');
+      setMessage('');
+      setToast({ text: '新增成功', kind: 'ok' });
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : '新增失败'); }
     finally { setBusy(false); }
@@ -293,11 +302,18 @@ function VoucherManager() {
     } catch (e) { setError(e instanceof Error ? e.message : '状态更新失败'); }
   };
 
-  const remove = async (type: number, description: string) => {
-    if (!window.confirm(`确认删除「${description}」？该类型的全部领取记录会一并删除。`)) return;
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
     setError('');
-    try { await api.adminDeleteVoucher(type); await load(); }
-    catch (e) { setError(e instanceof Error ? e.message : '删除失败'); }
+    try {
+      await api.adminDeleteVoucher(pendingDelete.type);
+      setPendingDelete(null);
+      setToast({ text: '删除成功', kind: 'danger' });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '删除失败');
+      setPendingDelete(null);
+    }
   };
 
   const saveStock = async (type: number, fallback: number) => {
@@ -313,7 +329,7 @@ function VoucherManager() {
 
   return <div className="admin-voucher-view">
     <section className="admin-voucher-create">
-      <div className="admin-list-head"><h2>新增优惠券</h2><small>金额单位为元，type 自动递增</small></div>
+      <div className="admin-list-head"><div><h2>新增优惠券</h2><small>金额单位：元</small></div></div>
       <div className="admin-voucher-form">
         <label>满减金额<input type="number" min="0" step="0.01" value={threshold} onChange={e => setThreshold(e.target.value)}/></label>
         <label>优惠金额<input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(e.target.value)}/></label>
@@ -328,12 +344,18 @@ function VoucherManager() {
 
     <section className="admin-voucher-list">
       <div className="admin-list-head"><h2>优惠券列表 <span>{items.length}</span></h2><small>删除会同时清除该类型的全部领取记录</small></div>
+      {toast && <div className={`admin-voucher-toast is-${toast.kind}`} role="status">{toast.text}</div>}
+      {pendingDelete && <div className="admin-voucher-confirm" role="alertdialog">
+        <span>确认删除「{pendingDelete.description}」？该类型全部领取记录会一并删除。</span>
+        <button type="button" className="btn btn-danger" onClick={() => void confirmDelete()}>确认删除</button>
+        <button type="button" className="btn" onClick={() => setPendingDelete(null)}>取消</button>
+      </div>}
       {loading ? <div className="admin-empty">正在加载…</div>
         : items.length === 0 ? <div className="admin-empty">还没有优惠券，先在上方新增一张。</div>
         : <div className="admin-ledger-scroll"><table>
-          <thead><tr><th>类型</th><th>满减规则</th><th>库存</th><th>状态</th><th>操作</th></tr></thead>
+          <thead><tr><th>编号</th><th>满减规则</th><th>库存</th><th>状态</th><th>操作</th></tr></thead>
           <tbody>{items.map(item => <tr key={item.type}>
-            <td>#{item.type}</td>
+            <td>{item.type}</td>
             <td>{item.description}</td>
             <td className="admin-voucher-stock-cell">
               <input className="admin-stock-input" type="number" min="0" step="1"
@@ -346,7 +368,7 @@ function VoucherManager() {
               <button type="button" className="btn btn-ghost" onClick={() => void toggle(item.type, item.status)}>
                 {item.status === 'ONLINE' ? '下架' : '上架'}
               </button>
-              <button type="button" className="btn btn-ghost admin-danger" onClick={() => void remove(item.type, item.description)}>删除</button>
+              <button type="button" className="btn btn-ghost admin-danger" onClick={() => setPendingDelete({ type: item.type, description: item.description })}>删除</button>
             </td>
           </tr>)}</tbody>
         </table></div>}

@@ -144,3 +144,30 @@
 .admin-danger { color: #b23b32; }
 
 .admin-voucher-list table { width: 100%; }
+
+/* 优惠券列表沿用资金流水表格样式 */
+.admin-voucher-list table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.admin-voucher-list thead th {
+  background: #faf7ef; color: #8a938b; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+  text-align: left; padding: 10px 12px; border-bottom: 1px solid #e9e2d2; border-right: 1px solid #f0ebdf;
+  white-space: nowrap;
+}
+.admin-voucher-list tbody td {
+  padding: 10px 12px; font-size: 12px; color: #3c443d;
+  border-bottom: 1px solid #efe9dc; border-right: 1px solid #f4efe3;
+}
+.admin-voucher-list thead th:last-child, .admin-voucher-list tbody td:last-child { border-right: 0; }
+.admin-voucher-list tbody tr:nth-child(even) { background: #fcfaf5; }
+.admin-voucher-list tbody tr:hover { background: #fff7e0; }
+.admin-voucher-list tbody tr:last-child td { border-bottom: 0; }
+.admin-voucher-list thead th:nth-child(1), .admin-voucher-list tbody td:nth-child(1) { width: 74px; }
+.admin-voucher-list thead th:nth-child(3), .admin-voucher-list tbody td:nth-child(3) { width: 210px; }
+.admin-voucher-list thead th:nth-child(4), .admin-voucher-list tbody td:nth-child(4) { width: 90px; }
+.admin-voucher-list thead th:nth-child(5), .admin-voucher-list tbody td:nth-child(5) { width: 210px; }
+.admin-voucher-confirm { display: flex; align-items: center; gap: 10px; margin: 10px 0; padding: 10px 12px;
+  background: #fff4f2; border: 1px solid #f0c9c3; border-radius: 9px; font-size: 12px; color: #8d3b33; }
+.admin-voucher-confirm span { flex: 1; }
+.admin-voucher-toast { position: fixed; top: 20px; right: 32px; z-index: 220; min-width: 96px; text-align: center;
+  padding: 10px 18px; border-radius: 10px; font-size: 12px; color: #fff; box-shadow: 0 12px 30px #00000026; }
+.admin-voucher-toast.is-ok { background: #2f6b4a; }
+.admin-voucher-toast.is-danger { background: #b23b32; }
