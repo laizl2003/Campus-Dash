@@ -22,6 +22,7 @@ export default function Square() {
   const [category, setCategory] = useState('ALL');
   const [sort, setSort] = useState('default');
   const [vouchers, setVouchers] = useState<VoucherItem[]>([]);
+  const [claimedTypes, setClaimedTypes] = useState<Set<number>>(new Set());
   const [claiming, setClaiming] = useState<number | null>(null);
   const requestId = useRef(0);
   const load = useCallback(async () => {
@@ -34,8 +35,10 @@ export default function Square() {
 
   const loadVouchers = useCallback(async () => {
     try {
-      const data = await api.vouchers();
-      setVouchers(data.items);
+      // 库存 + 我已持有的可用券：已持有的类型直接显示"已领取"且不可再点
+      const [stock, mine] = await Promise.all([api.vouchers(), api.myVouchers()]);
+      setVouchers(stock.items);
+      setClaimedTypes(new Set(mine.filter(v => v.status === 'available').map(v => v.type)));
     } catch { /* 优惠券加载失败不影响任务列表 */ }
   }, []);
 
@@ -46,6 +49,7 @@ export default function Square() {
       const claimed = await api.claimVoucher(voucher.type);
       setVouchers(list => list.map(item =>
         item.type === voucher.type ? { ...item, stock: claimed.remainingStock } : item));
+      setClaimedTypes(prev => new Set(prev).add(voucher.type));
       window.dispatchEvent(new CustomEvent('dash:notice', {
         detail: { text: `已领取「${claimed.description}」，领取后 2 天内有效`, error: false },
       }));
@@ -83,15 +87,21 @@ export default function Square() {
           <small>满减券 · 领取后 2 天内有效</small>
         </div>
         <div className="voucher-list">
-          {vouchers.map(voucher => <div key={voucher.type} className={`voucher-card${voucher.stock === 0 ? ' is-empty' : ''}`}>
-            <span className="voucher-amount"><strong>{Number(voucher.discountCents) / 100}</strong>元</span>
-            <span className="voucher-rule">满{Number(voucher.thresholdCents) / 100}元可用</span>
-            <span className="voucher-stock">{voucher.stock === 0 ? '已领完' : `剩 ${voucher.stock} 张`}</span>
-            <button type="button" className="voucher-claim" disabled={voucher.stock === 0 || claiming !== null}
-                    onClick={() => void claimVoucher(voucher)}>
-              {claiming === voucher.type ? '领取中' : '领取'}
-            </button>
-          </div>)}
+          {vouchers.map(voucher => {
+            const claimed = claimedTypes.has(voucher.type);
+            const soldOut = voucher.stock === 0;
+            return <div key={voucher.type} className={`voucher-card${soldOut ? ' is-empty' : ''}`}>
+              <span className="voucher-amount"><strong>{Number(voucher.discountCents) / 100}</strong>元</span>
+              <span className="voucher-rule">满{Number(voucher.thresholdCents) / 100}元可用</span>
+              <span className="voucher-stock">{soldOut ? '已领完' : `剩 ${voucher.stock} 张`}</span>
+              <button type="button"
+                      className={`voucher-claim${claimed ? ' is-claimed' : ''}`}
+                      disabled={claimed || soldOut || claiming !== null}
+                      onClick={() => void claimVoucher(voucher)}>
+                {claimed ? '已领取' : claiming === voucher.type ? '领取中' : soldOut ? '已领完' : '领取'}
+              </button>
+            </div>;
+          })}
         </div>
       </section>}
       <div className="section-title"><h2>发现任务 <span>{loading && !updatedAt ? '—' : cards.length}</span></h2><span className="update-time">{updatedAt ? `${updatedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 更新` : '等待加载'}</span></div>

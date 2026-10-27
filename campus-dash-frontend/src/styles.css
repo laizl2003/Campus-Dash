@@ -384,3 +384,7 @@ input::placeholder, textarea::placeholder { color: #707070; }
   .voucher-card { width: 132px; padding: 9px 10px; }
   .voucher-amount strong { font-size: 19px; }
 }
+
+/* 已领取：按钮置灰、不可点，视觉上与"已领完"区分开（仍显示已领取文案） */
+.voucher-claim.is-claimed { background: #ededed; color: #8c8c8c; cursor: not-allowed; }
+.voucher-claim.is-claimed:hover { background: #ededed; }
