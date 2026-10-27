@@ -63,8 +63,9 @@ public class LoginUserUseCase {
         }
 
         // 2. 查库：这一步拿到的 user_id 才是后续所有业务的身份
+        // 账号不存在与密码错误必须给出同一句话，否则接口变成用户名枚举器
         UserAccount user = users.findByUsername(username)
-                .orElseThrow(() -> new BizException(ErrorCode.BAD_CREDENTIALS, "账号不存在"));
+                .orElseThrow(() -> new BizException(ErrorCode.BAD_CREDENTIALS));
 
         if (!user.enabled()) {
             throw new BizException(ErrorCode.ACCOUNT_DISABLED, "userId=" + user.userId());
@@ -73,7 +74,7 @@ public class LoginUserUseCase {
         // 3. 校验密码：失败只记次数，不区分"账号不存在"与"密码错误"
         if (!hasher.matches(password, user.passwordHash())) {
             users.markLoginFailure(user.userId());
-            throw new BizException(ErrorCode.BAD_CREDENTIALS, "密码错误");
+            throw new BizException(ErrorCode.BAD_CREDENTIALS);
         }
 
         users.markLoginSuccess(user.userId(), Instant.now(),

@@ -38,6 +38,15 @@ public class JdbcWalletRepository implements WalletRepository {
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
     }
 
+    @Override
+    public void insertAccount(WalletAccount account) {
+        jdbc.update("""
+                INSERT INTO wallet_account (id, owner_id, owner_type, available, frozen, version)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """, account.id(), account.ownerId(), account.type().name(),
+                account.available().cents(), account.frozen().cents(), account.version());
+    }
+
     /**
      * 带条件的 CAS 转出，一条语句同时完成"判断余额是否够"和"扣减"。
      *

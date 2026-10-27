@@ -12,6 +12,9 @@ public interface WalletRepository {
 
     Optional<WalletAccount> findByOwner(String ownerId, AccountType type);
 
+    /** 开户：注册用户第一次充值时补建钱包账户 */
+    void insertAccount(WalletAccount account);
+
     Optional<WalletAccount> findById(long accountId);
 
     /**

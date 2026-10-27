@@ -45,7 +45,11 @@ export default function App() {
   }, [userId]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [route]);
 
-  if (userId === null) return <AuthPage onAuthed={profile => setUserId(profile.userId)} />;
+  if (userId === null) return <AuthPage onAuthed={profile => {
+    setUserId(profile.userId);
+    // 登录/注册成功后直接回到任务广场，而不是停在登录页
+    window.location.hash = '#/square';
+  }} />;
 
   let page;
   const path = route.split('?')[0];

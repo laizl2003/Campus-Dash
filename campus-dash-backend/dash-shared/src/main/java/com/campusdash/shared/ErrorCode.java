@@ -22,6 +22,7 @@ public enum ErrorCode {
 
     // 资金
     INSUFFICIENT_BALANCE("余额不足"),
+    INVALID_AMOUNT("金额不合法"),
     ESCROW_ALREADY_EXISTS("该任务已托管"),
     ESCROW_NOT_FOUND("托管单不存在"),
     ESCROW_NOT_HELD("托管单已结算或已退款"),

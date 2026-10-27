@@ -70,7 +70,10 @@ async function postJson<T>(path: string, payload: unknown): Promise<T> {
   try {
     body = (await resp.json()) as ApiResult<T>;
   } catch {
-    throw new Error('服务返回了非 JSON 内容，请检查代理配置');
+    // 网关 502/504 返回的是 HTML 错误页，直接 JSON.parse 会得到这句困惑的提示
+    throw new Error(resp.ok
+      ? '服务返回了非 JSON 内容，请稍后重试'
+      : `服务暂时不可用（HTTP ${resp.status}），请稍后重试`);
   }
   if (body.code !== 'OK') throw new BizError(body.code, body.message);
   return body.data;
@@ -364,6 +367,8 @@ export const api = {
   arbitrate: (id: string, favor: 'RUNNER' | 'PUBLISHER') =>
     request<{ result: string }>(`/api/errands/${id}/arbitrate`, 'POST', { favor }),
   wallet: () => request<{ availableCents: number; frozenCents: number }>('/api/wallet'),
+  recharge: (amountCents: number) =>
+    request<{ availableCents: number }>('/api/wallet/recharge', 'POST', { amountCents }),
   ledger: () => request<{
     time: string; direction: string; amountCents: number;
     refType: string; refId: string; bizNo: string;

@@ -17,7 +17,36 @@ export default function Wallet() {
   const [refType, setRefType] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [rechargeOpen, setRechargeOpen] = useState(false);
+  const [amountYuan, setAmountYuan] = useState('10');
+  const [recharging, setRecharging] = useState(false);
+  const [rechargeMessage, setRechargeMessage] = useState('');
   const requestId = useRef(0);
+
+  /** 演示用固定面额（元） */
+  const QUICK_AMOUNTS = [10, 20, 50, 100, 200, 500];
+
+  const submitRecharge = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (recharging) return;
+    const yuanValue = Number(amountYuan);
+    if (!Number.isFinite(yuanValue) || yuanValue <= 0) {
+      setRechargeMessage('请输入大于 0 的金额');
+      return;
+    }
+    setRecharging(true);
+    setRechargeMessage('');
+    try {
+      const result = await api.recharge(Math.round(yuanValue * 100));
+      setBalance((prev) => (prev ? { ...prev, availableCents: result.availableCents } : prev));
+      setRechargeMessage(`充值成功，当前可用余额 ${yuan(result.availableCents)}`);
+      void load();
+    } catch (e) {
+      setRechargeMessage(e instanceof Error ? e.message : '充值失败，请稍后重试');
+    } finally {
+      setRecharging(false);
+    }
+  };
 
   const load = useCallback(async () => {
     const id = ++requestId.current;
@@ -50,8 +79,32 @@ export default function Wallet() {
     <div className="account-page">
       <div className="page-head">
         <div><span className="eyebrow">MY WALLET</span><h1>每一笔，都有着落</h1><p>账户余额与每一笔任务资金记录，在这里清楚查看。</p></div>
-        <button className="btn btn-ghost" onClick={() => void load()} disabled={loading}><Icon name="refresh" size={15} />{loading ? '更新中' : '刷新账单'}</button>
+        <div className="wallet-head-actions">
+          <button className="btn btn-primary" onClick={() => { setRechargeOpen((open) => !open); setRechargeMessage(''); }}>
+            <Icon name="plus" size={15} />{rechargeOpen ? '收起充值' : '充值'}
+          </button>
+          <button className="btn btn-ghost" onClick={() => void load()} disabled={loading}><Icon name="refresh" size={15} />{loading ? '更新中' : '刷新账单'}</button>
+        </div>
       </div>
+      {rechargeOpen && <section className="account-surface recharge-panel" aria-label="余额充值">
+        <div className="account-section-head"><div><h2>余额充值</h2><p>演示环境直接入账，不接真实支付网关</p></div></div>
+        <form className="recharge-form" onSubmit={submitRecharge}>
+          <label className="recharge-amount"><span>充值金额（元）</span>
+            <input type="number" min="0.01" step="0.01" inputMode="decimal" value={amountYuan}
+                   onChange={(event) => setAmountYuan(event.target.value)} placeholder="输入金额，例如 20"/>
+          </label>
+          <div className="recharge-quick" role="group" aria-label="快捷金额">
+            {QUICK_AMOUNTS.map((value) => <button key={value} type="button"
+              className={Number(amountYuan) === value ? 'active' : ''}
+              onClick={() => setAmountYuan(String(value))}>{value} 元</button>)}
+          </div>
+          <div className="recharge-actions">
+            <button className="btn btn-primary" type="submit" disabled={recharging}>{recharging ? '入账中…' : '确认充值'}</button>
+            <span className="recharge-hint">单笔上限 1000 元，充值会记一条「余额充值」流水</span>
+          </div>
+          {rechargeMessage && <div className="banner ok" role="status">{rechargeMessage}</div>}
+        </form>
+      </section>}
       {error && <div className="banner warn account-error" role="alert"><span>{error}</span><button className="btn btn-ghost" onClick={() => void load()} disabled={loading}>重试</button></div>}
       <section className="account-wallet-overview" aria-label="钱包概览" aria-busy={loading}>
         <div className="account-balance-main">

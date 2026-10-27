@@ -223,3 +223,21 @@
   .account-table .account-time { line-height: 1.8; overflow-wrap: anywhere; }
   .account-table .account-amount { white-space: nowrap; }
 }
+
+/* ── 钱包充值 ───────────────────────────────────────────── */
+.wallet-head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.recharge-panel { margin-bottom: 18px; }
+.recharge-form { display: grid; gap: 14px; padding: 4px 0 2px; }
+.recharge-amount { display: grid; gap: 7px; max-width: 280px; }
+.recharge-amount > span { font-size: 12px; color: #555; font-weight: 600; }
+.recharge-amount > input { height: 40px; }
+.recharge-quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.recharge-quick button { min-width: 66px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 12px; color: #555; }
+.recharge-quick button:hover:not(:disabled) { border-color: var(--primary-dark); background: var(--primary-soft); }
+.recharge-quick button.active { border-color: var(--primary); background: var(--primary); color: var(--primary-ink); font-weight: 650; }
+.recharge-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.recharge-hint { font-size: 11px; color: var(--muted); }
+@media(max-width: 530px) {
+  .recharge-amount { max-width: none; }
+  .recharge-quick button { min-width: 56px; padding: 6px 9px; font-size: 11px; }
+}

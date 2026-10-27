@@ -79,7 +79,7 @@ public class RegisterUserUseCase {
 
         // 3. 两次密码一致
         if (!command.password().equals(command.confirmPassword())) {
-            throw new BizException(ErrorCode.PASSWORD_MISMATCH, "两次输入的密码不一致");
+            throw new BizException(ErrorCode.PASSWORD_MISMATCH);
         }
 
         // 4. 唯一性：先给友好错误码，并发下的最终防线仍是数据库唯一索引
