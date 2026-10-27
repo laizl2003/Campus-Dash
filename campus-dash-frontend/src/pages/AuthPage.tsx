@@ -111,7 +111,8 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required/>
         </label>
 
-        {mode === 'login' && <button type="button" className="auth-switch" onClick={() => switchMode('register')}>
+        {mode === 'login' && <button type="button" className="auth-switch" tabIndex={-1}
+                onClick={() => switchMode('register')}>
           还没有账号？<strong>注册新账号</strong>
         </button>}
 
@@ -126,7 +127,8 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
           <div className="auth-captcha">
             <input value={captchaCode} onChange={e => setCaptchaCode(e.target.value)}
                    placeholder="输入右侧字符" maxLength={4} autoComplete="off" required/>
-            <button type="button" className="auth-captcha-image" onClick={() => void reloadCaptcha()}
+            <button type="button" className="auth-captcha-image" tabIndex={-1}
+                    onClick={() => void reloadCaptcha()}
                     title="看不清？换一张" aria-label="刷新验证码">
               {captcha ? <img src={captcha.image} alt="图形验证码"/> : <span>点击加载</span>}
             </button>
@@ -136,11 +138,14 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
         {notice && <div className="banner ok" role="status">{notice}</div>}
         {error && <div className="banner warn" role="alert">{error}</div>}
 
-        <button className="btn btn-primary auth-submit" disabled={busy} type="submit">
+        {/* 登录态只让 Tab 在三个输入框之间走：其余控件用鼠标点，或用回车提交 */}
+        <button className="btn btn-primary auth-submit" disabled={busy} type="submit"
+                tabIndex={mode === 'login' ? -1 : 0}>
           {busy ? '处理中…' : mode === 'login' ? '登录' : '注册'}
         </button>
 
-        {mode === 'register' && <button type="button" className="auth-switch" onClick={() => switchMode('login')}>
+        {mode === 'register' && <button type="button" className="auth-switch" tabIndex={-1}
+                onClick={() => switchMode('login')}>
           已有账号？<strong>返回登录</strong>
         </button>}
       </form>
