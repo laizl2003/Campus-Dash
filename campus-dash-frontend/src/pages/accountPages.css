@@ -227,7 +227,9 @@
 /* ── 钱包充值 ───────────────────────────────────────────── */
 .wallet-head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .recharge-panel { margin-bottom: 18px; }
-.recharge-form { display: grid; gap: 14px; padding: 4px 0 2px; }
+/* 与 .account-section-head 的 23px 左内边距对齐，标题和金额输入框左边齐平 */
+.recharge-panel .account-section-head { padding-bottom: 12px; }
+.recharge-form { display: grid; gap: 12px; padding: 0 23px 20px; }
 .recharge-amount { display: grid; gap: 7px; max-width: 280px; }
 .recharge-amount > span { font-size: 12px; color: #555; font-weight: 600; }
 .recharge-amount > input { height: 40px; }
@@ -237,7 +239,11 @@
 .recharge-quick button.active { border-color: var(--primary); background: var(--primary); color: var(--primary-ink); font-weight: 650; }
 .recharge-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .recharge-hint { font-size: 11px; color: var(--muted); }
+/* 提示栏只占一行宽度的 80%，不铺满整栏 */
+.recharge-panel .banner { width: 80%; max-width: 80%; margin: 0; padding: 8px 12px; font-size: 12px; line-height: 1.5; }
 @media(max-width: 530px) {
+  .recharge-form { padding: 0 18px 16px; }
   .recharge-amount { max-width: none; }
   .recharge-quick button { min-width: 56px; padding: 6px 9px; font-size: 11px; }
+  .recharge-panel .banner { width: 100%; max-width: 100%; }
 }
