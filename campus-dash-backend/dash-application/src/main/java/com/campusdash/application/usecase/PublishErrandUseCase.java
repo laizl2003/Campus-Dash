@@ -6,6 +6,7 @@ import com.campusdash.domain.errand.model.ErrandType;
 import com.campusdash.domain.errand.ports.ErrandCachePort;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.domain.grab.ports.GrabSlotPort;
+import com.campusdash.domain.config.ports.PlatformConfigPort;
 import com.campusdash.domain.voucher.model.Voucher;
 import com.campusdash.domain.voucher.model.VoucherStatus;
 import com.campusdash.domain.voucher.model.VoucherStock;
@@ -48,7 +49,7 @@ public class PublishErrandUseCase {
     private final SnowflakeIdGenerator idGenerator;
     private final ErrandCachePort cache;
     private final VoucherRepository voucherRepository;
-    private final double runnerBearRatio;
+    private final PlatformConfigPort config;
 
     public PublishErrandUseCase(ErrandRepository errandRepository,
                                 WalletRepository walletRepository,
@@ -56,14 +57,14 @@ public class PublishErrandUseCase {
                                 SnowflakeIdGenerator idGenerator,
                                 ErrandCachePort cache,
                                 VoucherRepository voucherRepository,
-                                @Value("${dash.voucher.runner-bear-ratio:0.40}") double runnerBearRatio) {
+                                PlatformConfigPort config) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.grabSlotPort = grabSlotPort;
         this.idGenerator = idGenerator;
         this.cache = cache;
         this.voucherRepository = voucherRepository;
-        this.runnerBearRatio = runnerBearRatio;
+        this.config = config;
     }
 
     public record Command(long campusId, String publisherId, ErrandType type,
@@ -108,7 +109,7 @@ public class PublishErrandUseCase {
                         "未达到使用门槛，需满" + stock.thresholdCents() / 100 + "元");
             }
             discountCents = stock.discountCents();
-            runnerBearCents = Math.round(discountCents * runnerBearRatio);
+            runnerBearCents = Math.round(discountCents * config.voucherRunnerBearRatio());
             int locked = voucherRepository.lockForErrand(
                     cmd.voucherId(), cmd.publisherId(), errandId, runnerBearCents);
             if (locked != 1) {

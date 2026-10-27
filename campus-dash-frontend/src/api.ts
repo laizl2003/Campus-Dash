@@ -500,6 +500,15 @@ export const api = {
   }>(`/api/vouchers/${type}/claim`, 'POST'),
   me: () => request<{ userId: string; username: string; role: string }>('/api/auth/me'),
   deleteAccount: () => request<null>('/api/account', 'DELETE'),
+  adminConfig: () => request<{ commissionRate: number; voucherRunnerBearRatio: number }>('/api/admin/config'),
+  adminUpdateConfig: (commissionRate: number, voucherRunnerBearRatio: number) =>
+    request<{ commissionRate: number; voucherRunnerBearRatio: number }>('/api/admin/config', 'PUT', {
+      commissionRate, voucherRunnerBearRatio,
+    }),
+  adminUsers: (page = 0, size = 20) => request<{
+    items: { userId: string; username: string; online: boolean; lastLoginAt: string; balanceCents: number }[];
+    total: number; page: number; size: number;
+  }>(`/api/admin/users?page=${page}&size=${size}`),
   adminVouchers: () => request<{
     type: number; stock: number; status: string; thresholdCents: number; discountCents: number;
     description: string; lastChangeTime: string;

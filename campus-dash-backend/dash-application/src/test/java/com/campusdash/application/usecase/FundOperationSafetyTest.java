@@ -9,6 +9,7 @@ import com.campusdash.domain.errand.ports.ErrandCachePort;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.notify.ports.RealtimeNotifier;
+import com.campusdash.domain.config.ports.PlatformConfigPort;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.*;
 import com.campusdash.domain.wallet.ports.FundAuditPort;
@@ -252,6 +253,14 @@ class FundOperationSafetyTest {
         }
 
         /** 本测试不涉及优惠券：所有查询返回空，写入为 no-op */
+        PlatformConfigPort config() {
+            return new PlatformConfigPort() {
+                @Override public double commissionRate() { return 0.05; }
+                @Override public double voucherRunnerBearRatio() { return 0.35; }
+                @Override public void update(double commissionRate, double voucherRunnerBearRatio) { }
+            };
+        }
+
         VoucherRepository vouchers() {
             return stub(VoucherRepository.class, (method, args) -> {
                 if (method.equals("findUseByErrand")) return Optional.empty();
@@ -262,7 +271,7 @@ class FundOperationSafetyTest {
 
         SettleErrandUseCase settle() {
             return new SettleErrandUseCase(errands, wallets, audit, fund, ids, cache, credit,
-                    noop(CreditRankingPort.class), new TransactionTemplate(tx), notifier, vouchers(), 0.05);
+                    noop(CreditRankingPort.class), new TransactionTemplate(tx), notifier, vouchers(), config());
         }
 
         RefundErrandUseCase refund() {
@@ -271,7 +280,7 @@ class FundOperationSafetyTest {
         }
 
         ArbitrateErrandUseCase arbitrate() {
-            ArbitrateSettleStep target = new ArbitrateSettleStep(errands, wallets, ids, credit, vouchers(), 0.05);
+            ArbitrateSettleStep target = new ArbitrateSettleStep(errands, wallets, ids, credit, vouchers(), config());
             ProxyFactory proxy = new ProxyFactory(target);
             proxy.addAdvice(new TransactionInterceptor(tx, new AnnotationTransactionAttributeSource()));
             return new ArbitrateErrandUseCase(errands, wallets, refund(), (ArbitrateSettleStep) proxy.getProxy(),

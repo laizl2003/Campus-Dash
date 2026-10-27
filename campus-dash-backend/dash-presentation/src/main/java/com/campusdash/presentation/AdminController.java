@@ -11,6 +11,9 @@ import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.AccountType;
 import com.campusdash.domain.wallet.model.EscrowOrder;
 import com.campusdash.domain.wallet.ports.WalletRepository;
+import com.campusdash.domain.admin.ports.AdminUserQueryPort;
+import com.campusdash.domain.config.ports.PlatformConfigPort;
+import com.campusdash.presentation.realtime.WsSessionRegistry;
 import com.campusdash.presentation.auth.CurrentUser;
 import com.campusdash.shared.BizException;
 import com.campusdash.shared.ErrorCode;
@@ -48,17 +51,26 @@ public class AdminController {
     private final WalletRepository walletRepository;
     private final VoucherRepository voucherRepository;
     private final ArbitrateErrandUseCase arbitrateUseCase;
+    private final PlatformConfigPort platformConfig;
+    private final AdminUserQueryPort adminUserQuery;
+    private final WsSessionRegistry wsSessionRegistry;
 
     public AdminController(QueryErrandListUseCase queryUseCase,
                            ErrandRepository errandRepository,
                            WalletRepository walletRepository,
                            VoucherRepository voucherRepository,
-                           ArbitrateErrandUseCase arbitrateUseCase) {
+                           ArbitrateErrandUseCase arbitrateUseCase,
+                           PlatformConfigPort platformConfig,
+                           AdminUserQueryPort adminUserQuery,
+                           WsSessionRegistry wsSessionRegistry) {
         this.queryUseCase = queryUseCase;
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.voucherRepository = voucherRepository;
         this.arbitrateUseCase = arbitrateUseCase;
+        this.platformConfig = platformConfig;
+        this.adminUserQuery = adminUserQuery;
+        this.wsSessionRegistry = wsSessionRegistry;
     }
 
     public record ArbitrateRequest(String favor) {
@@ -71,6 +83,58 @@ public class AdminController {
     }
 
     public record VoucherStatusRequest(String status) {
+    }
+
+    public record PlatformConfigRequest(Double commissionRate, Double voucherRunnerBearRatio) {
+    }
+
+    /** 平台配置：佣金比例与优惠券抽成比例 */
+    @GetMapping("/config")
+    public Result<Map<String, Object>> config() {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("commissionRate", platformConfig.commissionRate());
+        data.put("voucherRunnerBearRatio", platformConfig.voucherRunnerBearRatio());
+        return Result.ok(data);
+    }
+
+    @PutMapping("/config")
+    public Result<Map<String, Object>> updateConfig(@RequestBody PlatformConfigRequest req) {
+        double commission = req == null || req.commissionRate() == null ? -1 : req.commissionRate();
+        double voucher = req == null || req.voucherRunnerBearRatio() == null ? -1 : req.voucherRunnerBearRatio();
+        if (commission < 0 || commission > 1 || voucher < 0 || voucher > 1) {
+            throw new BizException(ErrorCode.INVALID_AMOUNT, "比例必须在 0 到 1 之间");
+        }
+        platformConfig.update(commission, voucher);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("commissionRate", commission);
+        data.put("voucherRunnerBearRatio", voucher);
+        return Result.ok(data);
+    }
+
+    /** 用户列表：role=user，分页 20，带在线状态与余额 */
+    @GetMapping("/users")
+    public Result<Map<String, Object>> users(@RequestParam(defaultValue = "0") int page,
+                                             @RequestParam(defaultValue = "20") int size) {
+        int safeSize = Math.max(1, Math.min(size, 20));
+        int safePage = Math.max(0, page);
+        var result = adminUserQuery.page(safePage * safeSize, safeSize);
+        List<Map<String, Object>> items = result.items().stream()
+                .map(row -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("userId", row.userId());
+                    item.put("username", row.username());
+                    item.put("online", !wsSessionRegistry.of(row.userId()).isEmpty());
+                    item.put("lastLoginAt", row.lastLoginAt() == null ? "" : row.lastLoginAt().toString());
+                    item.put("balanceCents", row.balanceCents());
+                    return item;
+                })
+                .toList();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("items", items);
+        data.put("total", result.total());
+        data.put("page", safePage);
+        data.put("size", safeSize);
+        return Result.ok(data);
     }
 
     /** 优惠券管理：列表 */

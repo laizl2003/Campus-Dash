@@ -171,3 +171,30 @@
   padding: 10px 18px; border-radius: 10px; font-size: 12px; color: #fff; box-shadow: 0 12px 30px #00000026; }
 .admin-voucher-toast.is-ok { background: #2f6b4a; }
 .admin-voucher-toast.is-danger { background: #b23b32; }
+
+/* ── 平台配置 ─────────────────────────────────────────── */
+.admin-settings-view { display: grid; gap: 16px; }
+.admin-settings-card, .admin-users-card { background: #fff; border: 1px solid #e7e2d8; border-radius: 14px; padding: 18px; }
+.admin-settings-form { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin: 10px 0; }
+.admin-settings-form label { display: grid; gap: 4px; font-size: 10px; color: #7d857e; }
+.admin-settings-form input { width: 130px; height: 34px; border: 1px solid #e2dccd; border-radius: 8px; padding: 0 8px; font-size: 12px; }
+.admin-formula { display: grid; gap: 4px; margin-top: 12px; padding: 12px 14px; background: #fdfbf6; border: 1px dashed #e5ddc9; border-radius: 10px; font-size: 12px; color: #5b635c; }
+.admin-formula strong { font-size: 12px; color: #1f2421; }
+.admin-formula p { margin: 2px 0; font-size: 16px; font-weight: 600; color: #8a6d1f; }
+.admin-formula small { font-size: 10px; color: #8a938b; }
+.admin-users-card table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.admin-users-card thead th {
+  background: #faf7ef; color: #8a938b; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+  text-align: left; padding: 10px 12px; border-bottom: 1px solid #e9e2d2; border-right: 1px solid #f0ebdf;
+}
+.admin-users-card tbody td { padding: 10px 12px; font-size: 12px; color: #3c443d; border-bottom: 1px solid #efe9dc; border-right: 1px solid #f4efe3; }
+.admin-users-card thead th:last-child, .admin-users-card tbody td:last-child { border-right: 0; }
+.admin-users-card tbody tr:nth-child(even) { background: #fcfaf5; }
+.admin-users-card tbody tr:hover { background: #fff7e0; }
+.admin-users-card tbody tr:last-child td { border-bottom: 0; }
+.admin-users-card thead th:nth-child(1) { width: 34%; }
+.admin-users-card thead th:nth-child(2) { width: 18%; }
+.admin-users-card thead th:nth-child(3) { width: 30%; }
+.admin-online-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; vertical-align: middle; }
+.admin-online-dot.is-online { background: #2fa060; box-shadow: 0 0 0 3px #2fa06022; }
+.admin-online-dot.is-offline { background: #c9c3b8; }

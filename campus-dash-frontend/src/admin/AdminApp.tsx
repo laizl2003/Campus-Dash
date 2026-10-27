@@ -24,7 +24,7 @@ export default function AdminApp() {
   const [busy, setBusy] = useState(false);
   const [pendingFavor, setPendingFavor] = useState<'RUNNER' | 'PUBLISHER' | null>(null);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
-  const [view, setView] = useState<'disputes' | 'ledger' | 'vouchers'>('disputes');
+  const [view, setView] = useState<'disputes' | 'ledger' | 'vouchers' | 'settings'>('disputes');
   const [netCents, setNetCents] = useState(0);
   const [ledgerAccount, setLedgerAccount] = useState<'COMMISSION' | 'MARKETING'>('COMMISSION');
 
@@ -81,7 +81,7 @@ export default function AdminApp() {
         <button type="button" className={view === 'disputes' ? 'is-active' : ''} onClick={() => setView('disputes')}><Icon name="shield" size={16}/>仲裁工作台</button>
         <button type="button" className={view === 'ledger' ? 'is-active' : ''} onClick={() => setView('ledger')}><Icon name="receipt" size={16}/>资金流水</button>
         <button type="button" className={view === 'vouchers' ? 'is-active' : ''} onClick={() => setView('vouchers')}><Icon name="ticket" size={16}/>优惠券管理</button>
-        <button type="button" disabled title="规划中"><Icon name="wallet" size={16}/>平台配置</button>
+        <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}><Icon name="wallet" size={16}/>平台配置</button>
       </nav>
       <div className="admin-side-foot">
         <span><Icon name="user" size={14}/>{getUsername()} · 001</span>
@@ -91,9 +91,9 @@ export default function AdminApp() {
 
     <div className="admin-main">
       <header className="admin-top">
-        <div><span className="eyebrow">ADMIN CONSOLE</span><h1>{view === 'disputes' ? '仲裁工作台' : view === 'vouchers' ? '优惠券管理' : '平台资金流水'}<span className="heading-dot">.</span></h1>
-          <p>{view === 'disputes' ? '处理争议任务，决定托管资金流向跑腿或发单人。' : view === 'vouchers' ? '维护满减券的类型、库存与上下架状态。' : '佣金账户与营销账户的每一笔入账/出账。'}</p></div>
-        {view !== 'vouchers' && <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
+        <div><span className="eyebrow">ADMIN CONSOLE</span><h1>{view === 'disputes' ? '仲裁工作台' : view === 'vouchers' ? '优惠券管理' : view === 'settings' ? '平台配置' : '平台资金流水'}<span className="heading-dot">.</span></h1>
+          <p>{view === 'disputes' ? '处理争议任务，决定托管资金流向跑腿或发单人。' : view === 'vouchers' ? '维护满减券的类型、库存与上下架状态。' : view === 'settings' ? '调整佣金与优惠券抽成比例，查看平台用户。' : '佣金账户与营销账户的每一笔入账/出账。'}</p></div>
+        {view !== 'vouchers' && view !== 'settings' && <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
           <Icon name="refresh" size={15} className={loading ? 'is-spinning' : ''}/>刷新
         </button>}
       </header>
@@ -167,7 +167,7 @@ export default function AdminApp() {
             <p className="admin-hint">裁决前请核对双方描述与送达凭证；资金动作在同一个事务里完成。</p>
           </>}
         </section>
-      </div> : view === 'vouchers' ? <VoucherManager/> : <div className="admin-ledger-view">
+      </div> : view === 'vouchers' ? <VoucherManager/> : view === 'settings' ? <SettingsPanel/> : <div className="admin-ledger-view">
         <div className={`admin-net ${netCents >= 0 ? 'in' : 'out'}`}>
           <span>平台净收入</span>
           <strong>{yuan(netCents)}</strong>
@@ -372,6 +372,91 @@ function VoucherManager() {
             </td>
           </tr>)}</tbody>
         </table></div>}
+    </section>
+  </div>;
+}
+
+function SettingsPanel() {
+  const [config, setConfig] = useState<Awaited<ReturnType<typeof api.adminConfig>> | null>(null);
+  const [commission, setCommission] = useState('');
+  const [voucher, setVoucher] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [users, setUsers] = useState<Awaited<ReturnType<typeof api.adminUsers>> | null>(null);
+  const [page, setPage] = useState(0);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+
+  useEffect(() => {
+    api.adminConfig().then(data => {
+      setConfig(data);
+      setCommission(String(Math.round(data.commissionRate * 100)));
+      setVoucher(String(Math.round(data.voucherRunnerBearRatio * 100)));
+    }).catch(e => setError(e instanceof Error ? e.message : '配置加载失败'));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setLoadingUsers(true);
+    api.adminUsers(page, 20)
+      .then(data => { if (active) setUsers(data); })
+      .catch(e => { if (active) setError(e instanceof Error ? e.message : '用户加载失败'); })
+      .finally(() => { if (active) setLoadingUsers(false); });
+    return () => { active = false; };
+  }, [page]);
+
+  const save = async () => {
+    const c = Number(commission), v = Number(voucher);
+    if (!Number.isFinite(c) || !Number.isFinite(v) || c < 0 || c > 100 || v < 0 || v > 100) {
+      setError('比例需在 0% - 100% 之间'); return;
+    }
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const next = await api.adminUpdateConfig(c / 100, v / 100);
+      setConfig(next);
+      setMessage('保存成功');
+    } catch (e) { setError(e instanceof Error ? e.message : '保存失败'); }
+    finally { setSaving(false); }
+  };
+
+  const totalPages = users ? Math.max(1, Math.ceil(users.total / Math.max(users.size, 1))) : 1;
+
+  return <div className="admin-settings-view">
+    <section className="admin-settings-card">
+      <div className="admin-list-head"><div><h2>佣金与抽成比例</h2><small>保存后立即生效，下一次结算开始使用新比例</small></div></div>
+      <div className="admin-settings-form">
+        <label>佣金比例（%）<input type="number" min="0" max="100" step="0.1" value={commission} onChange={e => setCommission(e.target.value)}/></label>
+        <label>优惠券抽成比例（%）<input type="number" min="0" max="100" step="0.1" value={voucher} onChange={e => setVoucher(e.target.value)}/></label>
+        <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}>{saving ? '保存中…' : '保存配置'}</button>
+      </div>
+      {message && <div className="banner ok" role="status">{message}</div>}
+      {error && <div className="banner warn" role="alert">{error}</div>}
+      <div className="admin-formula">
+        <strong>佣金账户收入规则</strong>
+        <p>I = R₁ × x + R₂ × y</p>
+        <small>x：订单原价（悬赏金额）　y：优惠券优惠金额　R₁：佣金比例　R₂：优惠券抽成比例</small>
+        <small>按当前配置：I = {(config ? (config.commissionRate * 100).toFixed(1) : '—')}% × x + {(config ? (config.voucherRunnerBearRatio * 100).toFixed(1) : '—')}% × y</small>
+      </div>
+    </section>
+
+    <section className="admin-users-card">
+      <div className="admin-list-head"><h2>平台用户 <span>{users?.total ?? '—'}</span></h2><small>仅 role=user，每页 20 人</small></div>
+      {loadingUsers && !users ? <div className="admin-empty">正在加载…</div>
+        : !users || users.items.length === 0 ? <div className="admin-empty">暂无普通用户</div>
+        : <div className="admin-ledger-scroll"><table>
+          <thead><tr><th>用户名</th><th>在线状态</th><th>上次登录</th><th>余额</th></tr></thead>
+          <tbody>{users.items.map(user => <tr key={user.userId}>
+            <td>{user.username}</td>
+            <td><span className={`admin-online-dot ${user.online ? 'is-online' : 'is-offline'}`}/>{user.online ? '在线' : '离线'}</td>
+            <td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</td>
+            <td>{yuan(user.balanceCents)}</td>
+          </tr>)}</tbody>
+        </table></div>}
+      <div className="admin-pager">
+        <button type="button" className="btn btn-ghost" disabled={page <= 0 || loadingUsers} onClick={() => setPage(p => Math.max(0, p - 1))}>上一页</button>
+        <span>第 {page + 1} / {totalPages} 页</span>
+        <button type="button" className="btn btn-ghost" disabled={page + 1 >= totalPages || loadingUsers} onClick={() => setPage(p => p + 1)}>下一页</button>
+      </div>
     </section>
   </div>;
 }

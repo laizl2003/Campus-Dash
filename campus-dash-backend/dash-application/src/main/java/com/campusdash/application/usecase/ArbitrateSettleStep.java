@@ -6,6 +6,7 @@ import com.campusdash.domain.credit.ports.CreditRepository;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.model.ErrandStatus;
 import com.campusdash.domain.errand.ports.ErrandRepository;
+import com.campusdash.domain.config.ports.PlatformConfigPort;
 import com.campusdash.domain.voucher.model.VoucherUse;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.*;
@@ -41,20 +42,20 @@ public class ArbitrateSettleStep {
     private final SnowflakeIdGenerator idGenerator;
     private final CreditRepository creditRepository;
     private final VoucherRepository voucherRepository;
-    private final double commissionRate;
+    private final PlatformConfigPort config;
 
     public ArbitrateSettleStep(ErrandRepository errandRepository,
                               WalletRepository walletRepository,
                               SnowflakeIdGenerator idGenerator,
                               CreditRepository creditRepository,
                               VoucherRepository voucherRepository,
-                              @Value("${dash.settle.commission-rate:0.08}") double commissionRate) {
+                              PlatformConfigPort config) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.idGenerator = idGenerator;
         this.creditRepository = creditRepository;
         this.voucherRepository = voucherRepository;
-        this.commissionRate = commissionRate;
+        this.config = config;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -80,7 +81,7 @@ public class ArbitrateSettleStep {
         long discountCents = voucher == null ? 0L : voucher.discountCents();
         long runnerBearCents = voucher == null ? 0L : voucher.runnerBearCents();
         long rewardCents = paidCents + discountCents;
-        long commissionCents = (long) Math.floor(rewardCents * commissionRate);
+        long commissionCents = (long) Math.floor(rewardCents * config.commissionRate());
         long runnerCents = rewardCents - commissionCents - runnerBearCents;
         long subsidyCents = discountCents - runnerBearCents;
         if (runnerCents < 0) {
