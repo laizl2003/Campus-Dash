@@ -462,3 +462,16 @@ button.topbar-avatar:hover { filter: brightness(0.97); }
 .auth-account-item:hover { background: #fff7e0; }
 .auth-account-item.is-current { border-color: #eadfbf; background: #fdf8e8; }
 .auth-accounts-hint { font-size: 9px; color: #8a938b; line-height: 1.5; }
+
+/* 登录页：本机账号滚动下拉 */
+.auth-quick { position: relative; margin-top: 14px; }
+.auth-quick-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 10px 12px; border: 1px solid #e6dfcf; border-radius: 10px; background: #fbf9f3; text-align: left; cursor: pointer; }
+.auth-quick-toggle strong { display: block; font-size: 11px; color: #333333; }
+.auth-quick-toggle small { display: block; margin-top: 2px; font-size: 9px; color: #8a938b; }
+.auth-quick-caret { color: #8a938b; font-size: 11px; }
+.auth-quick-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 30; padding: 8px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 40px #1f24211f; }
+.auth-quick-list { display: grid; gap: 4px; max-height: 208px; overflow-y: auto; }
+.auth-quick-menu .auth-account-item { width: 100%; }
+
+/* 展开后就地撑开在登录按钮下方，不再浮层遮挡表单 */
+.auth-quick-menu { position: static; bottom: auto; margin-top: 8px; box-shadow: 0 6px 18px #1f24210f; }

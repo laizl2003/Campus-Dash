@@ -239,3 +239,14 @@
 
 /* 提高优先级，确保管理台菜单向上展开（避免被全局 .account-menu 的 top 覆盖） */
 .admin-side .admin-account-menu { top: auto; right: auto; left: 0; bottom: calc(100% + 10px); width: 224px; }
+
+/* 管理台账号菜单：深绿主题并限制高度 */
+.admin-side .admin-account-menu { z-index: 60; width: 216px; max-height: 280px; overflow-y: auto; background: #26312b; border-color: #3a473e; box-shadow: 0 18px 40px #00000066; color: #e9ede7; }
+.admin-side .admin-account-menu .account-menu-head { border-color: #3a473e; }
+.admin-side .admin-account-menu .account-menu-head small { color: #9da79f; }
+.admin-side .admin-account-menu button { color: #e9ede7; }
+.admin-side .admin-account-menu button:hover { background: #313d35; }
+.admin-side .admin-account-menu button.is-current { background: #3a4a3f; }
+.admin-side .admin-account-menu .menu-account small { color: #9da79f; }
+.admin-side .admin-account-menu .account-menu-link { color: #c9d3ca; border-color: #3a473e; }
+.admin-side .admin-account-menu .account-menu-link:hover { background: #313d35; }

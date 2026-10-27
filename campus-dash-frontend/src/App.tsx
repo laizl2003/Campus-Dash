@@ -92,7 +92,6 @@ export default function App() {
     accounts={listAccounts()}
     currentUserId={userId}
     onQuickLogin={switchAccount}
-    current={userId !== null ? { username: getUsername() ?? userId, role } : null}
     onResume={() => { window.location.hash = role === 'Admin' ? '#/admin' : '#/square'; }}
     onAuthed={profile => {
       setUserId(profile.userId);
