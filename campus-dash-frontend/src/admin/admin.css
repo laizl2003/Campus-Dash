@@ -98,3 +98,33 @@
 .admin-account-tabs button { padding: 7px 16px; border: 1px solid #e7e2d8; border-radius: 9px; background: #fff; color: #6b746c; font-size: 12px; }
 .admin-account-tabs button.is-active { background: #1f2421; border-color: #1f2421; color: #fff; font-weight: 600; }
 .admin-ledger-view .admin-ledger-panel { min-height: 520px; }
+
+/* 资金流水表格：满宽、行列分隔、淡色表头/斑马纹 */
+.admin-ledger-panel .admin-ledger-scroll { width: 100%; overflow-x: auto; margin-top: 4px; }
+.admin-ledger-panel table { width: 100%; min-width: 680px; border-collapse: collapse; table-layout: fixed; }
+.admin-ledger-panel thead th {
+  background: #faf7ef; color: #8a938b; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+  text-align: left; padding: 10px 12px; border-bottom: 1px solid #e9e2d2; border-right: 1px solid #f0ebdf;
+  white-space: nowrap;
+}
+.admin-ledger-panel tbody td {
+  padding: 10px 12px; font-size: 12px; color: #3c443d;
+  border-bottom: 1px solid #efe9dc; border-right: 1px solid #f4efe3;
+}
+.admin-ledger-panel thead th:last-child, .admin-ledger-panel tbody td:last-child { border-right: 0; }
+.admin-ledger-panel tbody tr:nth-child(even) { background: #fcfaf5; }
+.admin-ledger-panel tbody tr:hover { background: #fff7e0; }
+.admin-ledger-panel tbody tr:last-child td { border-bottom: 0; }
+.admin-ledger-panel tbody td.in { color: #2f6b4a; font-weight: 600; }
+.admin-ledger-panel tbody td.out { color: #b23b32; font-weight: 600; }
+.admin-ledger-panel tbody td.mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10.5px; color: #7d857e; }
+.admin-ledger-panel thead th:nth-child(1), .admin-ledger-panel tbody td:nth-child(1) { width: 118px; }
+.admin-ledger-panel thead th:nth-child(2), .admin-ledger-panel tbody td:nth-child(2) { width: 64px; }
+.admin-ledger-panel thead th:nth-child(3), .admin-ledger-panel tbody td:nth-child(3) { width: 100px; }
+.admin-ledger-panel thead th:nth-child(4), .admin-ledger-panel tbody td:nth-child(4) { width: 100px; }
+.admin-ledger-panel thead th:nth-child(6), .admin-ledger-panel tbody td:nth-child(6) { width: 84px; }
+
+/* 汇总行也做分隔与淡底 */
+.admin-ledger-summary { padding: 8px 12px; border-top: 1px solid #f0ebdf; border-bottom: 1px solid #f0ebdf; background: #fdfbf6; }
+.admin-ledger-summary > span + span { border-left: 1px solid #ece5d6; padding-left: 14px; }
+.admin-ledger-panel-head { padding-bottom: 10px; border-bottom: 1px solid #f0ebdf; }
