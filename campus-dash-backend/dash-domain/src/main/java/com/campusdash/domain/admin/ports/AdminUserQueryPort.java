@@ -8,7 +8,8 @@ public interface AdminUserQueryPort {
 
     Page page(int offset, int limit);
 
-    record Row(String userId, String username, Instant lastLoginAt, long balanceCents) {
+    record Row(String userId, String username, Instant lastLoginAt, long balanceCents,
+               boolean loginStatus, Instant lastSeenAt) {
     }
 
     record Page(List<Row> items, long total) {

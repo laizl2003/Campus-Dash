@@ -86,6 +86,7 @@ public class AuthController {
         }
         userId = userId.trim();
         forceLogoutPort.clear(userId);
+        users.markOnline(userId);
         if (authPort instanceof RefreshTokenPort refreshTokenPort) {
             var pair = refreshTokenPort.loginWithRefresh(userId);
             Map<String, Object> data = new LinkedHashMap<>();
@@ -133,11 +134,19 @@ public class AuthController {
                 .orElseGet(() -> Result.fail(ErrorCode.UNAUTHORIZED));
     }
 
+    @PostMapping("/heartbeat")
+    public Result<Void> heartbeat() {
+        users.markOnline(CurrentUser.get());
+        return Result.ok(null);
+    }
+
     @PostMapping("/logout")
     public Result<Void> logout(@RequestHeader(value = "Authorization", required = false) String auth,
                                @RequestBody(required = false) LogoutRequest body) {
         if (auth != null && auth.startsWith("Bearer ")) {
-            authPort.logout(auth.substring(7).trim());
+            String access = auth.substring(7).trim();
+            authPort.resolve(access).ifPresent(users::markOffline);
+            authPort.logout(access);
         }
         // access token 进黑名单只挡住剩余有效期；refresh 若留在 Redis，登出后仍能换新 access
         if (authPort instanceof RefreshTokenPort refreshTokenPort

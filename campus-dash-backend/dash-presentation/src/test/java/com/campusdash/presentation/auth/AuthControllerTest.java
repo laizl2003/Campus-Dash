@@ -192,6 +192,9 @@ class AuthControllerTest {
         @Override public void insert(UserAccount account) { byName.put(account.username(), account); }
         @Override public java.util.List<UserAccount> findAll() { return new java.util.ArrayList<>(byName.values()); }
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
+        @Override public void markOnline(String userId) { }
+        @Override public void markOffline(String userId) { }
+        @Override public int sweepOffline(Instant cutoff) { return 0; }
         @Override public void markLoginFailure(String userId) { loginFailures++; }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
         @Override public boolean deleteById(String userId) { return byName.values().removeIf(u -> u.userId().equals(userId)); }
@@ -206,6 +209,9 @@ class AuthControllerTest {
         @Override public void insert(UserAccount account) { }
         @Override public java.util.List<UserAccount> findAll() { return java.util.List.of(); }
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
+        @Override public void markOnline(String userId) { }
+        @Override public void markOffline(String userId) { }
+        @Override public int sweepOffline(Instant cutoff) { return 0; }
         @Override public void markLoginFailure(String userId) { }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
         @Override public boolean deleteById(String userId) { return false; }

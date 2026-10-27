@@ -290,6 +290,8 @@ CREATE TABLE IF NOT EXISTS `user` (
   status              TINYINT      NOT NULL DEFAULT 1 COMMENT '1 正常 / 0 禁用',
   last_login_at       DATETIME(3)  NULL COMMENT '冗余：最近登录时间，安全审计用',
   last_login_ip       VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '冗余：最近登录 IP',
+  login_status        TINYINT      NOT NULL DEFAULT 0 COMMENT '1=已登录/在线，0=离线',
+  last_seen_at        DATETIME(3)  NULL COMMENT '最近心跳时间',
   login_fail_count    INT          NOT NULL DEFAULT 0 COMMENT '连续登录失败次数，防爆破',
   remark              VARCHAR(255) NOT NULL DEFAULT '' COMMENT '运营备注',
   PRIMARY KEY (user_id),

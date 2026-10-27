@@ -32,6 +32,15 @@ public interface UserRepository {
 
     void markLoginSuccess(String userId, Instant at, String ip);
 
+    /** 登录/心跳：标记在线并刷新 last_seen_at */
+    void markOnline(String userId);
+
+    /** 主动登出/强制下线：立即标记离线 */
+    void markOffline(String userId);
+
+    /** 清理心跳超时的在线标记，返回影响行数 */
+    int sweepOffline(Instant cutoff);
+
     void markLoginFailure(String userId);
 
     /** 修改密码：只更新 password_hash / password_updated_at / updated_at */

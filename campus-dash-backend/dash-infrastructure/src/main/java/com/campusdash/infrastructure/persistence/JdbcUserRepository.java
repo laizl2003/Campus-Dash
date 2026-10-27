@@ -120,8 +120,31 @@ public class JdbcUserRepository implements UserRepository {
 
     @Override
     public void markLoginSuccess(String userId, Instant at, String ip) {
-        jdbc.update("UPDATE `user` SET last_login_at = ?, last_login_ip = ?, login_fail_count = 0 WHERE user_id = ?",
-                timestamp(at), ip == null ? "" : ip, userId);
+        jdbc.update("""
+                UPDATE `user`
+                   SET last_login_at = ?, last_login_ip = ?, login_fail_count = 0,
+                       login_status = 1, last_seen_at = NOW(3)
+                 WHERE user_id = ?
+                """, timestamp(at), ip == null ? "" : ip, userId);
+    }
+
+    @Override
+    public void markOnline(String userId) {
+        jdbc.update("UPDATE `user` SET login_status = 1, last_seen_at = NOW(3) WHERE user_id = ?", userId);
+    }
+
+    @Override
+    public void markOffline(String userId) {
+        jdbc.update("UPDATE `user` SET login_status = 0 WHERE user_id = ?", userId);
+    }
+
+    @Override
+    public int sweepOffline(Instant cutoff) {
+        return jdbc.update("""
+                UPDATE `user` SET login_status = 0
+                 WHERE login_status = 1
+                   AND (last_seen_at IS NULL OR last_seen_at < ?)
+                """, timestamp(cutoff));
     }
 
     @Override

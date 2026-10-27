@@ -185,6 +185,9 @@ class RegisterUserUseCaseTest {
         @Override public boolean existsByPhone(String phone) { existsCalls++; return byPhone.containsKey(phone); }
         @Override public void insert(UserAccount account) { byName.put(account.username(), account); byPhone.put(account.phone(), account); }
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
+        @Override public void markOnline(String userId) { }
+        @Override public void markOffline(String userId) { }
+        @Override public int sweepOffline(Instant cutoff) { return 0; }
         @Override public void markLoginFailure(String userId) { }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
         @Override public boolean deleteById(String userId) { return byName.remove(byName.entrySet().stream().filter(e -> e.getValue().userId().equals(userId)).map(java.util.Map.Entry::getKey).findFirst().orElse(null)) != null; }

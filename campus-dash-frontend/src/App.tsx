@@ -71,6 +71,16 @@ export default function App() {
   useEffect(() => {
     if (userId !== null) { connectWs(); return disconnectWs; }
   }, [userId]);
+  // 在线状态心跳：每 30 秒刷新 last_seen_at；关闭页面后由后端 90 秒 TTL 兜底下线
+  useEffect(() => {
+    if (userId === null) return;
+    const ping = () => { void api.heartbeat().catch(() => {}); };
+    ping();
+    const timer = window.setInterval(ping, 30000);
+    const onVisible = () => { if (!document.hidden) ping(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [userId]);
   useEffect(() => { window.scrollTo({ top: 0 }); }, [route]);
   // 切换/登录到 Admin 后统一落到管理台；普通用户被管理台守卫送回广场
   useEffect(() => {

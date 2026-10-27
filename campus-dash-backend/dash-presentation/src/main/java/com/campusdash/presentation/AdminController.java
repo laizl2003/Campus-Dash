@@ -13,6 +13,7 @@ import com.campusdash.domain.wallet.model.EscrowOrder;
 import com.campusdash.domain.wallet.ports.WalletRepository;
 import com.campusdash.domain.admin.ports.AdminUserQueryPort;
 import com.campusdash.domain.auth.ports.ForceLogoutPort;
+import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.config.ports.PlatformConfigPort;
 import com.campusdash.presentation.realtime.WsSessionRegistry;
 import com.campusdash.presentation.auth.CurrentUser;
@@ -57,6 +58,7 @@ public class AdminController {
     private final AdminUserQueryPort adminUserQuery;
     private final WsSessionRegistry wsSessionRegistry;
     private final ForceLogoutPort forceLogoutPort;
+    private final UserRepository userRepository;
 
     public AdminController(QueryErrandListUseCase queryUseCase,
                            ErrandRepository errandRepository,
@@ -66,7 +68,8 @@ public class AdminController {
                            PlatformConfigPort platformConfig,
                            AdminUserQueryPort adminUserQuery,
                            WsSessionRegistry wsSessionRegistry,
-                           ForceLogoutPort forceLogoutPort) {
+                           ForceLogoutPort forceLogoutPort,
+                           UserRepository userRepository) {
         this.queryUseCase = queryUseCase;
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
@@ -76,6 +79,7 @@ public class AdminController {
         this.adminUserQuery = adminUserQuery;
         this.wsSessionRegistry = wsSessionRegistry;
         this.forceLogoutPort = forceLogoutPort;
+        this.userRepository = userRepository;
     }
 
     public record ArbitrateRequest(String favor) {
@@ -127,6 +131,7 @@ public class AdminController {
             }
         }
         forceLogoutPort.force(userId);
+        userRepository.markOffline(userId);
         return Result.ok(null);
     }
 
@@ -145,7 +150,9 @@ public class AdminController {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("userId", row.userId());
                     item.put("username", row.username());
-                    item.put("online", !wsSessionRegistry.of(row.userId()).isEmpty());
+                    boolean online = row.loginStatus() && row.lastSeenAt() != null
+                            && row.lastSeenAt().isAfter(java.time.Instant.now().minusSeconds(90));
+                    item.put("online", online);
                     item.put("lastLoginAt", row.lastLoginAt() == null ? "" : row.lastLoginAt().toString());
                     item.put("balanceCents", row.balanceCents());
                     return item;
