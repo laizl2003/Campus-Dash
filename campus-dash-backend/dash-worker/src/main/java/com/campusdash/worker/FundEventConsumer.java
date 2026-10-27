@@ -77,9 +77,9 @@ public class FundEventConsumer {
                         // 发单人视角与跑腿视角的文案不同——同一事件对双方语义不一样，
                         // 不能共用一句话（P4 浏览器验证时发现"你获得"出现在发单人侧）
                         String pubContent = switch (tag) {
-                            case "SETTLED" -> String.format("任务已完成结算，跑腿获得 %d 分", amount);
-                            case "REFUNDED" -> String.format("任务已退款，%d 分已退回你的账户", amount);
-                            case "ARBITRATED" -> String.format("争议已裁决，涉及金额 %d 分", amount);
+                            case "SETTLED" -> String.format("任务已完成结算，跑腿获得 %.2f 元", amount / 100.0);
+                            case "REFUNDED" -> String.format("任务已退款，%.2f 元已退回你的账户", amount / 100.0);
+                            case "ARBITRATED" -> String.format("争议已裁决，涉及金额 %.2f 元", amount / 100.0);
                             default -> "任务 " + errandId + " 资金状态变动";
                         };
                         notificationRepository.insertIfAbsent(idGenerator.nextId(),
@@ -87,7 +87,7 @@ public class FundEventConsumer {
 
                         // 结算类事件同时通知跑腿
                         if (!runnerId.isEmpty() && ("SETTLED".equals(tag) || "ARBITRATED".equals(tag))) {
-                            String runnerContent = String.format("任务结算完成，你获得 %d 分", amount);
+                            String runnerContent = String.format("任务结算完成，你获得 %.2f 元", amount / 100.0);
                             notificationRepository.insertIfAbsent(idGenerator.nextId(),
                                     msgKey + ":runner", runnerId, errandId, tag, runnerContent);
                         }

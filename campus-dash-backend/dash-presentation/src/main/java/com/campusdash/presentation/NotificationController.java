@@ -25,8 +25,15 @@ public class NotificationController {
         return Result.ok(queryUseCase.list(userId, page, size).stream()
                 .map(v -> Map.<String, Object>of(
                         "id", v.id(), "errandId", v.errandId(), "type", v.type(),
-                        "content", v.content(), "time", v.time().toString()))
+                        "content", v.content(), "time", v.time().toString(), "read", v.read()))
                 .toList());
+    }
+
+    /** 点开某条消息时标记已读（前端乐观更新，失败也不阻塞跳转） */
+    @PostMapping("/{id}/read")
+    public Result<Map<String, Object>> markRead(@PathVariable long id) {
+        int changed = queryUseCase.markRead(CurrentUser.get(), id);
+        return Result.ok(Map.of("changed", changed));
     }
 
     @GetMapping("/unread")

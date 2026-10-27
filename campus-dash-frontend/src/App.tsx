@@ -97,7 +97,8 @@ export default function App() {
     if (role !== 'Admin') return <RedirectToSquare />;
     return <AdminApp />;
   }
-  if (path.startsWith('/detail/')) page = <Detail key={path.split('/')[2]} errandId={path.split('/')[2]}/>;
+  if (path.startsWith('/detail/')) page = <Detail key={path.split('/')[2]} errandId={path.split('/')[2]}
+    backHref={route.includes('from=notifications') ? '#/notifications' : '#/square'}/>;
   else if (path === '/publish') page = <Publish key={route}/>;
   else if (path === '/mine') page = <Mine/>;
   else if (path === '/wallet') page = <Wallet/>;

@@ -272,3 +272,8 @@
 
 /* 倒计时等宽，秒位跳动时卡片宽度不抖 */
 .wallet-voucher-expire { font-variant-numeric: tabular-nums; letter-spacing: .2px; }
+
+/* 未读消息：淡黄色底，点击后立即取消高亮 */
+.account-message.is-unread { background: #fff9e4; border-radius: 9px; padding-left: 12px; padding-right: 12px; margin-left: -12px; margin-right: -12px; }
+.account-message.is-unread .account-message-title { color: var(--primary-ink); }
+.account-message.is-unread:hover { background: #fff5cf; }

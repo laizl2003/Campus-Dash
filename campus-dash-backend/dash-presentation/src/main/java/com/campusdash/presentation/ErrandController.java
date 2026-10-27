@@ -6,6 +6,8 @@ import com.campusdash.application.usecase.query.GetErrandDetailUseCase;
 import com.campusdash.application.usecase.query.QueryErrandListUseCase;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.model.ErrandType;
+import com.campusdash.domain.auth.model.UserAccount;
+import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.presentation.auth.CurrentUser;
 import com.campusdash.shared.ErrorCode;
@@ -41,6 +43,7 @@ public class ErrandController {
     private final GetErrandDetailUseCase detailUseCase;
     private final ErrandActionResolver actionResolver;
     private final ErrandRepository errandRepository;
+    private final UserRepository users;
 
     public ErrandController(PublishErrandUseCase publishUseCase,
                             GrabErrandUseCase grabUseCase,
@@ -54,7 +57,8 @@ public class ErrandController {
                             QueryErrandListUseCase queryUseCase,
                             GetErrandDetailUseCase detailUseCase,
                             ErrandActionResolver actionResolver,
-                            ErrandRepository errandRepository) {
+                            ErrandRepository errandRepository,
+                            UserRepository users) {
         this.publishUseCase = publishUseCase;
         this.grabUseCase = grabUseCase;
         this.confirmUseCase = confirmUseCase;
@@ -68,6 +72,7 @@ public class ErrandController {
         this.detailUseCase = detailUseCase;
         this.actionResolver = actionResolver;
         this.errandRepository = errandRepository;
+        this.users = users;
     }
 
     public record PublishRequest(Long campusId, ErrandType type, String title,
@@ -226,7 +231,11 @@ public class ErrandController {
         card.put("slotTotal", e.slotTotal());
         card.put("slotTaken", e.slotTaken());
         card.put("publisherId", e.publisherId());
+        card.put("publisherName", users.findById(e.publisherId())
+                .map(UserAccount::username).orElse(e.publisherId()));
         card.put("grabberId", e.grabberId() == null ? -1L : e.grabberId());
+        card.put("grabberName", e.grabberId() == null ? "" : users.findById(e.grabberId())
+                .map(UserAccount::username).orElse(e.grabberId()));
         card.put("round", e.round());
         card.put("role", resolved.role());
         card.put("availableActions", resolved.actions());

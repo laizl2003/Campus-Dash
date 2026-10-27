@@ -7,7 +7,7 @@ import { subscribeWs } from '../ws';
 import { displayUserName } from '../identities';
 import './taskPages.css';
 
-interface Props { errandId: string }
+interface Props { errandId: string; backHref?: string }
 
 const TERMINAL = new Set(['SETTLED', 'CLOSED', 'CANCELLED', 'REFUNDED']);
 const ROLE_TEXT: Record<string, string> = { PUBLISHER: '发单同学', CURRENT_RUNNER: '接单同学', VIEWER: '浏览任务', ARBITRATOR: '仲裁员' };
@@ -26,12 +26,12 @@ function formatTime(value: string) {
 
 function operatorName(id: string, card: ErrandCard) {
   if (id === '-1') return '平台自动处理';
-  if (id === card.publisherId) return `${displayUserName(id)} · 发单同学`;
-  if (id === card.grabberId) return `${displayUserName(id)} · 接单同学`;
+  if (id === card.publisherId) return `${card.publisherName || displayUserName(id)} · 发单同学`;
+  if (id === card.grabberId) return `${card.grabberName || displayUserName(id)} · 接单同学`;
   return displayUserName(id);
 }
 
-export default function Detail({ errandId }: Props) {
+export default function Detail({ errandId, backHref = '#/square' }: Props) {
   const [card, setCard] = useState<ErrandCard | null>(null);
   const [timeline, setTimeline] = useState<StatusChange[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +104,7 @@ export default function Detail({ errandId }: Props) {
     finally { arbitrationPending.current = false; setArbitrationBusy(false); }
   };
 
-  if (!card) return <div className="task-detail-page"><a className="task-back-link" href="#/square"><Icon name="arrow-left" size={16} /> 返回任务广场</a><section className="panel empty-state task-detail-empty"><Icon name={loading ? 'clock' : 'package'} size={32} /><h2>{loading ? '正在打开这份任务' : '暂时无法打开任务'}</h2><p>{loading ? '任务信息与最新进展即将呈现。' : error || '请稍后再试。'}</p>{!loading && <button className="btn btn-primary" onClick={() => void load()} disabled={refreshing}>{refreshing ? '正在重试…' : '重新加载'}</button>}</section></div>;
+  if (!card) return <div className="task-detail-page"><a className="task-back-link" href={backHref}><Icon name="arrow-left" size={16} /> 返回任务广场</a><section className="panel empty-state task-detail-empty"><Icon name={loading ? 'clock' : 'package'} size={32} /><h2>{loading ? '正在打开这份任务' : '暂时无法打开任务'}</h2><p>{loading ? '任务信息与最新进展即将呈现。' : error || '请稍后再试。'}</p>{!loading && <button className="btn btn-primary" onClick={() => void load()} disabled={refreshing}>{refreshing ? '正在重试…' : '重新加载'}</button>}</section></div>;
 
   const hasRunner = Boolean(card.grabberId && card.grabberId !== '-1');
   const ordinaryActions = card.availableActions.filter((action) => action !== 'ARBITRATE');
@@ -113,7 +113,7 @@ export default function Detail({ errandId }: Props) {
 
   return (
     <div className="task-detail-page">
-      <div className="task-detail-toolbar"><a className="task-back-link" href="#/square"><Icon name="arrow-left" size={16} /> 返回任务广场</a><div><span className="task-updated-at">{updatedAt ? `${updatedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} 更新` : ''}</span><button className="btn btn-ghost" onClick={() => void load()} disabled={refreshing}><Icon name="refresh" size={15} /> {refreshing ? '更新中…' : '刷新进度'}</button></div></div>
+      <div className="task-detail-toolbar"><a className="task-back-link" href={backHref}><Icon name="arrow-left" size={16} /> 返回任务广场</a><div><span className="task-updated-at">{updatedAt ? `${updatedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} 更新` : ''}</span><button className="btn btn-ghost" onClick={() => void load()} disabled={refreshing}><Icon name="refresh" size={15} /> {refreshing ? '更新中…' : '刷新进度'}</button></div></div>
       <div className="page-head task-detail-head"><div><span className="eyebrow">ERRAND DETAILS</span><h1>每份帮助，都有迹可循</h1><p>任务信息、当前进度与悬赏状态，在这里一目了然。</p></div></div>
       {error && <div className="banner warn" role="alert">{error}<button className="task-inline-button" disabled={refreshing} onClick={() => void load()}>重试</button></div>}
       {notice && <div className="banner info" role="status">{notice}</div>}
@@ -123,7 +123,7 @@ export default function Detail({ errandId }: Props) {
             <div className="task-overview-top"><span className="task-detail-category"><Icon name={TYPE_ICON[card.type] || 'package'} size={18} /> {TYPE_TEXT[card.type] || '校园任务'}</span><span className={`status status-${card.status}`}>{STATUS_TEXT[card.status] || card.status}</span></div>
             <h2>{card.title}</h2><span className="task-order-id">任务编号 {card.id}</span>
             <div className="task-status-note"><span className="task-status-indicator" /><p>{STATUS_DESCRIPTION[card.status] || '可查看下方进度记录，了解任务的最新变化。'}</p></div>
-            <dl className="task-facts"><div><dt>发单同学</dt><dd><Icon name="user" size={15} /><span title={`用户 ID：${card.publisherId}`}>{displayUserName(card.publisherId)}</span></dd></div><div><dt>接单同学</dt><dd><Icon name="user" size={15} /><span title={hasRunner ? `用户 ID：${card.grabberId}` : undefined}>{hasRunner ? displayUserName(card.grabberId!) : '等待接单'}</span></dd></div><div><dt>接单名额</dt><dd>{card.slotTaken} / {card.slotTotal} 人</dd></div><div><dt>当前身份</dt><dd>{ROLE_TEXT[card.role] || '任务参与者'}</dd></div></dl>
+            <dl className="task-facts"><div><dt>发单同学</dt><dd><Icon name="user" size={15} /><span title={`用户 ID：${card.publisherId}`}>{card.publisherName || displayUserName(card.publisherId)}</span></dd></div><div><dt>接单同学</dt><dd><Icon name="user" size={15} /><span title={hasRunner ? `用户 ID：${card.grabberId}` : undefined}>{hasRunner ? (card.grabberName || displayUserName(card.grabberId!)) : '等待接单'}</span></dd></div><div><dt>接单名额</dt><dd>{card.slotTaken} / {card.slotTotal} 人</dd></div><div><dt>当前身份</dt><dd>{ROLE_TEXT[card.role] || '任务参与者'}</dd></div></dl>
           </section>
           <section className="panel task-progress"><div className="task-panel-title"><div><span className="task-section-icon"><Icon name="clock" size={18} /></span><h2>任务进展</h2></div><span>{timeline.length} 条记录</span></div>{timelineError && <div className="banner warn" role="status">进度记录暂未更新。<button className="task-inline-button" disabled={refreshing} onClick={() => void load()}>重新加载</button></div>}
             {timeline.length === 0 ? <div className="task-timeline-empty"><Icon name="clock" size={24} /><p>{timelineError ? '暂时无法读取进展记录' : '还没有进展记录'}</p><span>任务状态变化后，记录会显示在这里。</span></div> : <ol className="task-timeline">{timeline.map((item, index) => <li key={`${item.time}-${item.to}-${index}`} className={index === timeline.length - 1 ? 'is-latest' : ''}><div className="task-timeline-node">{index === timeline.length - 1 ? <span /> : <Icon name="check" size={11} />}</div><div className="task-timeline-content"><div className="task-timeline-title"><strong>{STATUS_TEXT[item.to] || item.to}</strong>{index === timeline.length - 1 && <span>最新进展</span>}<time dateTime={item.time}>{formatTime(item.time)}</time></div><p>{STATUS_TEXT[item.from] || item.from} <Icon name="arrow-right" size={12} /> {STATUS_TEXT[item.to] || item.to}</p><div className="task-timeline-meta"><span>{operatorName(item.operatorId, card)}</span>{item.round > 0 && <span>第 {item.round + 1} 轮接单</span>}</div></div></li>)}</ol>}

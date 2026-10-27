@@ -22,4 +22,8 @@ public class QueryNotificationUseCase {
     public int unread(String userId) {
         return queryPort.unreadCount(userId);
     }
+
+    public int markRead(String userId, long notificationId) {
+        return queryPort.markRead(userId, notificationId);
+    }
 }

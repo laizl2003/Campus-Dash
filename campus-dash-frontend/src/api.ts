@@ -440,7 +440,9 @@ export interface ErrandCard {
   slotTotal: number;
   slotTaken: number;
   publisherId: string;
+  publisherName?: string;
   grabberId: string;
+  grabberName?: string;
   round: number;
   role: string;
   availableActions: string[];
@@ -478,8 +480,10 @@ export const api = {
     refType: string; refId: string; bizNo: string;
   }[]>('/api/wallet/ledger'),
   notifications: () => request<{
-    id: string; errandId: string; type: string; content: string; time: string;
+    id: string; errandId: string; type: string; content: string; time: string; read: boolean;
   }[]>('/api/notifications'),
+  markNotificationRead: (id: string) =>
+    request<{ changed: number }>(`/api/notifications/${id}/read`, 'POST'),
   vouchers: () => request<{
     items: { type: number; stock: number; description: string; thresholdCents: number; discountCents: number }[];
   }>('/api/vouchers'),

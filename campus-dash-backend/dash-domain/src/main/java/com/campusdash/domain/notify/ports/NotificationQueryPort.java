@@ -10,5 +10,8 @@ public interface NotificationQueryPort {
 
     int unreadCount(String userId);
 
-    record NotificationView(long id, long errandId, String type, String content, Instant time) {}
+    /** 把某条消息标记为已读；只有归属该用户时才生效，返回影响行数 */
+    int markRead(String userId, long notificationId);
+
+    record NotificationView(long id, long errandId, String type, String content, Instant time, boolean read) {}
 }

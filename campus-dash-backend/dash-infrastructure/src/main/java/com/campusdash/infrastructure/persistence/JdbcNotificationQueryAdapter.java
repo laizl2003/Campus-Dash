@@ -18,15 +18,23 @@ public class JdbcNotificationQueryAdapter implements NotificationQueryPort {
     @Override
     public List<NotificationView> list(String userId, int page, int size) {
         return jdbc.query("""
-                SELECT id, errand_id, type, content, created_at
+                SELECT id, errand_id, type, content, read_flag, created_at
                   FROM notification
                  WHERE user_id = ?
                  ORDER BY created_at DESC, id DESC
                  LIMIT ? OFFSET ?
                 """, (rs, n) -> new NotificationView(
                         rs.getLong("id"), rs.getLong("errand_id"), rs.getString("type"),
-                        rs.getString("content"), rs.getTimestamp("created_at").toInstant()),
+                        rs.getString("content"), rs.getTimestamp("created_at").toInstant(),
+                        rs.getInt("read_flag") == 1),
                 userId, size, page * size);
+    }
+
+    @Override
+    public int markRead(String userId, long notificationId) {
+        return jdbc.update(
+                "UPDATE notification SET read_flag = 1 WHERE id = ? AND user_id = ? AND read_flag = 0",
+                notificationId, userId);
     }
 
     @Override

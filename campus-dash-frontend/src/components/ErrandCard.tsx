@@ -10,7 +10,7 @@ export default function ErrandCardView({ card, onChanged }: { card: Card; onChan
     </div>
     <a href={`#/detail/${card.id}`} className="card-title">{card.title}</a>
     <div className="card-meta">
-      <span className="card-publisher"><Icon name="user" size={13}/>{displayUserName(card.publisherId)}</span>
+      <span className="card-publisher"><Icon name="user" size={13}/>{card.publisherName || displayUserName(card.publisherId)}</span>
       <span className="card-slots"><Icon name="users" size={13}/>{card.slotTaken} / {card.slotTotal} 已接</span>
       {card.round > 0 && <span className="round">第 {card.round + 1} 轮</span>}
     </div>

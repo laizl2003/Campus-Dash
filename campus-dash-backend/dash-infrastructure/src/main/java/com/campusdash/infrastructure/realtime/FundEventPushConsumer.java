@@ -74,16 +74,16 @@ public class FundEventPushConsumer {
                         String tag = msg.getTag().orElse("");
 
                         String content = switch (tag) {
-                            case "SETTLED" -> "任务已完成结算，跑腿获得 " + amount + " 分";
-                            case "REFUNDED" -> "任务已退款，" + amount + " 分已退回你的账户";
-                            case "ARBITRATED" -> "争议已裁决，涉及金额 " + amount + " 分";
+                            case "SETTLED" -> String.format("任务已完成结算，跑腿获得 %.2f 元", amount / 100.0);
+                            case "REFUNDED" -> String.format("任务已退款，%.2f 元已退回你的账户", amount / 100.0);
+                            case "ARBITRATED" -> String.format("争议已裁决，涉及金额 %.2f 元", amount / 100.0);
                             default -> "任务资金状态变动";
                         };
                         // 推给双方（多端登录由 SessionRegistry 处理）
                         notifier.notificationArrived(publisherId, errandId, tag, content);
                         if (!runnerId.isEmpty()) {
                             String runnerContent = "SETTLED".equals(tag)
-                                    ? "任务结算完成，你获得 " + amount + " 分" : content;
+                                    ? String.format("任务结算完成，你获得 %.2f 元", amount / 100.0) : content;
                             notifier.notificationArrived(runnerId, errandId, tag, runnerContent);
                         }
                         return ConsumeResult.SUCCESS;
