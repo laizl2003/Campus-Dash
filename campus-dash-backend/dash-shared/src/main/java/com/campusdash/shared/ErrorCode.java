@@ -50,7 +50,8 @@ public enum ErrorCode {
     USERNAME_TAKEN("用户名已被注册"),
     PHONE_TAKEN("手机号已被注册"),
     BAD_CREDENTIALS("用户名或密码错误"),
-    ACCOUNT_DISABLED("账号已被禁用"),
+    ACCOUNT_DISABLED("该账户已被禁用"),
+    ACCOUNT_DISABLE_FORBIDDEN("管理员账号不能被禁用"),
     ACCOUNT_DELETE_FORBIDDEN("管理员账号不能注销"),
     ACCOUNT_HAS_ONGOING("还有进行中的任务，完成后才能注销"),
 
@@ -66,6 +67,7 @@ public enum ErrorCode {
     ACCOUNT_NOT_FOUND("账户不存在"),
     ILLEGAL_STATE_TRANSITION("非法状态流转"),
     STALE_VERSION("数据已被并发修改"),
+    INVALID_STATUS("状态参数不合法"),
     INTERNAL_ERROR("系统内部错误");
 
     private final String message;

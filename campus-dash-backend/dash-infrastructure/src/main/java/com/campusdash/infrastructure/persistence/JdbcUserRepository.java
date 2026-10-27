@@ -139,6 +139,11 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
+    public void updateStatus(String userId, boolean enabled) {
+        jdbc.update("UPDATE `user` SET status = ? WHERE user_id = ?", enabled ? 1 : 0, userId);
+    }
+
+    @Override
     public int sweepOffline(Instant cutoff) {
         return jdbc.update("""
                 UPDATE `user` SET login_status = 0

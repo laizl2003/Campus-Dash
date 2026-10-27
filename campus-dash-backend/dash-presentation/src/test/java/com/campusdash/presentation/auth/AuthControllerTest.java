@@ -195,6 +195,7 @@ class AuthControllerTest {
         @Override public void markOnline(String userId) { }
         @Override public void markOffline(String userId) { }
         @Override public int sweepOffline(Instant cutoff) { return 0; }
+        @Override public void updateStatus(String userId, boolean enabled) { }
         @Override public void markLoginFailure(String userId) { loginFailures++; }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
         @Override public boolean deleteById(String userId) { return byName.values().removeIf(u -> u.userId().equals(userId)); }
@@ -212,6 +213,7 @@ class AuthControllerTest {
         @Override public void markOnline(String userId) { }
         @Override public void markOffline(String userId) { }
         @Override public int sweepOffline(Instant cutoff) { return 0; }
+        @Override public void updateStatus(String userId, boolean enabled) { }
         @Override public void markLoginFailure(String userId) { }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
         @Override public boolean deleteById(String userId) { return false; }

@@ -250,3 +250,5 @@
 .admin-side .admin-account-menu .menu-account small { color: #9da79f; }
 .admin-side .admin-account-menu .account-menu-link { color: #c9d3ca; border-color: #3a473e; }
 .admin-side .admin-account-menu .account-menu-link:hover { background: #313d35; }
+
+.admin-user-actions { display: flex; gap: 6px; flex-wrap: wrap; }

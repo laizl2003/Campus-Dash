@@ -507,9 +507,11 @@ export const api = {
       commissionRate, voucherRunnerBearRatio,
     }),
   adminUsers: (page = 0, size = 20) => request<{
-    items: { userId: string; username: string; online: boolean; loginStatus?: boolean; lastSeenAt?: string; lastLoginAt: string; balanceCents: number }[];
+    items: { userId: string; username: string; online: boolean; enabled?: boolean; loginStatus?: boolean; lastSeenAt?: string; lastLoginAt: string; balanceCents: number }[];
     total: number; page: number; size: number;
   }>(`/api/admin/users?page=${page}&size=${size}`),
+  adminUpdateUserStatus: (userId: string, enabled: boolean) =>
+    request<null>(`/api/admin/users/${userId}/status`, 'POST', { enabled }),
   adminForceLogout: (userId: string) =>
     request<null>(`/api/admin/users/${userId}/force-logout`, 'POST'),
   adminVouchers: () => request<{

@@ -481,6 +481,15 @@ function SettingsPanel() {
     finally { setSaving(false); }
   };
 
+  const toggleUser = async (userId: string, enabled: boolean, username: string) => {
+    setError('');
+    try {
+      await api.adminUpdateUserStatus(userId, !enabled);
+      setToast(`${enabled ? '已禁用' : '已启用'}用户 ${username}`);
+      setUsers(await api.adminUsers(page, 20));
+    } catch (e) { setError(e instanceof Error ? e.message : '状态更新失败'); }
+  };
+
   const forceLogout = async (userId: string, username: string) => {
     setError('');
     try {
@@ -528,7 +537,10 @@ function SettingsPanel() {
             <td><span className={`admin-online-dot ${user.online ? 'is-online' : 'is-offline'}`}/>{user.online ? '在线' : '离线'}</td>
             <td>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</td>
             <td>{yuan(user.balanceCents)}</td>
-            <td>
+            <td className="admin-user-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => void toggleUser(user.userId, user.enabled !== false, user.username)}>
+                {user.enabled === false ? '启用' : '禁用'}
+              </button>
               <button type="button" className="btn btn-ghost admin-danger" disabled={!user.online}
                       title={user.online ? '强制该用户下线' : '用户已离线'}
                       onClick={() => void forceLogout(user.userId, user.username)}>强制下线</button>

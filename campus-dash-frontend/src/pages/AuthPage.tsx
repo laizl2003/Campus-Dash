@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { captchaImage, changePassword, login, registerAccount, type Profile, type StoredAccount } from '../api';
+import { BizError, captchaImage, changePassword, login, registerAccount, type Profile, type StoredAccount } from '../api';
 import Icon from '../components/Icon';
 import CampusArt from '../components/CampusArt';
 
@@ -31,6 +31,7 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
   const [notice, setNotice] = useState('');
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [disabledNotice, setDisabledNotice] = useState('');
   const [quickUp, setQuickUp] = useState(false);
   const quickRef = useRef<HTMLDivElement>(null);
 
@@ -49,7 +50,13 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
     setQuickBusy(id);
     setError('');
     try { await onQuickLogin(id); }
-    catch (e) { setError(e instanceof Error ? e.message : '快速登录失败，请重新输入密码'); }
+    catch (e) {
+      if (e instanceof BizError && e.code === 'ACCOUNT_DISABLED') {
+        setDisabledNotice(e.message);
+      } else {
+        setError(e instanceof Error ? e.message : '快速登录失败，请重新输入密码');
+      }
+    }
     finally { setQuickBusy(null); }
   };
 
@@ -118,7 +125,11 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
       setNotice('注册成功，请用新账号登录');
       await reloadCaptcha();
     } catch (e) {
-      setError(e instanceof Error ? e.message : '操作失败，请重试');
+      if (e instanceof BizError && e.code === 'ACCOUNT_DISABLED') {
+        setDisabledNotice(e.message);
+      } else {
+        setError(e instanceof Error ? e.message : '操作失败，请重试');
+      }
       // 验证码一次性，失败后必须换一张，否则再提交一定失败
       await reloadCaptcha();
     } finally {
@@ -231,5 +242,14 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
         </div>}
       </div>}
     </div></section>
+    {disabledNotice && <div className="modal-scrim" role="dialog" aria-modal="true" aria-label="账户已被禁用">
+      <div className="confirm-card">
+        <h3>该账户已被禁用</h3>
+        <p>{disabledNotice}，请联系平台管理员启用后再登录。</p>
+        <div className="confirm-actions">
+          <button type="button" className="btn btn-primary" onClick={() => setDisabledNotice('')}>知道了</button>
+        </div>
+      </div>
+    </div>}
   </div>;
 }

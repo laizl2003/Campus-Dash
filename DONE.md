@@ -3,6 +3,18 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 管理员禁用/启用账号
+
+- **目标**：平台配置可对每个普通账号禁用/启用；禁用后不能登录并立即失效。
+- **改动**：
+  - user.status 作为启用位（1 启用 / 0 禁用）；新增 POST /api/admin/users/{userId}/status。
+  - 禁用时撤销该用户全部 token、打强制下线标记、置 login_status=0；启用时清除标记。
+  - 登录（密码与演示）查 status，禁用抛 ErrorCode.ACCOUNT_DISABLED（“该账户已被禁用”）。
+  - 管理台用户表增加「禁用/启用」按钮；登录页对 ACCOUNT_DISABLED 弹窗提示。
+  - 管理员账号与当前操作者自身不可被禁用（ACCOUNT_DISABLE_FORBIDDEN）。
+- **验证**：禁用 stuhuceap → 旧 token 401、登录返回 ACCOUNT_DISABLED；管理台 enabled=false；启用后登录恢复 OK；禁用 Admin 返回 ACCOUNT_DISABLE_FORBIDDEN。
+
+
 ## 2026-10-28 · 强制下线撤销全部 token（方案二：用户 token 索引）
 
 - **目标**：踢人时一次性撤销该用户全部 access/refresh，旧 token 重新登录后也不复活；不给每次请求增加校验。

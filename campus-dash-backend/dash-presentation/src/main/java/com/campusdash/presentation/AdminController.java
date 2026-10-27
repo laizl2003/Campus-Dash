@@ -14,8 +14,10 @@ import com.campusdash.domain.wallet.ports.WalletRepository;
 import com.campusdash.domain.admin.ports.AdminUserQueryPort;
 import com.campusdash.domain.auth.ports.AuthPort;
 import com.campusdash.domain.auth.ports.ForceLogoutPort;
+import com.campusdash.domain.auth.model.UserAccount;
 import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.config.ports.PlatformConfigPort;
+import com.campusdash.presentation.auth.CurrentUser;
 import com.campusdash.presentation.realtime.WsSessionRegistry;
 import com.campusdash.presentation.auth.CurrentUser;
 import com.campusdash.shared.BizException;
@@ -101,6 +103,33 @@ public class AdminController {
     public record PlatformConfigRequest(Double commissionRate, Double voucherRunnerBearRatio) {
     }
 
+    public record UserStatusRequest(Boolean enabled) {
+    }
+
+    /** 启用/禁用普通账号：禁用时同时撤销其全部凭证并置离线 */
+    @PostMapping("/users/{userId}/status")
+    public Result<Void> updateUserStatus(@PathVariable String userId, @RequestBody UserStatusRequest req) {
+        if (req == null || req.enabled() == null) {
+            throw new BizException(ErrorCode.INVALID_STATUS, "enabled 必填");
+        }
+        UserAccount target = userRepository.findById(userId)
+                .orElseThrow(() -> new BizException(ErrorCode.ACCOUNT_NOT_FOUND, "id=" + userId));
+        if ("Admin".equals(target.role()) || userId.equals(CurrentUser.get())) {
+            throw new BizException(ErrorCode.ACCOUNT_DISABLE_FORBIDDEN);
+        }
+        userRepository.updateStatus(userId, req.enabled());
+        if (!req.enabled()) {
+            // 禁用立即生效：删掉该用户所有 token，并挡住旧标记
+            authPort.revokeAllSessions(userId);
+            forceLogoutPort.force(userId);
+            userRepository.markOffline(userId);
+        } else {
+            // 重新启用：允许重新登录
+            forceLogoutPort.clear(userId);
+        }
+        return Result.ok(null);
+    }
+
     /** 平台配置：佣金比例与优惠券抽成比例 */
     @GetMapping("/config")
     public Result<Map<String, Object>> config() {
@@ -159,6 +188,7 @@ public class AdminController {
                     boolean online = row.loginStatus() && row.lastSeenAt() != null
                             && row.lastSeenAt().isAfter(java.time.Instant.now().minusSeconds(90));
                     item.put("online", online);
+                    item.put("enabled", row.enabled());
                     item.put("loginStatus", row.loginStatus());
                     item.put("lastSeenAt", row.lastSeenAt() == null ? "" : row.lastSeenAt().toString());
                     item.put("lastLoginAt", row.lastLoginAt() == null ? "" : row.lastLoginAt().toString());

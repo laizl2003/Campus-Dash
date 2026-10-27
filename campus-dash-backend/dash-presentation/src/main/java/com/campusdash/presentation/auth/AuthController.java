@@ -6,6 +6,7 @@ import com.campusdash.domain.auth.ports.AuthPort;
 import com.campusdash.domain.auth.ports.ForceLogoutPort;
 import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.auth.ports.RefreshTokenPort;
+import com.campusdash.shared.BizException;
 import com.campusdash.shared.ErrorCode;
 import com.campusdash.shared.Result;
 import jakarta.servlet.http.HttpServletRequest;
@@ -85,6 +86,11 @@ public class AuthController {
             return Result.fail(ErrorCode.UNAUTHORIZED);
         }
         userId = userId.trim();
+        users.findById(userId).ifPresent(user -> {
+            if (!user.enabled()) {
+                throw new BizException(ErrorCode.ACCOUNT_DISABLED);
+            }
+        });
         forceLogoutPort.clear(userId);
         users.markOnline(userId);
         if (authPort instanceof RefreshTokenPort refreshTokenPort) {

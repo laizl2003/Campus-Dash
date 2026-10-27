@@ -41,6 +41,9 @@ public interface UserRepository {
     /** 清理心跳超时的在线标记，返回影响行数 */
     int sweepOffline(Instant cutoff);
 
+    /** 启用/禁用账号：status 1=启用，0=禁用 */
+    void updateStatus(String userId, boolean enabled);
+
     void markLoginFailure(String userId);
 
     /** 修改密码：只更新 password_hash / password_updated_at / updated_at */
