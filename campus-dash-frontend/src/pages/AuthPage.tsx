@@ -131,15 +131,6 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
                  placeholder="8-32 位，需同时含字母与数字" autoComplete="new-password" required/>
         </label>}
 
-        {mode === 'login' && <div className="auth-switch-row">
-          <button type="button" className="auth-switch" tabIndex={-1} onClick={() => switchMode('register')}>
-            还没有账号？<strong>注册新账号</strong>
-          </button>
-          <button type="button" className="auth-switch" tabIndex={-1} onClick={() => switchMode('change')}>
-            忘记密码？<strong>修改密码</strong>
-          </button>
-        </div>}
-
         {mode === 'register' && <label className="auth-field">
           <span>确认密码</span>
           <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
@@ -158,6 +149,14 @@ export default function AuthPage({ onAuthed }: { onAuthed: (profile: Profile) =>
             </button>
           </div>
         </div>
+
+        {/* 注册 / 修改密码：同一行、位于验证码下方；只有带下划线的方框本身可点 */}
+        {mode === 'login' && <div className="auth-link-row">
+          <button type="button" className="auth-link-box" tabIndex={-1}
+                  onClick={() => switchMode('register')}>注册账号</button>
+          <button type="button" className="auth-link-box" tabIndex={-1}
+                  onClick={() => switchMode('change')}>修改密码</button>
+        </div>}
 
         {notice && <div className="banner ok" role="status">{notice}</div>}
         {error && <div className="banner warn" role="alert">{error}</div>}
