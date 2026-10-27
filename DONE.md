@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-27 · Redis 缓存清理与排行榜 1 分钟重建
+
+- **目标**：并发测试后清空 Redis 缓存；排行榜可通过后台 job 定期重建。
+- **改动**：
+  - 新增 CreditRankingRebuildJob，默认 60 秒按 credit_score 全量 ZADD（可配 dash.credit.ranking-rebuild-ms）。
+  - 手动清理 errand/credit/captcha 缓存，保留 auth 会话与 errand:bloom；重启后初始器重建榜单 52 个账号。
+  - cleanup-test-data.ps1 额外清理 errand:slot / grabbed / candidates。
+- **验证**：DBSIZE 34（31 auth + credit:rank + bloom 2），ZCARD=52；worker 日志「排行榜缓存已重建 52 个账号」。
+
+
 ## 2026-10-27 · 测试规范：只用 USER.md 账号、标题统一「测试任务」
 
 - **目标**：禁止再用 Admin 跑用户侧流程，测试数据统一命名并清理。

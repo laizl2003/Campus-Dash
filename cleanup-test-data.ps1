@@ -20,6 +20,12 @@ docker cp $sql dash-mysql:/tmp/cleanup-test-data.sql | Out-Null
 docker exec -e MYSQL_PWD=dash123456 dash-mysql sh -c "mysql -uroot campus_dash < /tmp/cleanup-test-data.sql"
 if ($LASTEXITCODE -ne 0) { throw '清理 SQL 执行失败' }
 
+# 并发测试会留下 errand:slot / grabbed / candidates 等缓存键，一并清掉；
+# 保留 errand:bloom（布隆过滤器）与 auth:* 会话，避免误伤详情查询和登录态。
+foreach ($pattern in @('errand:slot:*','errand:grabbed:*','errand:candidates:*')) {
+    docker exec dash-redis sh -c "redis-cli --scan --pattern '$pattern' | xargs -r -n 200 redis-cli UNLINK" | Out-Null
+}
+
 Write-Host '清理后：'
 Mysql "select status,count(*) from errand group by status"
 Mysql "select concat('L1 借贷差=', coalesce(sum(case when direction='DEBIT' then amount else -amount end),0)) from wallet_ledger"
