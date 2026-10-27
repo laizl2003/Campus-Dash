@@ -75,7 +75,8 @@ dash:
     bloom-enabled: true
     redisson-pool-size: 16    # 与 Lettuce 池分开，避免叠加打满 Redis
   web:
-    cors-origins: http://localhost:5173,http://127.0.0.1:5173
+    # 5173 是 vite 开发服务器；8088 是 nginx 全栈部署（同源，但代理偶发丢端口时会走这里兜底）
+    cors-origins: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8088,http://127.0.0.1:8088
 
 logging:
   level:
