@@ -288,18 +288,3 @@
 /* Admin 侧栏聊天：只占左侧栏，移动端隐藏 */
 .admin-chat-slot { display: flex; flex: 0 0 auto; height: clamp(220px, 30vh, 300px); min-height: 0; margin-top: 2px; }
 @media (max-width: 800px) { .admin-chat-slot { display: none; } }
-
-/* 仅 Admin 左侧栏：固定侧栏、聊天填满、仲裁区限高；不改 main 布局 */
-.admin-side { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.admin-chat-slot { display: flex; flex: 1 1 auto; height: auto; min-height: 0; margin-top: 2px; margin-bottom: -8px; }
-.admin-chat-slot > section { height: 100%; }
-.admin-body .admin-list,
-.admin-body .admin-detail { height: 360px; min-height: 0; overflow: hidden; }
-.admin-body .admin-list { display: flex; flex-direction: column; }
-.admin-body .admin-list ul { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.admin-body .admin-detail { overflow-y: auto; overscroll-behavior: contain; }
-
-@media (max-width: 800px) {
-  .admin-side { position: static; height: auto; overflow: visible; }
-  .admin-chat-slot { display: none; }
-}

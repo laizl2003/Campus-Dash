@@ -3,14 +3,11 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
-## 2026-10-28 · Admin 聊天/仲裁布局（仅左侧栏）
+## 2026-10-28 · 前端回滚到聊天 v1.0
 
-- **目标**：在不动主界面/登录布局的前提下，Admin 聊天填满左侧空白、发送键贴账号区；待仲裁限高可滚；仲裁记录每页 10 条；左侧栏固定。
-- **改动**：
-  - 仅 Admin 侧栏：sticky + 100vh，聊天 slot flex:1，发送按钮 bottom 与账号区 top 对齐。
-  - 待仲裁/详情固定 360px，列表 ul 与详情 overflow-y:auto；仲裁记录接入 page,size=10 分页。
-  - 用户端只给 TopBar 加 inline sticky、保留原 sidebar/main 结构；没有改 App/main 的宽度、间距或布局。
-- **验证**：Admin 1280×900 chat 303.97→844.4，send bottom 844.4 = foot top 844.4；待仲裁 360px；仲裁第 1/2 页 10 条；广场滚动后 topbar/sidebar top=0，主内容相对布局未变。
+- **目标**：撤销后续 Admin 布局/分页/滚动改动，恢复聊天 v1.0 前端，此后先不动左侧聊天栏。
+- **改动**：AdminApp、admin.css、TopBar、styles.css 全部恢复到 `072c748`；保留聊天 v1.0 的 SquareChat 与后端。
+- **验证**：Admin 聊天 256px、无分页、侧栏 static、待仲裁 420px；TopBar 非 sticky；主界面/登录布局恢复上一版本。
 
 
 ## 2026-10-28 · 广场聊天 v1.0

@@ -36,9 +36,6 @@ export default function AdminApp() {
   const switchRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<Dispute[]>([]);
   const [arbitrations, setArbitrations] = useState<Awaited<ReturnType<typeof api.adminArbitrations>>['items']>([]);
-  const [arbitrationPage, setArbitrationPage] = useState(0);
-  const [arbitrationTotal, setArbitrationTotal] = useState(0);
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [selected, setSelected] = useState<Dispute | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -51,8 +48,9 @@ export default function AdminApp() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const disputes = await api.adminDisputes();
+      const [disputes, history] = await Promise.all([api.adminDisputes(), api.adminArbitrations(0, 10)]);
       setList(disputes);
+      setArbitrations(history.items);
       setMessage(null);
     } catch (e) {
       setMessage({ text: e instanceof Error ? e.message : '待仲裁任务加载失败', error: true });
@@ -61,28 +59,11 @@ export default function AdminApp() {
     }
   }, []);
 
-  const loadArbitrations = useCallback(async (page: number) => {
-    setHistoryLoading(true);
-    try {
-      const history = await api.adminArbitrations(page, 10);
-      setArbitrations(history.items);
-      setArbitrationTotal(history.total);
-    } catch (e) {
-      setMessage({ text: e instanceof Error ? e.message : '仲裁记录加载失败', error: true });
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     void load();
     // 与普通页面共用 App 建立的同一条 /ws 连接，不另开管理端连接
     return subscribeWs(event => { if (event.type === 'admin.dispute') void load(); });
   }, [load]);
-
-  useEffect(() => {
-    void loadArbitrations(arbitrationPage);
-  }, [arbitrationPage, loadArbitrations]);
   // 兜底轮询：WS 断线/事件丢失时，5 秒内也能看到新争议
   useEffect(() => {
     if (view !== 'disputes') return;
@@ -129,8 +110,6 @@ export default function AdminApp() {
     finally { setSwitchBusy(false); }
   };
 
-  const arbitrationPages = Math.max(1, Math.ceil(arbitrationTotal / 10));
-
   const arbitrate = async (favor: 'RUNNER' | 'PUBLISHER') => {
     if (!selected || busy) return;
     setBusy(true);
@@ -140,8 +119,6 @@ export default function AdminApp() {
       setMessage({ text: `裁决完成：${result.result === 'SETTLED' ? '已结算给跑腿' : '已退款给发单人'}`, error: false });
       setSelected(null);
       await load();
-      setArbitrationPage(0);
-      await loadArbitrations(0);
     } catch (e) {
       setMessage({ text: e instanceof Error ? e.message : '裁决失败，请稍后重试', error: true });
     } finally {
@@ -263,9 +240,8 @@ export default function AdminApp() {
           </>}
         </section>
         <section className="admin-arbitration-history" aria-label="仲裁记录">
-          <div className="admin-list-head"><h2>仲裁记录 <span>{arbitrationTotal}</span></h2><small>每页 10 条</small></div>
-          {historyLoading && arbitrations.length === 0 ? <div className="admin-empty">正在加载仲裁记录…</div>
-            : arbitrations.length === 0 ? <div className="admin-empty">暂无仲裁记录</div>
+          <div className="admin-list-head"><h2>仲裁记录 <span>{arbitrations.length}</span></h2><small>最近 10 条</small></div>
+          {arbitrations.length === 0 ? <div className="admin-empty">暂无仲裁记录</div>
             : <div className="admin-ledger-scroll"><table>
               <thead><tr><th>时间</th><th>任务</th><th>裁决</th><th>金额</th><th>操作人</th><th>结果</th></tr></thead>
               <tbody>{arbitrations.map(row => <tr key={row.id}>
@@ -277,13 +253,6 @@ export default function AdminApp() {
                 <td>{row.result === 'SUCCESS' ? '成功' : row.result}</td>
               </tr>)}</tbody>
             </table></div>}
-          {arbitrationTotal > 0 && <div className="admin-pager">
-            <button type="button" className="btn btn-ghost" disabled={arbitrationPage <= 0 || historyLoading}
-                    onClick={() => setArbitrationPage(page => Math.max(0, page - 1))}>上一页</button>
-            <span>第 {arbitrationPage + 1} / {arbitrationPages} 页</span>
-            <button type="button" className="btn btn-ghost" disabled={arbitrationPage + 1 >= arbitrationPages || historyLoading}
-                    onClick={() => setArbitrationPage(page => Math.min(arbitrationPages - 1, page + 1))}>下一页</button>
-          </div>}
         </section>
       </div> : view === 'vouchers' ? <VoucherManager/> : view === 'settings' ? <SettingsPanel/> : <div className="admin-ledger-view">
         <div className={`admin-net ${netCents >= 0 ? 'in' : 'out'}`}>
