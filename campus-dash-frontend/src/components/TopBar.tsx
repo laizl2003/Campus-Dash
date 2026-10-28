@@ -14,6 +14,7 @@ const NAV = [
 interface Props { route: string; userId: string; onSwitch: (id: string) => void; onLogout: () => void; switching: boolean }
 export default function TopBar({ route, userId, onSwitch, onLogout, switching }: Props) {
   const [unread, setUnread] = useState<number | null>(null);
+  const [creditUnread, setCreditUnread] = useState(0);
   const [balance, setBalance] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [accountMenu, setAccountMenu] = useState(false);
@@ -44,6 +45,19 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
     return () => { active = false; unsub(); clearInterval(timer); window.removeEventListener('dash:changed', load); };
   }, [userId, route]);
   useEffect(() => { setOpen(false); setAccountMenu(false); setSwitchMenu(false); }, [route]);
+  useEffect(() => {
+    const key = `dash_credit_unread:${userId}`;
+    const sync = () => setCreditUnread(Number(localStorage.getItem(key) || 0));
+    sync();
+    const onCredit = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId: string; count: number }>).detail;
+      if (!detail || detail.userId === userId) setCreditUnread(detail?.count ?? 0);
+    };
+    const onStorage = (event: StorageEvent) => { if (event.key === key) sync(); };
+    window.addEventListener('dash:credit-unread', onCredit);
+    window.addEventListener('storage', onStorage);
+    return () => { window.removeEventListener('dash:credit-unread', onCredit); window.removeEventListener('storage', onStorage); };
+  }, [userId]);
   useEffect(() => {
     const sync = () => setAccounts(listAccounts());
     window.addEventListener('dash:accounts', sync);
@@ -135,7 +149,7 @@ export default function TopBar({ route, userId, onSwitch, onLogout, switching }:
       <div className="campus-selector"><span className="campus-icon"><Icon name="pin" size={17}/></span><span><strong>校园服务站</strong><small>当前校区 · 01</small></span><span className="service-dot"/></div>
       <a className={`publish-nav ${route === '/publish' ? 'active' : ''}`} href="#/publish" onClick={() => setOpen(false)}><Icon name="plus" size={18}/>发布一个任务<Icon name="arrow-right" size={16}/></a>
       <div className="nav-label">我的工作台</div>
-      <nav>{NAV.map(n => <a key={n.path} href={`#${n.path}`} onClick={() => setOpen(false)} className={`nav-item ${route === n.path ? 'active' : ''}`} aria-current={route === n.path ? 'page' : undefined}><Icon name={n.icon} size={18}/>{n.label}{n.path === '/notifications' && unread !== null && unread > 0 && <span className="nav-count">{unread > 99 ? '99+' : unread}</span>}</a>)}</nav>
+      <nav>{NAV.map(n => <a key={n.path} href={`#${n.path}`} onClick={() => setOpen(false)} className={`nav-item ${route === n.path ? 'active' : ''}`} aria-current={route === n.path ? 'page' : undefined}><Icon name={n.icon} size={18}/>{n.label}{n.path === '/notifications' && unread !== null && unread > 0 && <span className="nav-count">{unread > 99 ? '99+' : unread}</span>}{n.path === '/credit' && creditUnread > 0 && <span className="nav-count">{creditUnread > 99 ? '99+' : creditUnread}</span>}</a>)}</nav>
       <div className="sidebar-guide"><Icon name="spark" size={23}/><strong>顺路，帮个小忙。</strong><p>一份刚好的委托，<br/>连接校园里的你和我。</p><a href="#/square" onClick={() => setOpen(false)}>看看大家需要什么<Icon name="arrow-right" size={13}/></a></div>
       <div className="sidebar-bottom"><a href="#/wallet" className="sidebar-wallet" onClick={() => setOpen(false)}><span><Icon name="wallet" size={16}/>可用余额</span><strong>{balance === null ? '—' : yuan(balance)}</strong></a><div className="profile" ref={profileRef}><span className="avatar" title={userName}>{userName.slice(0, 1).toUpperCase()}</span><button type="button" className="profile-trigger" aria-haspopup="menu" aria-expanded={switchMenu} disabled={switching} onClick={toggleSwitchMenu}><span><strong>{userName}</strong><small>{switchableAccounts.length > 1 ? `${switchableAccounts.length} 个账号` : '当前账号'}</small></span><span className="profile-caret" aria-hidden="true">⌄</span></button><a className="icon-button" href="#/login" title="返回登录页" aria-label="返回登录页"><Icon name="arrow-left" size={16}/></a></div></div>
     </aside>

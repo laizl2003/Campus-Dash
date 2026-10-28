@@ -316,3 +316,8 @@
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0; line-height: 1; text-align: center;
 }
+
+/* 信用足迹未读：与消息中心一致的淡黄底与左侧高亮 */
+.account-credit-event.is-unread { background: #fff9e4; border-radius: 9px; padding-left: 12px; padding-right: 12px; margin-left: -12px; margin-right: -12px; }
+.account-credit-event.is-unread strong { color: var(--primary-ink); }
+.account-credit-event.is-unread:hover { background: #fff5cf; }
