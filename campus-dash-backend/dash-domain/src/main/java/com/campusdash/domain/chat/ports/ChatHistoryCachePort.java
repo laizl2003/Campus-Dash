@@ -14,6 +14,9 @@ public interface ChatHistoryCachePort {
 
     int size(String roomId);
 
-    /** 任务状态等变更后使最近消息缓存失效，下一次从 DB 重建 */
+    /** 只更新当前 errand 对应 ERRAND 卡片的 errandStatus，不动 ZSET */
+    void updateErrandStatus(String roomId, long errandId, String status);
+
+    /** 全量失效，仅缓存结构异常/兜底使用 */
     void invalidate(String roomId);
 }

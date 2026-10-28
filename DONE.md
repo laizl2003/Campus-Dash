@@ -3,6 +3,14 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-29 · 聊天缓存方案 B：ZSET+Hash+HMGET+Lua
+
+- **目标**：ZSET 只存 messageId，Hash 存 payload；任务状态只更新对应 ERRAND 卡片，不再清空全部缓存。
+- **结构**：chat:recent:{room} ZSET、chat:payload:{room} Hash、chat:errand:{room} Hash（errandId→messageId）、chat:message-errand:{room} Hash（反向索引）。
+- **一致性**：ZADD+HSET+索引+淘汰+TTL 用 Lua ADD；状态更新用 Lua 校验索引和 payload 后 HSET；读取 ZREVRANGE + HMGET。
+- **验证**：2000 条时 ZCARD/HLEN 均 2000；抢单后仅对应 payload errandStatus PUBLISHED→LOCKED，ZSET 不变，其他消息保留。
+
+
 ## 2026-10-29 · 发布成功/再发一个任务时移除已用优惠券
 
 - **目标**：发布使用过的券后，“再发一个任务”不再显示上一单已锁定的券。

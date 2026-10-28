@@ -266,6 +266,6 @@ public class JdbcErrandRepository implements ErrandRepository {
         // ERRAND 聊天卡片跟随任务状态；历史记录也返回最新状态
         jdbc.update("UPDATE chat_message SET errand_status = ? WHERE errand_id = ?",
                 to.name(), errandId);
-        chatHistoryCache.invalidate("square");
+        chatHistoryCache.updateErrandStatus("square", errandId, to.name());
     }
 }
