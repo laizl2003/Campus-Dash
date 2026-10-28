@@ -321,3 +321,8 @@
 .account-credit-event.is-unread { background: #fff9e4; border-radius: 9px; padding-left: 12px; padding-right: 12px; margin-left: -12px; margin-right: -12px; }
 .account-credit-event.is-unread strong { color: var(--primary-ink); }
 .account-credit-event.is-unread:hover { background: #fff5cf; }
+
+/* 我的任务：在途/待确认卡片浅黄高亮，直到状态推进 */
+.errand-card.is-highlight { background: #fff9e4; border-color: #efdfa8; }
+.errand-card.is-highlight:hover { background: #fff6d6; border-color: #e7d28a; }
+.account-mine-switch .tab .account-heading-count { margin-left: 5px; }

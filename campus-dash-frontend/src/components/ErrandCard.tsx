@@ -2,8 +2,8 @@ import { ErrandCard as Card, STATUS_TEXT, TYPE_TEXT, TYPE_ICON, yuan } from '../
 import { displayUserName } from '../identities';
 import ActionButtons from './ActionButtons';
 import Icon from './Icon';
-export default function ErrandCardView({ card, onChanged }: { card: Card; onChanged: () => void }) {
-  return <article className="errand-card">
+export default function ErrandCardView({ card, onChanged, highlight = false }: { card: Card; onChanged: () => void; highlight?: boolean }) {
+  return <article className={`errand-card${highlight ? ' is-highlight' : ''}`}>
     <div className="card-top">
       <div className="card-category"><span className={`category-label type-${card.type}`}><Icon name={TYPE_ICON[card.type] ?? 'package'} size={15}/>{TYPE_TEXT[card.type] ?? card.type}</span><span className="card-number" title={`任务编号 ${card.id}`}>#{String(card.id).slice(-6)}</span></div>
       <span className={`status status-${card.status}`}><i/>{STATUS_TEXT[card.status] ?? card.status}</span>
