@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 
 /**
@@ -40,12 +41,16 @@ public class RocketMqDelayMessageAdapter implements DelayMessagePort {
     @Override
     public void send(String topic, String msgKey, String payload, Instant deliverAt) {
         try {
+            // RocketMQ 5.x 单条消息最大延迟 24h；更远的到期先投 24h，由消费者续投下一跳
+            Instant now = Instant.now();
+            Instant effective = deliverAt.isAfter(now.plus(Duration.ofHours(24)))
+                    ? now.plus(Duration.ofHours(24)) : deliverAt;
             Message message = provider.newMessageBuilder()
                     .setTopic(topic)
                     // msgKey 既是业务幂等键，也让消息在控制台可按 key 检索，排障方便
                     .setKeys(msgKey)
                     .setBody(payload.getBytes(StandardCharsets.UTF_8))
-                    .setDeliveryTimestamp(deliverAt.toEpochMilli())
+                    .setDeliveryTimestamp(effective.toEpochMilli())
                     .build();
             var receipt = producer.send(message);
             log.debug("定时消息已投递 msgKey={} msgId={} deliverAt={}", msgKey, receipt.getMessageId(), deliverAt);

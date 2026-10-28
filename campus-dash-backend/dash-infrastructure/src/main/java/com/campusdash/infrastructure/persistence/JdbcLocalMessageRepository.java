@@ -19,7 +19,10 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
     }
 
     /**
-     * 登记待发消息。撞 uk_msg_key 说明这一轮已经登记过，返回 false 而不是抛异常——
+     * 登记待发消息。next_retry_at 直接取 NOW，RetryJob 会立即把它投给 MQ；
+     * deliver_at 只作为 MQ 的 deliveryTimestamp，由 broker 真正延迟到期。
+     *
+     * 撞 uk_msg_key 说明这一轮已经登记过，返回 false 而不是抛异常——
      * 重复登记是预期情况（消息重投、请求重试），不该让业务事务回滚。
      */
     @Override
@@ -27,9 +30,9 @@ public class JdbcLocalMessageRepository implements LocalMessageRepository {
         try {
             jdbc.update("""
                     INSERT INTO local_message (id, msg_key, topic, payload, deliver_at, status, next_retry_at)
-                    VALUES (?, ?, ?, ?, ?, 'PENDING', ?)
+                    VALUES (?, ?, ?, ?, ?, 'PENDING', NOW(3))
                     """, id, msgKey, topic, payload,
-                    Timestamp.from(deliverAt), Timestamp.from(deliverAt));
+                    Timestamp.from(deliverAt));
             return true;
         } catch (DuplicateKeyException e) {
             return false;

@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 真延迟队列：立即投递 + 24h 分跳
+
+- **目标**：local_message 登记后立即投 MQ，由 broker 负责延迟，而不是 DB 到点调度。
+- **改动**：
+  - enqueue 的 next_retry_at 改为 NOW(3)。
+  - RocketMQ 单条最大延迟 24h：DelayMessageAdapter 对更远时间截断为 24h。
+  - VoucherExpireConsumer 收到未到期消息时登记下一跳；48h 券拆成 24h + 24h。
+- **验证**：local_message 状态 PENDING→SENT，deliver_at 仍为 48h 后。
+
+
 ## 2026-10-28 · 过期兜底扫描也释放一人一单
 
 - **目标**：MQ 延迟消息丢失时，扫描兜底过期也能让用户重新领取。

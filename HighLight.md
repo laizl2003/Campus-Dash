@@ -87,19 +87,19 @@ CampusDash 是一个校园跑腿与互助平台，覆盖「发布任务 → 托�
 超时确认、自动结算、优惠券到期都采用：
 
 ```text
-业务事务写 local_message(PENDING, deliver_at=到期时刻)
-→ LocalMessageRetryJob 在 next_retry_at 到期时取出
-→ 调用 DelayMessagePort 投递 RocketMQ（携带交付时间戳）
+业务事务写 local_message(PENDING, deliver_at=到期时刻, next_retry_at=NOW)
+→ LocalMessageRetryJob 在 10 秒内取出并立即投递
+→ RocketMQ 按 deliveryTimestamp 持有到到期时刻
 → 消费成功后 markSent(SENT)
 → 发送失败按指数退避重试，超过上限转 DEAD
 ```
 
-- local_message 同时承担“事务性 Outbox”和“到期任务表”：业务提交与消息登记同事务；
-- 当前实现把 `next_retry_at` 初始化为 `deliver_at`，所以由 job 在到期时刻触发投递，
-  RocketMQ 负责后续消费；这是一种“DB 调度 + MQ 投递”的组合；
-- 定时扫描 DB 作为最终兜底。
-- 如果希望 MQ 真正提前持有 48h 延迟消息，可把 `next_retry_at` 改为 NOW，
-  由 MQ 的 deliveryTimestamp 负责等待；当前设计优先把调度状态放在 DB，便于观测和重试。
+- local_message 是事务性 Outbox：业务提交与消息登记同事务；
+- `next_retry_at=NOW` 让 job 立即投递，真正的等待由 RocketMQ 的 deliveryTimestamp 完成；
+- RocketMQ 5.x 单条最大延迟 24h：适配器把超过 24h 的到期时间截断为 24h，
+  优惠券到期消费者发现券还没到期时，再登记下一跳；48h 券 = 24h + 24h 两跳；
+- 定时扫描 DB 作为最终兜底；
+- 这样既是“可靠投递”，也是真正的 MQ 延迟队列，而不是 DB 到点调度。
 
 ### 3. 普通消息：优惠券异步领取
 
