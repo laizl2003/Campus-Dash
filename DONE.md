@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 修复 locked 券导致优惠券接口 500
+
+- **根因**：发布任务锁券后 voucher_record.status='locked'，但 VoucherStatus 枚举缺少 LOCKED，
+  RowMapper 的 valueOf("LOCKED") 抛 IllegalArgumentException，导致 /api/vouchers/mine 500。
+- **影响**：广场 Promise.all(api.vouchers, api.myVouchers) 整体失败 → 广场优惠券区消失；
+  钱包、发布页券列表同样依赖 mine → 不显示/不可用。结算后状态变 used，枚举可解析，所以恢复正常。
+- **修复**：VoucherStatus 增加 LOCKED（dbValue=locked）。
+- **验证**：存在 2 张 locked 券时 /api/vouchers/mine 返回 OK、6 条记录。
+
+
 ## 2026-10-28 · 优惠券统一 24h 过期，单跳延迟消息
 
 - **目标**：去掉 48h 两跳，改为 24h 一跳；清空所有用户存量券。
