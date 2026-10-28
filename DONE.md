@@ -3,6 +3,18 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · Redis ZSET 登录态与在线人数
+
+- **目标**：登录态用 Redis 两级索引；主动登出只登出当前浏览器；Admin 踢人撤销全部；在线人数/平台在线统一读 ZSET。
+- **结构**：auth:token:{token}（2h）；auth:sessions:{userId} ZSET(token→expireAt)；auth:online ZSET(userId→maxExpireAt)。
+- **改动**：
+  - RedisAuthAdapter 实现 login/touch/logout/revokeAllSessions/onlineCount/isOnline；ZSET 用 score 表示成员级过期。
+  - AuthInterceptor 每次请求 touch 续期 token 与 ZSET 分数。
+  - AuthController.logout 仅 closeToken + 当前 token；Admin forceLogout 走 revokeAllSessions + closeUser。
+  - ChatController 在线人数、AdminController 用户在线均读 auth:online。
+- **验证**：同用户两 token sessions=2；登出1后 sessions=1、token2 仍 200；登出2后 0；Admin 踢人后两 token 均 401；WS A 登录出后 readyState 3，B 仍 1；chat_online=2 与 ZCARD 一致。
+
+
 ## 2026-10-28 · WS 注册表在线人数与登出关闭
 
 - **目标**：后端直接查询所有 WS 连接 userId；登出关闭连接并删除 map key；在线人数用 WS map。

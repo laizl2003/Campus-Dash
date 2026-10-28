@@ -46,8 +46,13 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (userId == null) {
             String auth = req.getHeader("Authorization");
             if (auth != null && auth.startsWith("Bearer ")) {
-                Optional<String> resolved = authPort.resolve(auth.substring(7).trim());
+                String token = auth.substring(7).trim();
+                Optional<String> resolved = authPort.resolve(token);
                 userId = resolved.orElse(null);
+                if (userId != null) {
+                    // Session 模式：活跃请求续期 token 与 ZSET 在线分数
+                    authPort.touch(token);
+                }
             }
         }
 

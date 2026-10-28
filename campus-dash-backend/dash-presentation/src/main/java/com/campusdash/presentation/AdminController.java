@@ -187,8 +187,7 @@ public class AdminController {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("userId", row.userId());
                     item.put("username", row.username());
-                    boolean online = row.loginStatus() && row.lastSeenAt() != null
-                            && row.lastSeenAt().isAfter(java.time.Instant.now().minusSeconds(90));
+                    boolean online = authPort.isOnline(row.userId());
                     item.put("online", online);
                     item.put("enabled", row.enabled());
                     item.put("loginStatus", row.loginStatus());

@@ -17,8 +17,22 @@ public interface AuthPort {
     /** token -> userId。不存在或已过期返回 empty */
     Optional<String> resolve(String token);
 
-    /** 登出：删除 token */
+    /** 登出：只删除当前 token（当前浏览器） */
     void logout(String token);
+
+    /** 有请求访问时续期当前 token（Session 模式）；默认无操作 */
+    default void touch(String token) {
+    }
+
+    /** 当前登录有效的用户数（Redis ZSET 统计）；默认 0 */
+    default int onlineCount() {
+        return 0;
+    }
+
+    /** 指定用户是否还有有效登录会话 */
+    default boolean isOnline(String userId) {
+        return false;
+    }
 
     /** 强制下线：撤销该用户已签发的全部 access/refresh 凭证（默认无操作） */
     default void revokeAllSessions(String userId) {

@@ -27,6 +27,7 @@ public class WsHandler extends TextWebSocketHandler {
 
     private static final Logger log = LoggerFactory.getLogger(WsHandler.class);
     public static final String ATTR_USER_ID = "wsUserId";
+    public static final String ATTR_TOKEN = "wsToken";
 
     private final WsSessionRegistry registry;
     private final SendChatMessageUseCase sendChatMessage;

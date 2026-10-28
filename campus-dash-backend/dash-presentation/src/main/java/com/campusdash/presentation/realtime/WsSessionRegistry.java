@@ -45,7 +45,21 @@ public class WsSessionRegistry {
         return Set.copyOf(sessions.keySet());
     }
 
-    /** 登出/强制下线：立即关闭并移除该用户的全部连接。 */
+    /** 当前浏览器登出：只关闭携带该 token 的连接，不影响同用户其他浏览器。 */
+    public void closeToken(String userId, String token) {
+        Set<WebSocketSession> set = sessions.get(userId);
+        if (set == null || token == null) return;
+        for (WebSocketSession session : set) {
+            if (!token.equals(session.getAttributes().get(WsHandler.ATTR_TOKEN))) continue;
+            try {
+                if (session.isOpen()) session.close(org.springframework.web.socket.CloseStatus.NORMAL);
+            } catch (Exception ignored) {
+                // 连接可能已断；remove 由 afterConnectionClosed 兜底
+            }
+        }
+    }
+
+    /** 强制下线：立即关闭并移除该用户的全部连接。 */
     public void closeUser(String userId) {
         Set<WebSocketSession> set = sessions.remove(userId);
         if (set == null) return;

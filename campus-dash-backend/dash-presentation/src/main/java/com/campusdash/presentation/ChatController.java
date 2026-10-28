@@ -2,8 +2,8 @@ package com.campusdash.presentation;
 
 import com.campusdash.application.usecase.chat.QueryChatHistoryUseCase;
 import com.campusdash.application.usecase.chat.SendChatMessageUseCase;
+import com.campusdash.domain.auth.ports.AuthPort;
 import com.campusdash.domain.chat.model.ChatMessage;
-import com.campusdash.presentation.realtime.WsSessionRegistry;
 import com.campusdash.presentation.auth.CurrentUser;
 import com.campusdash.shared.Result;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,19 +24,19 @@ public class ChatController {
 
     private final QueryChatHistoryUseCase history;
     private final SendChatMessageUseCase sender;
-    private final WsSessionRegistry wsSessions;
+    private final AuthPort authPort;
 
     public ChatController(QueryChatHistoryUseCase history, SendChatMessageUseCase sender,
-                          WsSessionRegistry wsSessions) {
+                          AuthPort authPort) {
         this.history = history;
         this.sender = sender;
-        this.wsSessions = wsSessions;
+        this.authPort = authPort;
     }
 
-    /** 在线人数直接来自当前 WebSocket 注册表，登出 closeUser 后立即减少。 */
+    /** 在线人数来自 Redis auth:online ZSET，按 token 过期时间裁剪。 */
     @GetMapping("/online")
     public Result<Map<String, Object>> online() {
-        return Result.ok(Map.of("count", wsSessions.onlineUsers()));
+        return Result.ok(Map.of("count", authPort.onlineCount()));
     }
 
     @GetMapping("/messages")

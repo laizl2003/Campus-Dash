@@ -156,10 +156,11 @@ public class AuthController {
         if (auth != null && auth.startsWith("Bearer ")) {
             String access = auth.substring(7).trim();
             authPort.resolve(access).ifPresent(userId -> {
-                users.markOffline(userId);
-                if (wsSessions != null) wsSessions.closeUser(userId);
+                // 只关闭当前浏览器的 WS，再删除当前 token；其他浏览器仍然在线
+                if (wsSessions != null) wsSessions.closeToken(userId, access);
+                authPort.logout(access);
+                if (!authPort.isOnline(userId)) users.markOffline(userId);
             });
-            authPort.logout(access);
         }
         // access token 进黑名单只挡住剩余有效期；refresh 若留在 Redis，登出后仍能换新 access
         if (authPort instanceof RefreshTokenPort refreshTokenPort
