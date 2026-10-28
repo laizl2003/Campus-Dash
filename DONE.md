@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 优惠券发布 VOUCHER 聊天卡片
+
+- **目标**：Admin 新增优惠券后向聊天室推浅绿色卡片，标题“新的优惠券”，content 含 description/stock。
+- **改动**：
+  - ChatVoucherNoticeUseCase 写 msg_type=VOUCHER 消息并广播，content={"description":...,"stock":...}。
+  - AdminController.createVoucher 插入库存后调用通知。
+  - SquareChat 渲染 VOUCHER 卡片：浅绿 #e8f5e9、绿色文字。
+- **验证**：创建满20减3库存25后，chat_message 为 VOUCHER；UI 卡片文本“新的优惠券 / 满20元减3元 / 库存 25”，背景 rgb(232,245,233)；测试数据已清理。
+
+
 ## 2026-10-28 · ERRAND 卡片显示发单人用户名
 
 - **目标**：聊天卡片不再显示发单人 userId，改为 userName。

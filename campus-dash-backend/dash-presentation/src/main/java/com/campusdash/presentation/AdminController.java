@@ -2,6 +2,7 @@ package com.campusdash.presentation;
 
 import com.campusdash.application.usecase.ArbitrateErrandUseCase;
 import com.campusdash.application.usecase.chat.ChatNoticeUseCase;
+import com.campusdash.application.usecase.chat.ChatVoucherNoticeUseCase;
 import com.campusdash.application.usecase.query.QueryErrandListUseCase;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.ports.ErrandRepository;
@@ -69,6 +70,7 @@ public class AdminController {
     private final AuthPort authPort;
     private final VoucherClaimPort voucherClaimCache;
     private final ChatNoticeUseCase chatNoticeUseCase;
+    private final ChatVoucherNoticeUseCase chatVoucherNoticeUseCase;
 
     public AdminController(QueryErrandListUseCase queryUseCase,
                            ErrandRepository errandRepository,
@@ -83,7 +85,8 @@ public class AdminController {
                            UserRepository userRepository,
                            AuthPort authPort,
                            VoucherClaimPort voucherClaimCache,
-                           ChatNoticeUseCase chatNoticeUseCase) {
+                           ChatNoticeUseCase chatNoticeUseCase,
+                           ChatVoucherNoticeUseCase chatVoucherNoticeUseCase) {
         this.queryUseCase = queryUseCase;
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
@@ -98,6 +101,7 @@ public class AdminController {
         this.authPort = authPort;
         this.voucherClaimCache = voucherClaimCache;
         this.chatNoticeUseCase = chatNoticeUseCase;
+        this.chatVoucherNoticeUseCase = chatVoucherNoticeUseCase;
     }
 
     public record ArbitrateRequest(String favor) {
@@ -250,6 +254,7 @@ public class AdminController {
         String description = "满" + moneyText(threshold) + "元减" + moneyText(discount) + "元";
         voucherRepository.insertStock(new VoucherStock(type, stock, "ONLINE", threshold, discount,
                 description, Instant.now()));
+        chatVoucherNoticeUseCase.voucherCreated(description, stock);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("type", type);
         return Result.ok(data);

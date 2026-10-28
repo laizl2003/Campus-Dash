@@ -150,6 +150,19 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
           <div style={{ color: '#666', fontSize: 10, lineHeight: 1.55 }}>还没有消息，来和大家打个招呼吧。</div>
         </div>}
         {messages.map(message => {
+          if (message.msgType === 'VOUCHER') {
+            let voucher: { description?: string; stock?: number } = {};
+            try { voucher = JSON.parse(message.content); } catch { /* 忽略非法内容 */ }
+            return <div key={message.id} style={{
+              alignSelf: 'stretch', padding: '7px 8px', boxSizing: 'border-box',
+              borderRadius: 8, border: '1px solid #b7d8b9', background: '#e8f5e9',
+              color: '#2f6b4a',
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 700 }}>新的优惠券</div>
+              <div style={{ marginTop: 2, fontSize: 11, fontWeight: 600 }}>{voucher.description ?? '满减优惠券'}</div>
+              <div style={{ marginTop: 1, fontSize: 9, opacity: .8 }}>库存 {voucher.stock ?? 0}</div>
+            </div>;
+          }
           if (message.msgType === 'ERRAND') {
             const errand = parseErrand(message.content);
             const clickable = message.errandStatus === 'PUBLISHED';
