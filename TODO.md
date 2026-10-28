@@ -308,3 +308,40 @@
 - `campus-dash-backend/dash-application/src/main/java/com/campusdash/application/usecase/ArbitrateSettleStep.java`
 - `campus-dash-backend/dash-bootstrap/src/test/java/com/campusdash/it/ApiEndpointIT.java`
 - `campus-dash-frontend/src/admin/AdminApp.tsx`
+
+## 7. JMeter 优惠券领取并发压测（未完成）
+
+**目标**：用 JMeter 对同一优惠券类型发起高并发领取，验证库存不超卖、同一用户只能领一张、Redis 预扣与 DB 最终一致。
+
+### 现状与差距
+
+- 已有：`VoucherController` 的 `POST /api/vouchers/{type}/claim`、Redis Lua 预扣（`RedisVoucherClaimAdapter`）、`voucher-claim` MQ、worker 幂等落库、`VoucherStockReconcileJob` 对账、`cleanup-test-data.ps1`。
+- 缺口：没有可重复执行的 JMeter 测试计划、批量账号 token 池、并发同步点与结果断言；没有把压测后的 Redis/DB 对账固化成脚本。
+
+### 实现步骤
+
+1. 选一个库存充足且无用户持有的券类型，记录 `voucher_stock.stock`、Redis `voucher:stock:{type}`、`voucher:pending:count:{type}` 基线。
+2. 准备一批测试账号，用 JMeter CSV Data Set 读取用户名/密码/token；或先用登录接口换取 token 写入 CSV。
+3. 建 JMeter Test Plan：线程组 + HTTP Cookie/Header Manager + Synchronizing Timer；请求 `POST /api/vouchers/{type}/claim`，断言 200/409 的业务 code 与响应时间。
+4. 分别跑 200、500 并发；统计成功领取数、`VOUCHER_ALREADY_CLAIMED`、`VOUCHER_SOLD_OUT`、异常数。
+5. 压测后校验：DB `voucher_record` 数量与 `stock` 变化一致；Redis 库存不为负；`pending` 归零；同一 `user_id + type` 最多一条 `available/locked`。
+6. 故障场景：停 MQ 或 worker 后领取，确认发送失败回滚 Redis；恢复后确认 `pending`/库存可对账，不出现永久挂死。
+7. 清理测试券/任务/Redis key，把 JMeter 脚本和校验 SQL 放进 `bench/scripts` 或 `tests/jmeter`。
+
+### 验收标准
+
+- [ ] 200/500 并发下 `voucher_record` 成功数不超过初始库存
+- [ ] 同一用户并发请求最多成功一次，其余返回 `VOUCHER_ALREADY_CLAIMED`
+- [ ] Redis 库存始终 `>= 0`，结束后 `pending = 0`
+- [ ] DB 库存与领取记录数量满足 `初始库存 = 剩余库存 + 成功领取数`
+- [ ] MQ/worker 故障时请求失败且 Redis 预扣回滚，恢复后无脏 pending
+- [ ] JMeter 报告、校验 SQL、清理步骤可重复执行
+
+### 参考文件
+
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/VoucherController.java`
+- `campus-dash-backend/dash-infrastructure/src/main/java/com/campusdash/infrastructure/cache/RedisVoucherClaimAdapter.java`
+- `campus-dash-backend/dash-worker/src/main/java/com/campusdash/worker/VoucherClaimConsumer.java`
+- `campus-dash-backend/bench/scripts/seed.sql`
+- `cleanup-test-data.ps1`
+
