@@ -523,3 +523,25 @@ button.topbar-avatar:hover { filter: brightness(0.97); }
 .select-menu { top: calc(100% + 6px); right: 0; left: auto; width: max-content; min-width: 180px; max-height: 280px; overflow-y: auto; z-index: 100; }
 .select-menu button { align-items: center; }
 .select-menu-check { margin-left: auto; color: #8a6d1f; font-size: 11px; }
+
+/* 提示宽度跟随文字：短消息不被固定宽度撑出大片空白 */
+.toast, .banner, .floating-notice {
+  width: max-content;
+  max-width: min(560px, calc(100vw - 32px));
+  min-width: 0;
+}
+.toast, .banner { word-break: break-word; }
+.floating-notice-card { width: 100%; }
+
+/* 待仲裁任务：浅色底 + 边框；未选中也有清晰边界 */
+.admin-list .admin-row { background: #fdfbf6; border-color: #efe9dc; }
+.admin-list .admin-row:hover { background: #f7f5ef; border-color: #e3dccd; }
+.admin-list .admin-row.is-active { background: #f0f6e8; border-color: #cfe0bb; }
+
+/* 仲裁记录表格与资金流水表格同款底色/表头/斑马纹 */
+.admin-arbitration-history table { background: #fff; border-collapse: collapse; }
+.admin-arbitration-history thead th { background: #faf7ef; border-right: 1px solid #f0ebdf; }
+.admin-arbitration-history tbody td { border-right: 1px solid #f4efe3; }
+.admin-arbitration-history thead th:last-child, .admin-arbitration-history tbody td:last-child { border-right: 0; }
+.admin-arbitration-history tbody tr:nth-child(even) { background: #fcfaf5; }
+.admin-arbitration-history tbody tr:hover { background: #fff7e0; }
