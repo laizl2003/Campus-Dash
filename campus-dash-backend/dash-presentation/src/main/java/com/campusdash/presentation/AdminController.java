@@ -11,6 +11,7 @@ import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.AccountType;
 import com.campusdash.domain.wallet.model.EscrowOrder;
 import com.campusdash.domain.wallet.ports.WalletRepository;
+import com.campusdash.domain.admin.ports.AdminArbitrationQueryPort;
 import com.campusdash.domain.admin.ports.AdminUserQueryPort;
 import com.campusdash.domain.auth.ports.AuthPort;
 import com.campusdash.domain.auth.ports.ForceLogoutPort;
@@ -59,6 +60,7 @@ public class AdminController {
     private final ArbitrateErrandUseCase arbitrateUseCase;
     private final PlatformConfigPort platformConfig;
     private final AdminUserQueryPort adminUserQuery;
+    private final AdminArbitrationQueryPort adminArbitrationQuery;
     private final WsSessionRegistry wsSessionRegistry;
     private final ForceLogoutPort forceLogoutPort;
     private final UserRepository userRepository;
@@ -71,6 +73,7 @@ public class AdminController {
                            ArbitrateErrandUseCase arbitrateUseCase,
                            PlatformConfigPort platformConfig,
                            AdminUserQueryPort adminUserQuery,
+                           AdminArbitrationQueryPort adminArbitrationQuery,
                            WsSessionRegistry wsSessionRegistry,
                            ForceLogoutPort forceLogoutPort,
                            UserRepository userRepository,
@@ -82,6 +85,7 @@ public class AdminController {
         this.arbitrateUseCase = arbitrateUseCase;
         this.platformConfig = platformConfig;
         this.adminUserQuery = adminUserQuery;
+        this.adminArbitrationQuery = adminArbitrationQuery;
         this.wsSessionRegistry = wsSessionRegistry;
         this.forceLogoutPort = forceLogoutPort;
         this.userRepository = userRepository;
@@ -362,6 +366,33 @@ public class AdminController {
         return Result.ok(data);
     }
 
+    /** 仲裁记录：fund_audit_log 里的 ARBITRATE 流水，按时间倒序 */
+    @GetMapping("/arbitrations")
+    public Result<Map<String, Object>> arbitrations(@RequestParam(defaultValue = "0") int page,
+                                                    @RequestParam(defaultValue = "10") int size) {
+        int safeSize = Math.max(1, Math.min(size, 50));
+        int safePage = Math.max(0, page);
+        var result = adminArbitrationQuery.page(safePage * safeSize, safeSize);
+        List<Map<String, Object>> items = result.items().stream().map(row -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", String.valueOf(row.id()));
+            item.put("errandId", String.valueOf(row.errandId()));
+            item.put("errandTitle", row.errandTitle());
+            item.put("operatorName", row.operatorName());
+            item.put("favor", row.favor());
+            item.put("amountCents", row.amountCents());
+            item.put("result", row.result());
+            item.put("createdAt", row.createdAt().toString());
+            return item;
+        }).toList();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("items", items);
+        data.put("total", result.total());
+        data.put("page", safePage);
+        data.put("size", safeSize);
+        return Result.ok(data);
+    }
+
     @GetMapping("/disputes/{id}")
     public Result<Map<String, Object>> detail(@PathVariable long id) {
         Errand errand = errandRepository.findById(id)
@@ -404,7 +435,11 @@ public class AdminController {
         row.put("status", errand.status().name());
         row.put("rewardCents", errand.reward().cents());
         row.put("publisherId", errand.publisherId());
+        row.put("publisherName", userRepository.findById(errand.publisherId())
+                .map(com.campusdash.domain.auth.model.UserAccount::username).orElse(errand.publisherId()));
         row.put("grabberId", errand.grabberId() == null ? "" : errand.grabberId());
+        row.put("grabberName", errand.grabberId() == null ? "" : userRepository.findById(errand.grabberId())
+                .map(com.campusdash.domain.auth.model.UserAccount::username).orElse(errand.grabberId()));
         row.put("round", errand.round());
         return row;
     }

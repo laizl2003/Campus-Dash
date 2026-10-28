@@ -551,11 +551,16 @@ export const api = {
     }>(`/api/admin/ledger?account=${account}&period=${period}&page=${page}&size=${size}`),
   adminDisputes: () => request<{
     errandId: string; title: string; status: string; rewardCents: number;
-    publisherId: string; grabberId: string; round: number;
+    publisherId: string; publisherName?: string; grabberId: string; grabberName?: string; round: number;
   }[]>('/api/admin/disputes'),
+  adminArbitrations: (page = 0, size = 10) => request<{
+    items: { id: string; errandId: string; errandTitle: string; operatorName: string;
+      favor: string; amountCents: number; result: string; createdAt: string }[];
+    total: number; page: number; size: number;
+  }>(`/api/admin/arbitrations?page=${page}&size=${size}`),
   adminDispute: (id: string) => request<{
     errandId: string; title: string; status: string; rewardCents: number;
-    publisherId: string; grabberId: string; round: number;
+    publisherId: string; publisherName?: string; grabberId: string; grabberName?: string; round: number;
     escrowAmountCents?: number; escrowStatus?: string;
     voucherDescription?: string; voucherDiscountCents?: number; runnerBearCents?: number;
   }>(`/api/admin/disputes/${id}`),

@@ -79,15 +79,21 @@ public class FundEventConsumer {
                         String pubContent = switch (tag) {
                             case "SETTLED" -> String.format("任务已完成结算，跑腿获得 %.2f 元", amount / 100.0);
                             case "REFUNDED" -> String.format("任务已退款，%.2f 元已退回你的账户", amount / 100.0);
-                            case "ARBITRATED" -> String.format("争议已裁决，涉及金额 %.2f 元", amount / 100.0);
+                            case "ARBITRATED" -> String.format("争议已裁决，支持跑腿，任务已结算（涉及金额 %.2f 元）", amount / 100.0);
                             default -> "任务 " + errandId + " 资金状态变动";
                         };
                         notificationRepository.insertIfAbsent(idGenerator.nextId(),
                                 msgKey + ":pub", publisherId, errandId, tag, pubContent);
 
-                        // 结算类事件同时通知跑腿
-                        if (!runnerId.isEmpty() && ("SETTLED".equals(tag) || "ARBITRATED".equals(tag))) {
-                            String runnerContent = String.format("任务结算完成，你获得 %.2f 元", amount / 100.0);
+                        // 结算/仲裁事件同时通知跑腿；退款也要告知跑腿结果
+                        if (!runnerId.isEmpty()
+                                && ("SETTLED".equals(tag) || "ARBITRATED".equals(tag) || "REFUNDED".equals(tag))) {
+                            String runnerContent = switch (tag) {
+                                case "SETTLED" -> String.format("任务结算完成，你获得 %.2f 元", amount / 100.0);
+                                case "ARBITRATED" -> String.format("争议已裁决，支持你并完成结算，你获得 %.2f 元", amount / 100.0);
+                                case "REFUNDED" -> "争议已裁决，退款给发单人，本次任务结束";
+                                default -> "任务资金状态变动";
+                            };
                             notificationRepository.insertIfAbsent(idGenerator.nextId(),
                                     msgKey + ":runner", runnerId, errandId, tag, runnerContent);
                         }

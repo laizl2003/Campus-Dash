@@ -4,6 +4,7 @@ import type { ErrandCard } from '../api';
 import { subscribeWs } from '../ws';
 import ErrandCardView from '../components/ErrandCard';
 import Icon from '../components/Icon';
+import SelectMenu from '../components/SelectMenu';
 import CampusArt from '../components/CampusArt';
 interface VoucherItem {
   type: number; stock: number; description: string; thresholdCents: number; discountCents: number;
@@ -105,7 +106,10 @@ export default function Square() {
         </div>
       </section>}
       <div className="section-title"><h2>发现任务 <span>{loading && !updatedAt ? '—' : cards.length}</span></h2><span className="update-time">{updatedAt ? `${updatedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 更新` : '等待加载'}</span></div>
-      <div className="market-toolbar"><div className="category-tabs" aria-label="任务分类">{[['ALL', '全部任务'], ...Object.entries(TYPE_TEXT)].map(([key, label]) => <button key={key} className={category === key ? 'active' : ''} aria-pressed={category === key} onClick={() => setCategory(key)}>{label}</button>)}</div><div className="market-search-row"><label className="search-field"><Icon name="search" size={16}/><input aria-label="搜索任务" placeholder="搜索任务名称或编号" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button aria-label="清除搜索" onClick={() => setQuery('')}><Icon name="close" size={14}/></button>}</label><select aria-label="任务排序" value={sort} onChange={e => setSort(e.target.value)}><option value="default">默认排序</option><option value="reward">悬赏从高到低</option></select></div></div>
+      <div className="market-toolbar"><div className="category-tabs" aria-label="任务分类">{[['ALL', '全部任务'], ...Object.entries(TYPE_TEXT)].map(([key, label]) => <button key={key} className={category === key ? 'active' : ''} aria-pressed={category === key} onClick={() => setCategory(key)}>{label}</button>)}</div><div className="market-search-row"><label className="search-field"><Icon name="search" size={16}/><input aria-label="搜索任务" placeholder="搜索任务名称或编号" value={query} onChange={e => setQuery(e.target.value)}/>{query && <button aria-label="清除搜索" onClick={() => setQuery('')}><Icon name="close" size={14}/></button>}</label><SelectMenu ariaLabel="任务排序" value={sort} onChange={setSort} options={[
+  { value: 'default', label: '默认排序' },
+  { value: 'reward', label: '悬赏从高到低' },
+]}/></div></div>
       {error && <div className="banner warn" role="alert"><Icon name="info" size={17}/><span>{error}{updatedAt && '。下方保留上次加载的任务。'}</span><button className="text-button" onClick={() => void load()}>重试</button></div>}
       {loading && !updatedAt ? <div className="card-grid" aria-label="正在加载任务">{[0, 1, 2, 3].map(n => <div key={n} className="skeleton-card"><i/><i/><i/><i/></div>)}</div> : filtered.length > 0 ? <div className="card-grid">{filtered.map(c => <ErrandCardView key={c.id} card={c} onChanged={() => void load()}/>)}</div> : !error && <div className="empty-state"><span className="empty-icon"><Icon name={query || category !== 'ALL' ? 'search' : 'package'} size={30}/></span><h3>{query || category !== 'ALL' ? '没有找到匹配的任务' : '新的委托，正在路上'}</h3><p>{query || category !== 'ALL' ? '换个关键词，或者看看其他类型的委托。' : '暂时还没有可浏览的任务，你也可以发布第一份委托。'}</p>{query || category !== 'ALL' ? <button className="btn" onClick={() => { setQuery(''); setCategory('ALL'); }}>清除筛选</button> : <a className="btn btn-primary" href="#/publish"><Icon name="plus" size={16}/>发布任务</a>}</div>}
       {updatedAt && cards.length > 0 && <p className="list-footnote">{query || category !== 'ALL' ? `匹配 ${filtered.length} 条 · ` : ''}展示当前加载的 {cards.length} 条任务 · 名额与操作以最新状态为准</p>}

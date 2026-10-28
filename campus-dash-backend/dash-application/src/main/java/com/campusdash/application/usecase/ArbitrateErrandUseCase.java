@@ -4,6 +4,7 @@ import com.campusdash.domain.auth.model.UserAccount;
 import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.credit.model.CreditEvent;
 import com.campusdash.domain.credit.model.CreditEventType;
+import com.campusdash.domain.credit.ports.CreditRankingPort;
 import com.campusdash.domain.credit.ports.CreditRepository;
 import com.campusdash.domain.notify.ports.RealtimeNotifier;
 import com.campusdash.domain.errand.model.Errand;
@@ -45,6 +46,7 @@ public class ArbitrateErrandUseCase {
     private final FundEventPort fundEventPort;
     private final CacheEvictSupport cacheEvict;
     private final CreditRepository creditRepository;
+    private final CreditRankingPort creditRankingPort;
     private final SnowflakeIdGenerator idGenerator;
     private final RealtimeNotifier notifier;
     private final UserRepository users;
@@ -58,6 +60,7 @@ public class ArbitrateErrandUseCase {
                                   FundEventPort fundEventPort,
                                   CacheEvictSupport cacheEvict,
                                   CreditRepository creditRepository,
+                                  CreditRankingPort creditRankingPort,
                                   SnowflakeIdGenerator idGenerator,
                                   RealtimeNotifier notifier,
                                   UserRepository users,
@@ -70,6 +73,7 @@ public class ArbitrateErrandUseCase {
         this.fundEventPort = fundEventPort;
         this.cacheEvict = cacheEvict;
         this.creditRepository = creditRepository;
+        this.creditRankingPort = creditRankingPort;
         this.idGenerator = idGenerator;
         this.notifier = notifier;
         this.users = users;
@@ -112,11 +116,17 @@ public class ArbitrateErrandUseCase {
                         java.time.Instant.now()));
             }
             if (r == RefundErrandUseCase.Result.REFUNDED) {
+                long refundAmount = walletRepository.findEscrowByErrandId(errand.campusId(), errandId)
+                        .map(e -> e.amount().cents()).orElse(0L);
+                auditPort.record(LedgerEntry.refundBizNo(errandId), "ARBITRATE", errandId, operatorId,
+                        String.format("{\"favor\":\"PUBLISHER\",\"amount\":%d}", refundAmount),
+                        true, null);
                 notifier.errandStatusChanged(errandId, errand.publisherId(), errand.grabberId(),
                         "REFUNDED", errand.round());
                 if (errand.grabberId() != null) {
-                    notifier.creditChanged(errand.grabberId(),
-                            creditRepository.scoreOf(errand.grabberId()),
+                    int score = creditRepository.scoreOf(errand.grabberId());
+                    creditRankingPort.update(errand.campusId(), errand.grabberId(), score);
+                    notifier.creditChanged(errand.grabberId(), score,
                             CreditEventType.DISPUTE_LOSE.delta(), "争议败诉");
                 }
             }
@@ -146,6 +156,15 @@ public class ArbitrateErrandUseCase {
                     true, null);
             notifier.errandStatusChanged(errandId, errand.publisherId(), errand.grabberId(),
                     "SETTLED", errand.round());
+            int delta = CreditEventType.SETTLE.delta();
+            int publisherScore = creditRepository.scoreOf(errand.publisherId());
+            creditRankingPort.update(errand.campusId(), errand.publisherId(), publisherScore);
+            notifier.creditChanged(errand.publisherId(), publisherScore, delta, "仲裁结算");
+            if (errand.grabberId() != null) {
+                int runnerScore = creditRepository.scoreOf(errand.grabberId());
+                creditRankingPort.update(errand.campusId(), errand.grabberId(), runnerScore);
+                notifier.creditChanged(errand.grabberId(), runnerScore, delta, "仲裁结算");
+            }
             return Result.SETTLED_TO_RUNNER;
         }
         return Result.CONFLICT;

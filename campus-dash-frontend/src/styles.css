@@ -514,3 +514,12 @@ button.topbar-avatar:hover { filter: brightness(0.97); }
 .toast.is-error { background: #fdf2f1; border-color: #f3c7c2; color: #b23b32; }
 .toast.is-success { background: #f2fbf5; border-color: #bfe3cc; color: #2f6b4a; }
 .toast button { color: inherit; }
+
+/* 通用下拉选择器（与账号切换同款菜单） */
+.select-menu-wrap { position: relative; display: inline-block; }
+.select-menu-trigger { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: #444; font-size: 12px; font-weight: 500; cursor: pointer; }
+.select-menu-trigger:hover { background: #fffaf0; border-color: #dfc558; }
+.select-menu-caret { color: #8a938b; font-size: 11px; }
+.select-menu { top: calc(100% + 6px); right: 0; left: auto; width: max-content; min-width: 180px; max-height: 280px; overflow-y: auto; z-index: 100; }
+.select-menu button { align-items: center; }
+.select-menu-check { margin-left: auto; color: #8a6d1f; font-size: 11px; }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, yuan } from '../api';
 import Icon from '../components/Icon';
+import SelectMenu from '../components/SelectMenu';
 import { subscribeWs } from '../ws';
 import './accountPages.css';
 
@@ -213,7 +214,8 @@ export default function Wallet() {
         <div className="account-section-head"><div><h2>记账流水</h2><p>默认加载最近 20 条记录，同一业务可能包含多条记账</p></div><span className="account-count">{ledger === null ? '等待加载' : `${filtered.length} 笔记录`}</span></div>
         <div className="account-filter-bar">
           <div className="tabs" aria-label="按记账方向筛选">{[['ALL', '全部流水'], ['CREDIT', '贷记'], ['DEBIT', '借记']].map(([value, label]) => <button key={value} className={`tab${direction === value ? ' active' : ''}`} aria-pressed={direction === value} onClick={() => setDirection(value)}>{label}</button>)}</div>
-          <label className="account-select-label"><span>交易类型</span><select value={refType} onChange={(event) => setRefType(event.target.value)}><option value="ALL">全部类型</option>{Object.entries(REF_TYPE_TEXT).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <div className="account-select-label"><span>交易类型</span><SelectMenu ariaLabel="交易类型" value={refType} onChange={setRefType}
+  options={[{ value: 'ALL', label: '全部类型' }, ...Object.entries(REF_TYPE_TEXT).map(([value, label]) => ({ value, label }))]}/></div>
         </div>
         {loading && ledger === null ? <div className="account-state" role="status"><span className="account-loader" /><strong>正在加载记账流水</strong><p>余额与交易记录即将呈现</p></div> : ledger === null ? <div className="account-state"><Icon name="wallet" size={28} /><strong>暂时无法获取流水</strong><p>请重试以获取最新账单。</p></div> : filtered.length === 0 ? <div className="account-state"><div className="account-empty-icon"><Icon name="wallet" size={27} /></div><strong>{ledger.length ? '没有符合条件的流水' : '你的账单，从第一笔开始'}</strong><p>{ledger.length ? '试试切换记账方向或交易类型。' : '发布或完成任务后，资金记录会出现在这里。'}</p>{ledger.length > 0 && <button className="btn btn-ghost" onClick={() => { setDirection('ALL'); setRefType('ALL'); }}>清除筛选</button>}</div> : (
           <div className="account-table-scroll"><table className="account-table"><thead><tr><th>交易类型</th><th>关联任务</th><th>交易时间</th><th className="account-align-right">金额</th></tr></thead><tbody>

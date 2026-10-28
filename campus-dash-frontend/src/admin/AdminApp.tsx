@@ -14,7 +14,7 @@ function formatDateTime(value: string): string {
 
 interface Dispute {
   errandId: string; title: string; status: string; rewardCents: number;
-  publisherId: string; grabberId: string; round: number;
+  publisherId: string; publisherName?: string; grabberId: string; grabberName?: string; round: number;
   escrowAmountCents?: number; escrowStatus?: string;
   voucherDescription?: string; voucherDiscountCents?: number; runnerBearCents?: number;
 }
@@ -33,6 +33,7 @@ export default function AdminApp() {
   const [switchError, setSwitchError] = useState('');
   const switchRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<Dispute[]>([]);
+  const [arbitrations, setArbitrations] = useState<Awaited<ReturnType<typeof api.adminArbitrations>>['items']>([]);
   const [selected, setSelected] = useState<Dispute | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -45,7 +46,9 @@ export default function AdminApp() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setList(await api.adminDisputes());
+      const [disputes, history] = await Promise.all([api.adminDisputes(), api.adminArbitrations(0, 10)]);
+      setList(disputes);
+      setArbitrations(history.items);
       setMessage(null);
     } catch (e) {
       setMessage({ text: e instanceof Error ? e.message : '待仲裁任务加载失败', error: true });
@@ -171,7 +174,7 @@ export default function AdminApp() {
               <button type="button" className={`admin-row${selected?.errandId === item.errandId ? ' is-active' : ''}`} onClick={() => void open(item.errandId)}>
                 <span className="admin-row-title">{item.title}</span>
                 <span className="admin-row-meta">#{item.errandId} · 悬赏 {yuan(item.rewardCents)} · 第 {item.round} 轮</span>
-                <span className="admin-row-parties">发单 {item.publisherId} → 跑腿 {item.grabberId || '—'}</span>
+                <span className="admin-row-parties">发单 {item.publisherName ?? item.publisherId} → 跑腿 {item.grabberName ?? item.grabberId ?? '—'}</span>
               </button>
             </li>)}
           </ul>
@@ -188,8 +191,8 @@ export default function AdminApp() {
               <div><dt>悬赏</dt><dd>{yuan(selected.rewardCents)}</dd></div>
               <div><dt>托管金额</dt><dd>{selected.escrowAmountCents == null ? '—' : yuan(selected.escrowAmountCents)}</dd></div>
               <div><dt>托管状态</dt><dd>{selected.escrowStatus ?? '—'}</dd></div>
-              <div><dt>发单人</dt><dd>{selected.publisherId}</dd></div>
-              <div><dt>跑腿</dt><dd>{selected.grabberId || '—'}</dd></div>
+              <div><dt>发单人</dt><dd>{selected.publisherName ?? selected.publisherId}</dd></div>
+              <div><dt>跑腿</dt><dd>{selected.grabberName ?? selected.grabberId ?? '—'}</dd></div>
               <div><dt>轮次</dt><dd>第 {selected.round} 轮</dd></div>
             </dl>
             {selected.voucherDescription && <div className="admin-voucher">
@@ -222,6 +225,21 @@ export default function AdminApp() {
             </div>}
             <p className="admin-hint">裁决前请核对双方描述与送达凭证；资金动作在同一个事务里完成。</p>
           </>}
+        </section>
+        <section className="admin-arbitration-history" aria-label="仲裁记录">
+          <div className="admin-list-head"><h2>仲裁记录 <span>{arbitrations.length}</span></h2><small>最近 10 条</small></div>
+          {arbitrations.length === 0 ? <div className="admin-empty">暂无仲裁记录</div>
+            : <div className="admin-ledger-scroll"><table>
+              <thead><tr><th>时间</th><th>任务</th><th>裁决</th><th>金额</th><th>操作人</th><th>结果</th></tr></thead>
+              <tbody>{arbitrations.map(row => <tr key={row.id}>
+                <td>{formatDateTime(row.createdAt)}</td>
+                <td>{row.errandTitle ?? row.errandId}</td>
+                <td>{row.favor === 'RUNNER' ? '支持跑腿 · 结算' : row.favor === 'PUBLISHER' ? '支持发单人 · 退款' : '—'}</td>
+                <td>{yuan(row.amountCents ?? 0)}</td>
+                <td>{row.operatorName}</td>
+                <td>{row.result === 'SUCCESS' ? '成功' : row.result}</td>
+              </tr>)}</tbody>
+            </table></div>}
         </section>
       </div> : view === 'vouchers' ? <VoucherManager/> : view === 'settings' ? <SettingsPanel/> : <div className="admin-ledger-view">
         <div className={`admin-net ${netCents >= 0 ? 'in' : 'out'}`}>

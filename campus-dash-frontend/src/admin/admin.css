@@ -274,3 +274,9 @@
 .admin-user-actions .btn.btn-danger:focus-visible { border-color: #9c322a; color: #fff; }
 .admin-user-actions .btn.btn-success:hover:not(:disabled) { background: #25573c; border-color: #25573c; color: #fff; }
 .admin-user-actions .btn.btn-success:focus-visible { border-color: #25573c; color: #fff; }
+
+/* 仲裁记录：与资金流水表格同款 */
+.admin-arbitration-history { grid-column: 1 / -1; padding: 16px; background: #fff; border: 1px solid #e7e2d8; border-radius: 14px; }
+.admin-arbitration-history table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.admin-arbitration-history th { text-align: left; font-size: 10px; color: #9aa39c; font-weight: 600; padding: 8px 10px; border-bottom: 1px solid #eee7da; white-space: nowrap; }
+.admin-arbitration-history td { padding: 9px 10px; border-bottom: 1px solid #f3f0e9; color: #333; white-space: nowrap; }

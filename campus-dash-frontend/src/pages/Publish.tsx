@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, TYPE_ICON, TYPE_TEXT, yuan } from '../api';
 import Icon from '../components/Icon';
+import SelectMenu from '../components/SelectMenu';
 import './taskPages.css';
 
 const CATEGORIES = [
@@ -131,12 +132,12 @@ export default function Publish() {
               <div className="task-balance-line" id="task-reward-hint"><span><Icon name="wallet" size={15} /> {balance === null ? '发布时将校验钱包余额' : `钱包可用 ${yuan(balance)}`}</span><a href="#/wallet">查看钱包 <Icon name="arrow-right" size={13} /></a></div>
               <div className="task-voucher-picker">
                 <label htmlFor="task-voucher"><Icon name="ticket" size={15} /> 优惠券</label>
-                <select id="task-voucher" value={voucherId ?? ''} onChange={(event) => setVoucherId(event.target.value || null)}>
-                  <option value="">不使用优惠券</option>
-                  {eligibleVouchers.map((voucher) => <option key={voucher.voucherId} value={voucher.voucherId}>
-                    满{Number(voucher.thresholdCents ?? 0) / 100}减{Number(voucher.discountCents ?? 0) / 100}（减 {yuan(Number(voucher.discountCents ?? 0))}）
-                  </option>)}
-                </select>
+                <SelectMenu value={voucherId ?? ''} onChange={value => setVoucherId(value || null)} ariaLabel="选择优惠券"
+                            className="task-voucher-select"
+                            options={[{ value: '', label: '不使用优惠券' }, ...eligibleVouchers.map(voucher => ({
+                              value: voucher.voucherId,
+                              label: `满${Number(voucher.thresholdCents ?? 0) / 100}减${Number(voucher.discountCents ?? 0) / 100}（减 ${yuan(Number(voucher.discountCents ?? 0))}）`,
+                            }))]}/>
                 {eligibleVouchers.length === 0 && <small>暂无满足当前悬赏门槛的可用券</small>}
               </div>
               {selectedVoucher && <div className="task-pay-line">

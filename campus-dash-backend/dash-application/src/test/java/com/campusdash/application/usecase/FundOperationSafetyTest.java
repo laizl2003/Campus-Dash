@@ -284,7 +284,7 @@ class FundOperationSafetyTest {
             ProxyFactory proxy = new ProxyFactory(target);
             proxy.addAdvice(new TransactionInterceptor(tx, new AnnotationTransactionAttributeSource()));
             return new ArbitrateErrandUseCase(errands, wallets, refund(), (ArbitrateSettleStep) proxy.getProxy(),
-                    audit, fund, cache, credit, ids, notifier,
+                    audit, fund, cache, credit, noop(com.campusdash.domain.credit.ports.CreditRankingPort.class), ids, notifier,
                     stub(UserRepository.class, (method, args) -> Optional.empty()), ARBITRATOR);
         }
 
