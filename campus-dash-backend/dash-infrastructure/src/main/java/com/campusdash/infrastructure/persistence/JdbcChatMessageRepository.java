@@ -1,6 +1,7 @@
 package com.campusdash.infrastructure.persistence;
 
 import com.campusdash.domain.chat.model.ChatMessage;
+import com.campusdash.domain.chat.ports.ChatHistoryCachePort;
 import com.campusdash.domain.chat.ports.ChatMessageRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -15,9 +16,11 @@ import java.util.Optional;
 public class JdbcChatMessageRepository implements ChatMessageRepository {
 
     private final JdbcTemplate jdbc;
+    private final ChatHistoryCachePort historyCache;
 
-    public JdbcChatMessageRepository(JdbcTemplate jdbc) {
+    public JdbcChatMessageRepository(JdbcTemplate jdbc, ChatHistoryCachePort historyCache) {
         this.jdbc = jdbc;
+        this.historyCache = historyCache;
     }
 
     private static final org.springframework.jdbc.core.RowMapper<ChatMessage> MAPPER =
@@ -49,6 +52,7 @@ public class JdbcChatMessageRepository implements ChatMessageRepository {
                 """, m.id(), m.roomId(), m.campusId(), m.senderId(), m.senderName(), m.senderRole(),
                 m.content(), m.msgType(), m.errandId(), m.errandStatus(), m.clientMsgId(), m.status(),
                 Timestamp.from(m.createdAt()));
+        historyCache.push(m);
     }
 
     @Override

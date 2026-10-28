@@ -3,6 +3,7 @@ package com.campusdash.infrastructure.persistence;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.model.ErrandStatus;
 import com.campusdash.domain.errand.model.ErrandType;
+import com.campusdash.domain.chat.ports.ChatHistoryCachePort;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.shared.Money;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,9 +24,11 @@ import java.util.Optional;
 public class JdbcErrandRepository implements ErrandRepository {
 
     private final JdbcTemplate jdbc;
+    private final ChatHistoryCachePort chatHistoryCache;
 
-    public JdbcErrandRepository(JdbcTemplate jdbc) {
+    public JdbcErrandRepository(JdbcTemplate jdbc, ChatHistoryCachePort chatHistoryCache) {
         this.jdbc = jdbc;
+        this.chatHistoryCache = chatHistoryCache;
     }
 
     private static final RowMapper<Errand> MAPPER = (rs, n) -> Errand.rehydrate(
@@ -263,5 +266,6 @@ public class JdbcErrandRepository implements ErrandRepository {
         // ERRAND 聊天卡片跟随任务状态；历史记录也返回最新状态
         jdbc.update("UPDATE chat_message SET errand_status = ? WHERE errand_id = ?",
                 to.name(), errandId);
+        chatHistoryCache.invalidate("square");
     }
 }

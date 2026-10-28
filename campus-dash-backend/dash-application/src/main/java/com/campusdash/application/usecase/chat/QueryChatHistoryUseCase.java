@@ -1,6 +1,7 @@
 package com.campusdash.application.usecase.chat;
 
 import com.campusdash.domain.chat.model.ChatMessage;
+import com.campusdash.domain.chat.ports.ChatHistoryCachePort;
 import com.campusdash.domain.chat.ports.ChatMessageRepository;
 import org.springframework.stereotype.Service;
 
@@ -14,11 +15,14 @@ public class QueryChatHistoryUseCase {
 
     public static final int DEFAULT_LIMIT = 50;
     public static final int MAX_LIMIT = 100;
+    private static final int CACHE_WARM_SIZE = 200;
 
     private final ChatMessageRepository messages;
+    private final ChatHistoryCachePort cache;
 
-    public QueryChatHistoryUseCase(ChatMessageRepository messages) {
+    public QueryChatHistoryUseCase(ChatMessageRepository messages, ChatHistoryCachePort cache) {
         this.messages = messages;
+        this.cache = cache;
     }
 
     public List<ChatMessage> history(String roomId, int limit, Long beforeId, Long afterId) {
@@ -29,7 +33,18 @@ public class QueryChatHistoryUseCase {
         if (afterId != null) {
             return messages.after(roomId, afterId, size);
         }
-        return reverse(messages.latest(roomId, size));
+
+        // 首页只读最近 200 条热缓存；缓存不足时回源 DB 并回填 200 条
+        List<ChatMessage> cached = cache.latest(roomId, size);
+        if (cached.size() >= size) {
+            return cached;
+        }
+        List<ChatMessage> latest = reverse(messages.latest(roomId, CACHE_WARM_SIZE));
+        for (ChatMessage message : latest) {
+            cache.push(message);
+        }
+        if (latest.size() <= size) return latest;
+        return new ArrayList<>(latest.subList(latest.size() - size, latest.size()));
     }
 
     private List<ChatMessage> reverse(List<ChatMessage> desc) {

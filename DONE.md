@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 聊天最近 200 条 Redis ZSET 缓存
+
+- **目标**：首页进入聊天时缓存最近 200 条，降低重复 DB 查询。
+- **改动**：
+  - ChatHistoryCachePort + RedisChatHistoryCache：chat:recent:square ZSET，score=message id，ZREM range 保留 200，TTL 24h。
+  - JdbcChatMessageRepository.save 后写入缓存（失败不影响消息）。
+  - QueryChatHistoryUseCase 最近消息先读缓存，不足回源 DB 并回填 200；beforeId/afterId 仍走 DB。
+  - 任务状态变化时 invalidate 缓存，避免 ERRAND 卡片状态过期。
+- **验证**：清空缓存后 GET history 回填 12 条；发送一条后 ZCARD 13；最新 member 为本次消息。
+
+
 ## 2026-10-28 · 在线用户列表浮层
 
 - **目标**：点击聊天右上角在线人数，弹出刚好覆盖聊天框的在线列表；当前用户第一且浅黄，其余按 auth:online score 排序。
