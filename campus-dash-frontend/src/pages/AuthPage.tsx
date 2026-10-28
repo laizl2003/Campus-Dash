@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BizError, captchaImage, changePassword, login, registerAccount, type Profile, type StoredAccount } from '../api';
+import { BizError, captchaImage, changePassword, forgetAccount, login, registerAccount, type Profile, type StoredAccount } from '../api';
 import Icon from '../components/Icon';
 import CampusArt from '../components/CampusArt';
 
@@ -31,6 +31,9 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
   const [notice, setNotice] = useState('');
   const [quickBusy, setQuickBusy] = useState<string | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [localAccounts, setLocalAccounts] = useState<StoredAccount[]>(accounts);
+
+  useEffect(() => { setLocalAccounts(accounts); }, [accounts]);
   const [disabledNotice, setDisabledNotice] = useState('');
   const [quickUp, setQuickUp] = useState(false);
   const quickRef = useRef<HTMLDivElement>(null);
@@ -103,6 +106,9 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
           username: username.trim(), oldPassword: password, newPassword,
           captchaId: captcha.captchaId, captchaCode,
         });
+        // 服务端已撤销该账号全部 token：本机账号簿同步移除，不能免密快速登录
+        forgetAccount(username.trim());
+        setLocalAccounts(prev => prev.filter(a => a.username !== username.trim()));
         setMode('login');
         setPassword('');
         setNewPassword('');
@@ -217,19 +223,19 @@ export default function AuthPage({ onAuthed, onResume, accounts = [], currentUse
         </button>}
       </form>
 
-      {mode === 'login' && accounts.length > 0 && <div className="auth-quick" ref={quickRef}>
+      {mode === 'login' && localAccounts.length > 0 && <div className="auth-quick" ref={quickRef}>
         <button type="button" className="auth-quick-toggle" aria-haspopup="menu" aria-expanded={quickOpen}
                 onClick={() => {
                   const rect = quickRef.current?.getBoundingClientRect();
                   setQuickUp(rect ? window.innerHeight - rect.bottom < 280 : false);
                   setQuickOpen(v => !v);
                 }}>
-          <span><strong>本机账号</strong><small>{accounts.length} 个已登录账号 · 点击快速进入</small></span>
+          <span><strong>本机账号</strong><small>{localAccounts.length} 个已登录账号 · 点击快速进入</small></span>
           <span className="auth-quick-caret" aria-hidden="true">⌄</span>
         </button>
         {quickOpen && <div className={`auth-quick-menu${quickUp ? ' is-up' : ''}`} role="menu" aria-label="本机账号">
           <div className="auth-quick-list">
-            {accounts.map(a => <button key={a.userId} type="button" role="menuitem"
+            {localAccounts.map(a => <button key={a.userId} type="button" role="menuitem"
                     className={`auth-account-item${a.userId === currentUserId ? ' is-current' : ''}`}
                     disabled={quickBusy !== null} onClick={() => void quickLogin(a.userId)}>
               <span className="menu-avatar">{a.username.slice(0, 1).toUpperCase()}</span>

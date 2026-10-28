@@ -269,6 +269,18 @@ export function restoreIdentity(access: string | null, userId: string | null, re
   if (userId !== null) localStorage.setItem(USER_KEY, JSON.stringify(userId));
 }
 
+/** 修改密码后移除本机账号簿；若正是当前会话则本地登出（服务端 token 已撤销） */
+export function forgetAccount(username: string) {
+  const name = username.trim();
+  const targets = listAccounts().filter(a => a.username === name);
+  if (targets.length === 0) return;
+  const ids = new Set(targets.map(a => a.userId));
+  writeAccounts(listAccounts().filter(a => !ids.has(a.userId)));
+  if (currentUserId && ids.has(currentUserId)) {
+    logout();
+  }
+}
+
 export function logout() {
   const access = token;
   const refresh = refreshToken;

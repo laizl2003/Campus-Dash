@@ -1,6 +1,7 @@
 package com.campusdash.application.usecase;
 
 import com.campusdash.domain.auth.model.UserAccount;
+import com.campusdash.domain.auth.ports.AuthPort;
 import com.campusdash.domain.auth.ports.CaptchaPort;
 import com.campusdash.domain.auth.ports.PasswordHasher;
 import com.campusdash.domain.auth.ports.UserRepository;
@@ -26,11 +27,14 @@ public class ChangePasswordUseCase {
     private final UserRepository users;
     private final PasswordHasher hasher;
     private final CaptchaPort captcha;
+    private final AuthPort authPort;
 
-    public ChangePasswordUseCase(UserRepository users, PasswordHasher hasher, CaptchaPort captcha) {
+    public ChangePasswordUseCase(UserRepository users, PasswordHasher hasher, CaptchaPort captcha,
+                                 AuthPort authPort) {
         this.users = users;
         this.hasher = hasher;
         this.captcha = captcha;
+        this.authPort = authPort;
     }
 
     public record Command(String username, String oldPassword, String newPassword,
@@ -67,5 +71,9 @@ public class ChangePasswordUseCase {
         }
 
         users.updatePassword(account.userId(), hasher.hash(command.newPassword()), Instant.now());
+        // 密码变更 = 该账号所有旧会话立即失效：撤销全部 token 并置离线，
+        // 本机账号簿也会由前端移除，不能再免密快速登录。
+        authPort.revokeAllSessions(account.userId());
+        users.markOffline(account.userId());
     }
 }
