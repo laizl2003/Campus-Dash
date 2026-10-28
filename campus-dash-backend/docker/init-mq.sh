@@ -15,7 +15,7 @@ TOPIC_AUTO_SETTLE="${TOPIC_AUTO_SETTLE:-errand-auto-settle}"
 TOPIC_FUND_EVENT="${TOPIC_FUND_EVENT:-errand-fund-event}"
 # P5：延迟双删（DELAY 类型）
 TOPIC_CACHE_EVICT="${TOPIC_CACHE_EVICT:-errand-cache-evict}"
-# 优惠券到期（DELAY 类型，领取时按 48 小时后的时刻投递）
+# 优惠券到期（DELAY 类型，领取时按 24 小时后的时刻投递）
 TOPIC_VOUCHER_EXPIRE="${TOPIC_VOUCHER_EXPIRE:-voucher-expire}"
 # 优惠券领取（普通类型；Redis 预扣成功后投递，worker 落库）
 TOPIC_VOUCHER_CLAIM="${TOPIC_VOUCHER_CLAIM:-voucher-claim}"

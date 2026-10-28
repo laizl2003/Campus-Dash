@@ -16,15 +16,12 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * 领取优惠券。
+ * 领取优惠券（同步降级路径；MQ 可用时走 ClaimVoucherAsyncUseCase）。
  *
  * 三件事必须在同一个事务里：
  *   1. 扣库存（UPDATE ... WHERE stock > 0，靠影响行数判断是否抢光）
  *   2. 写领取记录（雪花 ID 作为 voucher_id）
- *   3. 登记一条"到期作废"的本地消息（2 天后由 worker 投递到 voucher-expire）
- *
- * 库存扣减不能先查再减：并发下两个请求都会读到 stock=1。
- * 这里用单条带条件的 UPDATE，受影响行数就是并发裁决结果。
+ *   3. 登记一条“到期作废”的本地消息（24 小时后由 worker 投递到 voucher-expire）
  */
 @Service
 public class ClaimVoucherUseCase {
@@ -40,7 +37,7 @@ public class ClaimVoucherUseCase {
     public ClaimVoucherUseCase(VoucherRepository vouchers,
                                LocalMessageRepository localMessages,
                                SnowflakeIdGenerator idGenerator,
-                               @Value("${dash.voucher.expire-hours:48}") long expireHours) {
+                               @Value("${dash.voucher.expire-hours:24}") long expireHours) {
         this.vouchers = vouchers;
         this.localMessages = localMessages;
         this.idGenerator = idGenerator;
@@ -72,7 +69,6 @@ public class ClaimVoucherUseCase {
         vouchers.insert(new Voucher(voucherId, userId, typeCode, expireAt, VoucherStatus.AVAILABLE, null, now));
 
         // 本地消息表 + 定时投递：到点后 worker 发到 voucher-expire，消费者把状态改成 expired。
-        // 这里只登记不发送——和自动结算用的是同一套基础设施。
         localMessages.enqueue(
                 idGenerator.nextId(),
                 "voucherexpire:" + voucherId,

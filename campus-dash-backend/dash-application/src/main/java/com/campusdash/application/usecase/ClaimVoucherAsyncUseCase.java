@@ -31,7 +31,7 @@ public class ClaimVoucherAsyncUseCase {
     public ClaimVoucherAsyncUseCase(VoucherRepository vouchers, VoucherClaimPort cache,
                                     ObjectProvider<VoucherClaimPublisher> publisher,
                                     SnowflakeIdGenerator idGenerator,
-                                    @Value("${dash.voucher.expire-hours:48}") long expireHours,
+                                    @Value("${dash.voucher.expire-hours:24}") long expireHours,
                                     ClaimVoucherUseCase fallback) {
         this.vouchers = vouchers;
         this.cache = cache;

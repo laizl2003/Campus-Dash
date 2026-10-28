@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 优惠券统一 24h 过期，单跳延迟消息
+
+- **目标**：去掉 48h 两跳，改为 24h 一跳；清空所有用户存量券。
+- **改动**：
+  - dash.voucher.expire-hours 默认 24；Claim 两个用例默认值 24。
+  - VoucherExpireConsumer 删除续投下一跳逻辑，24h 直接 markExpired + release。
+  - Delay adapter 保留 24h 上限作为安全边界。
+  - 删除 voucher_record 全量、voucher-expire 本地消息、Redis claimed/pending/stock，重启初始化库存。
+- **验证**：领取后 expire_time ≈24h，local_message 立即 SENT；重复领取 ALREADY_CLAIMED；DB voucher_record=0。
+
+
 ## 2026-10-28 · 真延迟队列：立即投递 + 24h 分跳
 
 - **目标**：local_message 登记后立即投 MQ，由 broker 负责延迟，而不是 DB 到点调度。

@@ -1,9 +1,7 @@
 package com.campusdash.worker;
 
-import com.campusdash.domain.errand.ports.LocalMessageRepository;
 import com.campusdash.domain.voucher.ports.VoucherClaimPort;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
-import com.campusdash.shared.SnowflakeIdGenerator;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.apache.rocketmq.client.apis.ClientConfiguration;
@@ -24,7 +22,7 @@ import java.util.Collections;
 /**
  * 优惠券到期消费者。
  *
- * 消息由领取时登记的本地消息表在到期时刻投递（dash.voucher.expire-hours，默认 48 小时）。
+ * 消息由领取时登记的本地消息表立即投递，RocketMQ 延迟到 24 小时后的到期时刻。
  * 幂等靠 markExpired 的 WHERE status='available'：重复投递、已被使用都不会误改。
  */
 @Component
@@ -37,8 +35,6 @@ public class VoucherExpireConsumer {
     private final ClientConfiguration configuration;
     private final VoucherRepository voucherRepository;
     private final VoucherClaimPort voucherClaimCache;
-    private final LocalMessageRepository localMessages;
-    private final SnowflakeIdGenerator idGenerator;
     private final String topic;
     private final String group;
 
@@ -48,16 +44,12 @@ public class VoucherExpireConsumer {
                                  ClientConfiguration configuration,
                                  VoucherRepository voucherRepository,
                                  VoucherClaimPort voucherClaimCache,
-                                 LocalMessageRepository localMessages,
-                                 SnowflakeIdGenerator idGenerator,
                                  @Value("${dash.mq.topic.voucher-expire:voucher-expire}") String topic,
                                  @Value("${dash.mq.group.voucher-expire:dash-voucher-consumer}") String group) {
         this.provider = provider;
         this.configuration = configuration;
         this.voucherRepository = voucherRepository;
         this.voucherClaimCache = voucherClaimCache;
-        this.localMessages = localMessages;
-        this.idGenerator = idGenerator;
         this.topic = topic;
         this.group = group;
     }
@@ -74,14 +66,6 @@ public class VoucherExpireConsumer {
                     try {
                         long voucherId = extractLong(body, "voucherId");
                         var voucher = voucherRepository.findById(voucherId);
-                        // 48h 券会被拆成 24h + 24h 两跳；第一跳到点时续投下一跳
-                        if (voucher.isPresent() && voucher.get().expireTime().isAfter(java.time.Instant.now())) {
-                            localMessages.enqueue(idGenerator.nextId(),
-                                    "voucherexpire:" + voucherId + ":hop", topic, body,
-                                    voucher.get().expireTime());
-                            log.info("优惠券未到期，续投下一跳 voucherId={}", voucherId);
-                            return ConsumeResult.SUCCESS;
-                        }
                         int updated = voucherRepository.markExpired(voucherId);
                         if (updated > 0) {
                             voucher.ifPresent(v -> voucherClaimCache.release(v.type(), v.userId()));

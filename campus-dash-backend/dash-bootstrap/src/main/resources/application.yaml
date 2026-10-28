@@ -43,8 +43,8 @@ dash:
     commission-rate: 0.08
     auto-settle-seconds: 86400
   voucher:
-    # 领取后统一 2 天过期，由本地消息表在到期时刻投递到 voucher-expire
-    expire-hours: 48
+    # 领取后统一 24 小时过期，由 RocketMQ 延迟消息在到期时刻投递到 voucher-expire
+    expire-hours: 24
     # 券面金额由跑腿承担的比例，其余由平台营销户承担
     runner-bear-ratio: 0.35
   mq:
