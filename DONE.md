@@ -3,6 +3,13 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-29 · 聊天缓存 key 加 Redis Cluster hash tag
+
+- **目标**：聊天缓存 ZSET/HASH/Lua 多 key 在 Cluster 下同 slot；所有相关 key 统一 hash tag。
+- **改动**：key 改为 chat:{room}:recent / payload / errand / message-errand；HighLight 增加方案 B 说明与简历表述。
+- **验证**：清理旧 key 后 history 回填 ZCARD=2000、HLEN=2000；HMGET 最新 payload 正常；worker 正常启动。
+
+
 ## 2026-10-29 · 聊天缓存方案 B：ZSET+Hash+HMGET+Lua
 
 - **目标**：ZSET 只存 messageId，Hash 存 payload；任务状态只更新对应 ERRAND 卡片，不再清空全部缓存。

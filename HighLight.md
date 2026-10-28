@@ -86,6 +86,63 @@ CampusDash 是一个校园跑腿与互助平台，覆盖「发布任务 → 托�
 - 抢单热点限流（本地 / Sentinel 适配）；
 - 在线状态、强制下线、管理端事件广播。
 
+### 5. 聊天最近消息缓存（ZSET + Hash + Lua）
+
+用于聊天广场首页和上翻历史的最近消息缓存，避免每次进入都查 MySQL。
+
+**结构**
+
+```text
+chat:{square}:recent          ZSET  score=messageId  member=messageId
+chat:{square}:payload         HASH  messageId -> 消息 JSON
+chat:{square}:errand          HASH  errandId -> messageId
+chat:{square}:message-errand  HASH  messageId -> errandId（淘汰时清理反向索引）
+```
+
+四个 key 使用同一个 Redis Cluster hash tag `{square}`，保证多 key Lua 落在同一个 slot。
+
+**写入 / 淘汰**
+
+`JdbcChatMessageRepository.save` 落库后调用缓存，Lua 一次完成：
+
+```text
+HSET payload messageId json
+ZADD recent messageId messageId
+HSET errand errandId messageId
+HSET message-errand messageId errandId
+超过 2000 条 → ZREMRANGEBYRANK 删除最旧
+HDEL 被淘汰消息的 payload / 反向索引 / errand 索引
+EXPIRE 24h
+```
+
+**读取**
+
+```text
+ZREVRANGE chat:{square}:recent 0 49   → 50 个 messageId
+HMGET    chat:{square}:payload id...   → 50 条 JSON
+```
+
+只发 2 条 Redis 命令，不使用 50 次 HGET；读取结果反转成时间升序返回。
+
+**ERRAND 卡片状态更新**
+
+任务状态变化时不再删除整个缓存：
+
+```text
+HGET chat:{square}:errand <errandId>       → messageId
+HGET chat:{square}:payload <messageId>     → JSON
+修改 errandStatus
+Lua 再校验索引和 payload 存在后 HSET
+```
+
+只更新当前 ERRAND 卡片，ZSET 和其他消息完全不动；被淘汰的卡片查不到索引则 no-op，DB 仍是最终事实源。
+
+**简历表述**
+
+> 基于 Redis ZSET + Hash 实现聊天最近 2000 条消息缓存：ZSET 只存消息 id、Hash 存 payload，
+> 通过 HMGET 批量读取；用 Lua 原子维护 ZSET、payload、errand 索引及淘汰，任务状态只更新对应卡片，
+> 避免整份缓存失效，并使用 Redis Cluster hash tag 保证多 key 脚本同 slot。
+
 ---
 
 ## 三、RocketMQ 使用场景

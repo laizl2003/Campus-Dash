@@ -161,10 +161,12 @@ public class RedisChatHistoryCache implements ChatHistoryCachePort {
                 errandIndex(roomId), messageErrand(roomId)));
     }
 
-    private static String recent(String roomId) { return "chat:recent:" + roomId; }
-    private static String payload(String roomId) { return "chat:payload:" + roomId; }
-    private static String errandIndex(String roomId) { return "chat:errand:" + roomId; }
-    private static String messageErrand(String roomId) { return "chat:message-errand:" + roomId; }
+    // Redis Cluster hash tag：同一房间的 ZSET/HASH 必须落在同一 slot，
+    // 否则多 key Lua 会报 CROSSSLOT；以后新增相关 key 也统一用 {roomId}。
+    private static String recent(String roomId) { return "chat:{" + roomId + "}:recent"; }
+    private static String payload(String roomId) { return "chat:{" + roomId + "}:payload"; }
+    private static String errandIndex(String roomId) { return "chat:{" + roomId + "}:errand"; }
+    private static String messageErrand(String roomId) { return "chat:{" + roomId + "}:message-errand"; }
 
     private static Map<String, Object> toMap(ChatMessage m) {
         Map<String, Object> map = new LinkedHashMap<>();
