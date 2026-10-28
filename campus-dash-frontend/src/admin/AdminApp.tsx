@@ -34,6 +34,8 @@ export default function AdminApp() {
   const [switchBusy, setSwitchBusy] = useState(false);
   const [switchError, setSwitchError] = useState('');
   const switchRef = useRef<HTMLDivElement>(null);
+  const [accountMenu, setAccountMenu] = useState(false);
+  const topAccountRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<Dispute[]>([]);
   const [arbitrations, setArbitrations] = useState<Awaited<ReturnType<typeof api.adminArbitrations>>['items']>([]);
   const [selected, setSelected] = useState<Dispute | null>(null);
@@ -101,6 +103,14 @@ export default function AdminApp() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [switchOpen]);
+  useEffect(() => {
+    if (!accountMenu) return;
+    const onDown = (event: MouseEvent) => {
+      if (topAccountRef.current && !topAccountRef.current.contains(event.target as Node)) setAccountMenu(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [accountMenu]);
   const switchTo = async (id: string) => {
     if (switchBusy || id === getUserId()) { setSwitchOpen(false); return; }
     setSwitchBusy(true);
@@ -137,13 +147,15 @@ export default function AdminApp() {
       </nav>
       <div className="admin-chat-slot"><SquareChat compactBottom={false}/></div>
       <div className="admin-side-foot">
-        <div className="admin-account" ref={switchRef}>
-          <button type="button" className="admin-account-trigger" disabled={switchBusy}
+        <div className="profile admin-profile" ref={switchRef}>
+          <span className="avatar">{(getUsername() ?? 'Admin').slice(0, 1).toUpperCase()}</span>
+          <button type="button" className="profile-trigger" disabled={switchBusy}
                   aria-haspopup="menu" aria-expanded={switchOpen} onClick={() => setSwitchOpen(v => !v)}>
-            <span className="menu-avatar">{(getUsername() ?? 'Admin').slice(0, 1).toUpperCase()}</span>
-            <span className="menu-account"><strong>{getUsername() ?? 'Admin'}</strong><small>管理员</small></span>
-            <span className="profile-caret">⌄</span>
+            <span><strong>{getUsername() ?? 'Admin'}</strong><small>管理员 · {accounts.length} 个账号</small></span>
+            <span className="profile-caret" aria-hidden="true">⌄</span>
           </button>
+          <a className="icon-button admin-return" href="#/login" title="返回登录页" aria-label="返回登录页"
+             onClick={() => setSwitchOpen(false)}><Icon name="arrow-left" size={16}/></a>
           {switchOpen && <div className="account-menu admin-account-menu" role="menu" aria-label="切换账号">
             <div className="account-menu-head"><small>切换账号</small></div>
             {accounts.map(a => <button key={a.userId} type="button" role="menuitem"
@@ -157,7 +169,6 @@ export default function AdminApp() {
           </div>}
           {switchError && <span className="admin-switch-error">{switchError}</span>}
         </div>
-        <button type="button" className="admin-logout" onClick={logout}><Icon name="logout" size={14}/>退出</button>
       </div>
     </aside>
 
@@ -165,9 +176,25 @@ export default function AdminApp() {
       <header className="admin-top">
         <div><span className="eyebrow">ADMIN CONSOLE</span><h1>{view === 'disputes' ? '仲裁工作台' : view === 'vouchers' ? '优惠券管理' : view === 'settings' ? '平台配置' : '平台资金流水'}<span className="heading-dot">.</span></h1>
           <p>{view === 'disputes' ? '处理争议任务，决定托管资金流向跑腿或发单人。' : view === 'vouchers' ? '维护满减券的类型、库存与上下架状态。' : view === 'settings' ? '调整佣金与优惠券抽成比例，查看平台用户。' : '佣金账户与营销账户的每一笔入账/出账。'}</p></div>
-        {view !== 'vouchers' && view !== 'settings' && <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
-          <Icon name="refresh" size={15} className={loading ? 'is-spinning' : ''}/>刷新
-        </button>}
+        <div className="admin-top-actions">
+          {view !== 'vouchers' && view !== 'settings' && <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
+            <Icon name="refresh" size={15} className={loading ? 'is-spinning' : ''}/>刷新
+          </button>}
+          <div className="admin-top-account" ref={topAccountRef}>
+            <button type="button" className="topbar-avatar admin-top-avatar"
+                    aria-haspopup="menu" aria-expanded={accountMenu}
+                    title={getUsername() ?? 'Admin'}
+                    onClick={() => setAccountMenu(value => !value)}>
+              {(getUsername() ?? 'Admin').slice(0, 1).toUpperCase()}
+            </button>
+            {accountMenu && <div className="account-menu admin-top-menu" role="menu" aria-label="账号菜单">
+              <div className="account-menu-head"><strong>{getUsername() ?? 'Admin'}</strong></div>
+              <button type="button" role="menuitem" onClick={() => { setAccountMenu(false); logout(); }}>
+                <Icon name="logout" size={15}/>退出登录
+              </button>
+            </div>}
+          </div>
+        </div>
       </header>
 
       {message && <div className={`banner ${message.error ? 'warn' : 'ok'}`} role="status">

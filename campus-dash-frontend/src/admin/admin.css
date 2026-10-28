@@ -297,3 +297,18 @@
   margin-bottom: -22px;
 }
 @media (max-width: 800px) { .admin-chat-slot { display: none; } }
+
+/* Admin 右上角账号菜单：与广场头像下拉一致，仅退出登录 */
+.admin-top-actions { display: flex; align-items: center; gap: 10px; }
+.admin-top-account { position: relative; }
+.admin-top-avatar { border: 0; background: #2f6b4a; color: #fff; }
+.admin-top-menu { top: 38px; right: 0; width: 170px; }
+
+/* Admin 用户切换栏：沿用广场 .profile 结构，保持管理台绿色 */
+.admin-profile { position: relative; flex: 1; min-width: 0; padding: 12px 0 0; border-top: 1px solid #3a473e; }
+.admin-profile .avatar { background: #2f6b4a; color: #fff; }
+.admin-profile .profile-trigger strong { color: #e9ede7; }
+.admin-profile .profile-trigger small { color: #9da79f; }
+.admin-profile .profile-caret { color: #9da79f; }
+.admin-profile .admin-return { flex: 0 0 auto; background: transparent; border-color: #3a473e; color: #cfd6cc; }
+.admin-profile .admin-return:hover { background: #313d35; color: #fff; }
