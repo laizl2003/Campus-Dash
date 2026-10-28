@@ -62,7 +62,7 @@ public class SendChatMessageUseCase {
         var user = users.findById(senderId)
                 .orElseThrow(() -> new BizException(ErrorCode.UNAUTHORIZED, "sender=" + senderId));
         if (!users.messageAllowed(senderId)) {
-            throw new BizException(ErrorCode.CHAT_MUTED, "sender=" + senderId);
+            throw new BizException(ErrorCode.CHAT_MUTED);
         }
         ChatMessage message = new ChatMessage(
                 idGenerator.nextId(), ROOM, user.campusId(), senderId,
