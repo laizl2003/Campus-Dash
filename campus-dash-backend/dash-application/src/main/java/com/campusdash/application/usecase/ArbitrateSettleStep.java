@@ -138,10 +138,8 @@ public class ArbitrateSettleStep {
                 idGenerator.nextId(), CreditEvent.settleBizNo(errandId), errand.grabberId(),
                 CreditEventType.SETTLE, CreditEventType.SETTLE.delta(), "ERRAND", errandId,
                 java.time.Instant.now()));
-        creditRepository.applyEvent(new CreditEvent(
-                idGenerator.nextId(), CreditEvent.settlePublisherBizNo(errandId), errand.publisherId(),
-                CreditEventType.SETTLE, CreditEventType.SETTLE.delta(), "ERRAND", errandId,
-                java.time.Instant.now()));
+        // 发单人败诉：本分支不再给发单人 +2，统一由 ArbitrateErrandUseCase 记 -8，
+        // 保证"跑腿胜诉"时发单人净变化就是 -8，与跑腿败诉的 -8 对称。
         voucherRepository.markUsedByErrand(errandId);
         return true;
     }

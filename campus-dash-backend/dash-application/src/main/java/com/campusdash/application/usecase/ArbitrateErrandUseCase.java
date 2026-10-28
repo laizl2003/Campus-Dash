@@ -158,14 +158,21 @@ public class ArbitrateErrandUseCase {
             notifier.errandStatusChanged(errandId, errand.publisherId(), errand.grabberId(),
                     "SETTLED", errand.round());
             notifier.adminDisputeChanged(errandId, "SETTLED");
-            int delta = CreditEventType.SETTLE.delta();
+            // 发单人败诉：与跑腿败诉对称记 -8（跑腿胜诉分支）
+            creditRepository.applyEvent(new CreditEvent(
+                    idGenerator.nextId(),
+                    CreditEvent.disputeLoseBizNo(errandId, errand.publisherId()),
+                    errand.publisherId(), CreditEventType.DISPUTE_LOSE,
+                    CreditEventType.DISPUTE_LOSE.delta(), "ERRAND", errandId,
+                    java.time.Instant.now()));
             int publisherScore = creditRepository.scoreOf(errand.publisherId());
             creditRankingPort.update(errand.campusId(), errand.publisherId(), publisherScore);
-            notifier.creditChanged(errand.publisherId(), publisherScore, delta, "仲裁结算");
+            notifier.creditChanged(errand.publisherId(), publisherScore,
+                    CreditEventType.DISPUTE_LOSE.delta(), "争议败诉");
             if (errand.grabberId() != null) {
                 int runnerScore = creditRepository.scoreOf(errand.grabberId());
                 creditRankingPort.update(errand.campusId(), errand.grabberId(), runnerScore);
-                notifier.creditChanged(errand.grabberId(), runnerScore, delta, "仲裁结算");
+                notifier.creditChanged(errand.grabberId(), runnerScore, CreditEventType.SETTLE.delta(), "仲裁结算");
             }
             return Result.SETTLED_TO_RUNNER;
         }

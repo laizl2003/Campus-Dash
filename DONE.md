@@ -3,6 +3,15 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 发单人仲裁败诉对称扣 8 分
+
+- **目标**：判给跑腿时，发单人作为败诉方记 -8，净变化与跑腿败诉对称。
+- **改动**：
+  - ArbitrateErrandUseCase RUNNER 分支新增发单人 DISPUTE_LOSE（bizNo=disputelose:{errandId}:{publisherId}），推送 WS 并刷新排行榜。
+  - ArbitrateSettleStep 不再给该分支的发单人记 +2，避免净效果变成 -6。
+- **验证**：发单人 score 56 → 48，credit_event 仅一条 DISPUTE_LOSE -8；测试任务已清理。
+
+
 ## 2026-10-28 · Admin 仲裁 WS 推送与待处理角标
 
 - **目标**：新争议实时显示在 Admin 侧栏/待仲裁数字；裁决后自动消失。
