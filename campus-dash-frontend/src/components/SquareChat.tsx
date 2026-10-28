@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, getUserId, type ChatItem } from '../api';
-import { isWsAvailable, sendWs, subscribeWs } from '../ws';
+import { sendWs, subscribeWs } from '../ws';
 
 const chatIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H7l-4 3v-5.6A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></svg>;
 const sendIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></svg>;
@@ -33,7 +33,6 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [online, setOnline] = useState(() => isWsAvailable());
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const selfId = getUserId();
@@ -58,8 +57,7 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
         setError(typeof event.payload.message === 'string' ? event.payload.message : '消息发送失败');
       }
     });
-    const timer = window.setInterval(() => setOnline(isWsAvailable()), 5000);
-    return () => { active = false; unsubscribe(); clearInterval(timer); };
+    return () => { active = false; unsubscribe(); };
   }, []);
 
   useEffect(() => {
@@ -95,7 +93,6 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
       const sent = await api.sendChatMessage(clientMsgId, content);
       setMessages(prev => mergeMessages(prev, [sent]));
       setText('');
-      setOnline(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '消息发送失败，请稍后重试');
     }
@@ -118,7 +115,7 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
           {chatIcon}广场聊天
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 'auto', color: '#9a9a9a', fontSize: 9 }}>
-          <i style={{ width: 5, height: 5, borderRadius: '50%', background: online ? '#2fa060' : '#c9c3b8' }}/>
+          <i style={{ width: 5, height: 5, borderRadius: '50%', background: '#2fa060' }}/>
           {onlineCount === null ? '在线 —' : `在线 ${onlineCount}`}
         </span>
       </div>

@@ -16,7 +16,7 @@
 2. **高并发领券**：Redis Lua 预扣库存 + 一人一单，RocketMQ 削峰异步落库，pending 计数 + 启动初始化 + 定时对账保证缓存与 DB 最终一致。
 3. **资金与实时**：托管 + 复式记账 + 幂等流水 + 仲裁分账；WebSocket 推送任务、资金、信用、管理端争议事件。
 
-**技术关键词**：Java 21、Spring Boot 3、DDD、MySQL、Redis Lua、RocketMQ、事务消息、延迟消息、本地消息表、CAS、WebSocket、React、TypeScript。
+**技术关键词**：Java 21、Spring Boot 3、DDD、MySQL、Redis Lua、Redis ZSET、RocketMQ、事务消息、延迟消息、本地消息表、CAS、WebSocket、React、TypeScript。
 
 ---
 
@@ -46,7 +46,7 @@ CampusDash 是一个校园跑腿与互助平台，覆盖「发布任务 → 托�
 - 信用分：事件加减分、30 天滑动窗口、Redis 排行榜、实时推送。
 - 消息中心：站内通知、未读计数、WebSocket 实时提醒、跳转来源任务。
 - 管理台：仲裁工作台、平台资金流水、优惠券管理、平台配置、用户管理、强退 / 禁用。
-- 多账号登录与切换、强制下线、登录状态心跳、在线状态展示。
+- 多账号登录与切换、强制下线、Redis ZSET 在线状态展示。
 - WebSocket 实时推送：任务状态、资金通知、信用变化、管理端争议提醒。
 
 ---
@@ -55,12 +55,15 @@ CampusDash 是一个校园跑腿与互助平台，覆盖「发布任务 → 托�
 
 ### 1. 会话与认证
 
-- access token / refresh token 存储与轮换；
-- 登出撤销、refresh token 一次性消费（GETDEL）；
+- 凭证 `auth:token:{token}` → userId，TTL 2h；
+- 会话索引 `auth:sessions:{userId}` ZSET：token → 过期时间戳，支持多端登录；
+- 在线索引 `auth:online` ZSET：userId → 最晚过期时间戳；
+- 请求经过拦截器时 `touch` 续期 token 与 ZSET score，ZSET 按 score 裁剪过期成员；
+- 主动登出只删除当前 token、当前浏览器 WS，其他浏览器不受影响；
+- Admin 踢人遍历 `auth:sessions:{userId}` 撤销全部 token，并关闭该用户全部 WS；
 - 强制下线标记 `auth:forced:{userId}`；
-- 用户 token 索引 `auth:user_tokens:{userId}`，支持按用户批量撤销；
 - 图形验证码 `auth:captcha:{id}`，一次性消费；
-- 登录状态 `user.login_status` + `last_seen_at` 心跳，90 秒无心跳由 worker 置离线。
+- 平台用户在线状态直接判断 `auth:online` 中 userId 的 score 是否未过期。
 
 ### 2. 抢单名额（高并发场景一）
 
@@ -244,15 +247,28 @@ userId / username / role / accessToken / refreshToken
 - Admin 关闭该用户全部 WebSocket；
 - Redis 写 `auth:forced:{userId}`；
 - HTTP 拦截器与 WS 握手都检查；
-- 按 `auth:user_tokens:{userId}` 撤销全部 access / refresh；
+- 遍历 `auth:sessions:{userId}` ZSET，删除全部 `auth:token:{token}`；
+- 删除 `auth:sessions:{userId}` 与 `auth:online` 中的 userId；
 - 用户重新登录成功后清除标记。
 
-### 在线状态
+### 在线状态（Redis ZSET）
 
-- 登录置 `login_status=1`；
-- 前端每 30 秒心跳；
-- worker 每分钟清理 90 秒无心跳账号；
-- 管理台按 DB 状态展示在线 / 离线。
+- `auth:online` 的 member 是 userId，score 是该用户最晚 session 的过期时间；
+- 登录 / 请求续期时更新 score；
+- 统计在线人数时先 `ZREMRANGEBYSCORE` 清理过期成员，再 `ZCARD`；
+- 平台配置不再依赖 DB 的 `login_status`，而是 `ZSCORE auth:online userId > now`；
+- 主动登出只删除当前浏览器 token；Admin 踢人才删除该用户全部 session。
+
+### 这个设计作为简历亮点的价值
+
+可以写进日常实习简历，但定位建议是“项目中的并发/状态一致性亮点”，不是独立系统级亮点：
+
+- 有明确业务问题：多浏览器登录、单端登出、Admin 全端踢出、在线人数；
+- 有数据结构取舍：Set 不支持 member TTL，所以用 ZSET 的 score 表示每个 token 的过期时间；
+- 有边界处理：token 续期、自然过期裁剪、当前端/全端登出、平台在线判断；
+- 有可验证结果：两 token 登录、单端登出后另一端仍有效、Admin 踢人后全部 401。
+
+不要只写“用了 Redis ZSET”，要写清楚“为什么不用 Set、如何解决 member 级过期、如何区分单端登出与全端踢出”。
 
 ---
 
@@ -300,5 +316,6 @@ userId / username / role / accessToken / refreshToken
 2. 设计抢单四层防护：资格校验 → Redis Lua 原子占位 → MySQL CAS → 唯一索引兜底，保证高并发零超卖。
 3. 设计优惠券 Redis Lua 预扣 + RocketMQ 异步落库，支持一人一单、库存对账、失败补偿与缓存最终一致。
 4. 实现复式记账与托管资金模型，佣金 8%、优惠券跑腿承担 35%，通过唯一索引与 L1 借贷平衡保证资金幂等。
-5. 实现多账号登录切换、refresh token 轮换、强制下线与 token 索引撤销，支持跨浏览器在线状态。
+5. 基于 Redis ZSET 设计登录态：token→expireAt、userId→maxExpireAt，支持多端登录、单浏览器登出、Admin 全端踢出与在线人数统计。
 6. 基于 WebSocket 实现任务、资金、信用、管理端争议的实时推送，并用 DB 作为事实源保证最终一致。
+7. 用 Redis ZSET 的 score 表达 member 级过期，解决 Set 无法给单个 token 设 TTL 的问题，并区分“当前浏览器登出”和“Admin 全端踢出”。
