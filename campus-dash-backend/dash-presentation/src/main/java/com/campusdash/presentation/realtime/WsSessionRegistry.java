@@ -39,4 +39,18 @@ public class WsSessionRegistry {
     public int onlineUsers() {
         return sessions.size();
     }
+
+    /** 广播给所有在线连接（管理端事件量很低，直接遍历即可） */
+    public void broadcast(String json) {
+        sessions.values().forEach(set -> set.forEach(session -> {
+            if (!session.isOpen()) return;
+            try {
+                synchronized (session) {
+                    session.sendMessage(new org.springframework.web.socket.TextMessage(json));
+                }
+            } catch (java.io.IOException ignored) {
+                // 连接可能已断，下一次心跳/重连会自愈
+            }
+        }));
+    }
 }

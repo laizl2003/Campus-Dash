@@ -123,6 +123,7 @@ public class ArbitrateErrandUseCase {
                         true, null);
                 notifier.errandStatusChanged(errandId, errand.publisherId(), errand.grabberId(),
                         "REFUNDED", errand.round());
+                notifier.adminDisputeChanged(errandId, "REFUNDED");
                 if (errand.grabberId() != null) {
                     int score = creditRepository.scoreOf(errand.grabberId());
                     creditRankingPort.update(errand.campusId(), errand.grabberId(), score);
@@ -156,6 +157,7 @@ public class ArbitrateErrandUseCase {
                     true, null);
             notifier.errandStatusChanged(errandId, errand.publisherId(), errand.grabberId(),
                     "SETTLED", errand.round());
+            notifier.adminDisputeChanged(errandId, "SETTLED");
             int delta = CreditEventType.SETTLE.delta();
             int publisherScore = creditRepository.scoreOf(errand.publisherId());
             creditRankingPort.update(errand.campusId(), errand.publisherId(), publisherScore);

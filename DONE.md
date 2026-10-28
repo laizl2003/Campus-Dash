@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · Admin 仲裁 WS 推送与待处理角标
+
+- **目标**：新争议实时显示在 Admin 侧栏/待仲裁数字；裁决后自动消失。
+- **改动**：
+  - RealtimeNotifier 增加 adminDisputeChanged（默认空实现），WsSessionRegistry 增加 broadcast。
+  - 发起争议在事务提交后推送 admin.dispute；两种裁决完成后也推送。
+  - AdminApp 复用 App 的 /ws，订阅 admin.dispute 后 reload；侧栏与「待仲裁」显示绿色数量，列表为空即消失；另加 5 秒轮询兜底。
+- **验证**：存在 1 条 DISPUTED 时 Admin 页 nav=1、pending=1、row=1；裁决后 DISPUTED=0。
+
+
 ## 2026-10-28 · 任务计数与信用未读全局修正
 
 - **目标**：抢单后立即有数量；我的任务/侧栏/进行中同步；信用中心未读推送稳定。

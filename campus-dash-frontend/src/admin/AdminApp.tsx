@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, logout, yuan, getUsername, getUserId, listAccounts, switchAccount, type StoredAccount } from '../api';
 import Icon from '../components/Icon';
+import { subscribeWs } from '../ws';
 import './admin.css';
 
 /** 管理台时间格式：YYYY-MM-DD HH:mm:ss */
@@ -57,7 +58,17 @@ export default function AdminApp() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    // 与普通页面共用 App 建立的同一条 /ws 连接，不另开管理端连接
+    return subscribeWs(event => { if (event.type === 'admin.dispute') void load(); });
+  }, [load]);
+  // 兜底轮询：WS 断线/事件丢失时，5 秒内也能看到新争议
+  useEffect(() => {
+    if (view !== 'disputes') return;
+    const timer = window.setInterval(() => { void load(); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [view, load]);
   useEffect(() => {
     if (view !== 'ledger') return;
     Promise.all([
@@ -118,7 +129,7 @@ export default function AdminApp() {
     <aside className="admin-side">
       <div className="admin-brand"><span className="admin-brand-mark">C</span><div><strong>CampusDash</strong><small>平台管理台</small></div></div>
       <nav className="admin-nav" aria-label="管理导航">
-        <button type="button" className={view === 'disputes' ? 'is-active' : ''} onClick={() => setView('disputes')}><Icon name="shield" size={16}/>仲裁工作台</button>
+        <button type="button" className={view === 'disputes' ? 'is-active' : ''} onClick={() => setView('disputes')}><Icon name="shield" size={16}/>仲裁工作台{list.length > 0 && <span className="admin-nav-count">{list.length}</span>}</button>
         <button type="button" className={view === 'ledger' ? 'is-active' : ''} onClick={() => setView('ledger')}><Icon name="receipt" size={16}/>资金流水</button>
         <button type="button" className={view === 'vouchers' ? 'is-active' : ''} onClick={() => setView('vouchers')}><Icon name="ticket" size={16}/>优惠券管理</button>
         <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}><Icon name="wallet" size={16}/>平台配置</button>
@@ -164,7 +175,7 @@ export default function AdminApp() {
 
       {view === 'disputes' ? <div className="admin-body">
         <section className="admin-list" aria-label="待仲裁任务">
-          <div className="admin-list-head"><h2>待仲裁 <span>{list.length}</span></h2><small>按任务编号倒序</small></div>
+          <div className="admin-list-head"><h2>待仲裁 <span className="admin-pending-count">{list.length}</span></h2><small>按任务编号倒序</small></div>
           {loading && list.length === 0 && <div className="admin-empty">正在加载…</div>}
           {!loading && list.length === 0 && <div className="admin-empty">
             <Icon name="check" size={26}/><strong>没有待处理的争议</strong><p>任务送达后发单人确认前出现的争议会出现在这里。</p>

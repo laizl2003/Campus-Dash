@@ -280,3 +280,7 @@
 .admin-arbitration-history table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .admin-arbitration-history th { text-align: left; font-size: 10px; color: #9aa39c; font-weight: 600; padding: 8px 10px; border-bottom: 1px solid #eee7da; white-space: nowrap; }
 .admin-arbitration-history td { padding: 9px 10px; border-bottom: 1px solid #f3f0e9; color: #333; white-space: nowrap; }
+
+/* 仲裁待处理数量：绿色背景，仲裁完成后随列表归零消失 */
+.admin-nav-count { margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 6px; background: #dff0e4; color: #2f6b4a; font-size: 10px; text-align: center; }
+.admin-pending-count { display: inline-block; min-width: 22px; padding: 2px 8px; border-radius: 7px; background: #dff0e4; color: #2f6b4a; text-align: center; }

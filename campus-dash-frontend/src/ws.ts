@@ -1,6 +1,6 @@
 // 连接生命周期与主动断开分离，避免退出或切换身份后旧连接继续重试。
 import { getToken } from './api';
-export interface WsEvent { type: 'errand.status' | 'notification.new' | 'credit.changed'; payload: Record<string, unknown> }
+export interface WsEvent { type: 'errand.status' | 'notification.new' | 'credit.changed' | 'admin.dispute'; payload: Record<string, unknown> }
 type Handler = (event: WsEvent) => void;
 const handlers = new Set<Handler>();
 let socket: WebSocket | null = null;

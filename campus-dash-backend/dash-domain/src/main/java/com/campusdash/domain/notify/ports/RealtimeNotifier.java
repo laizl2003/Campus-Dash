@@ -22,4 +22,8 @@ public interface RealtimeNotifier {
 
     /** 信用分变更：推给本人 */
     void creditChanged(String userId, int newScore, int delta, String reason);
+
+    /** 管理员仲裁队列变更：广播给在线管理端（默认无操作，便于无 WS 环境） */
+    default void adminDisputeChanged(long errandId, String status) {
+    }
 }

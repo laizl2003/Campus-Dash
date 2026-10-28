@@ -61,6 +61,14 @@ public class RealtimePushService implements RealtimeNotifier {
         push(userId, msg);
     }
 
+    @Override
+    public void adminDisputeChanged(long errandId, String status) {
+        String msg = String.format(
+                "{\"type\":\"admin.dispute\",\"payload\":{\"errandId\":\"%d\",\"status\":\"%s\"}}",
+                errandId, status);
+        registry.broadcast(msg);
+    }
+
     private void push(String userId, String json) {
         for (WebSocketSession session : registry.of(userId)) {
             if (!session.isOpen()) {

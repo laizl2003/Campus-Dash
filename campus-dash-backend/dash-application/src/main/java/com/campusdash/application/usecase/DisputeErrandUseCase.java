@@ -8,6 +8,8 @@ import com.campusdash.shared.BizException;
 import com.campusdash.shared.ErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 发起争议用例：ACCEPTED / PICKED_UP / DELIVERED -> DISPUTED。
@@ -46,8 +48,19 @@ public class DisputeErrandUseCase {
             throw new BizException(ErrorCode.STALE_VERSION, "发起争议失败，状态已变更 errandId=" + errandId);
         }
         errandRepository.appendStatusLog(errandId, from, ErrandStatus.DISPUTED, errand.round(), operatorId);
-        notifier.errandStatusChanged(errand.id(), errand.publisherId(), errand.grabberId(),
-                ErrandStatus.DISPUTED.name(), errand.round());
+        Runnable notify = () -> {
+            notifier.errandStatusChanged(errand.id(), errand.publisherId(), errand.grabberId(),
+                    ErrandStatus.DISPUTED.name(), errand.round());
+            notifier.adminDisputeChanged(errand.id(), ErrandStatus.DISPUTED.name());
+        };
+        // 必须等事务提交后再推：Admin 收到事件会立刻回查列表，提前推会读到未提交数据
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { notify.run(); }
+            });
+        } else {
+            notify.run();
+        }
 
         // 状态变了，详情缓存必须失效。挂在事务提交后执行（见 CacheEvictSupport 的注释）
         cacheEvict.evictAfterCommit(errandId);
