@@ -6,8 +6,8 @@
 ## 2026-10-28 · Admin 左侧栏固定（v1.0 基线之上）
 
 - **目标**：参照任务广场，Admin 左侧栏固定，滚轮只滚动右侧主界面；不改主界面尺寸与登录页。
-- **改动**：仅 admin.css 的 .admin-side 增加 sticky + 100vh + overflow-y:auto；移动端恢复 static/auto。
-- **验证**：页面高 1099、视口 900；滚动到 199 时 sideTop=0、mainTop=-199；侧栏高度始终 900。
+- **改动**：仅 admin.css：.admin-side 改为 fixed 236px + 100vh + overflow:hidden，.admin-main 保持 grid-column:2；移动端恢复 static/auto。
+- **验证**：资金流水页滚动到 48 时，sideTop 仍为 0、mainTop=-48；侧栏无内部滚动；1280×900 左侧栏 0~236px。
 
 
 ## 2026-10-28 · 前端回滚到聊天 v1.0
