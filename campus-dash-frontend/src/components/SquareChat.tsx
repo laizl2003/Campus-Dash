@@ -24,6 +24,13 @@ function timeLabel(value: string) {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 }
 
+function cardTimeLabel(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+}
+
 interface ErrandPayload {
   type?: string;
   title?: string;
@@ -153,14 +160,19 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
           if (message.msgType === 'VOUCHER') {
             let voucher: { description?: string; stock?: number } = {};
             try { voucher = JSON.parse(message.content); } catch { /* 忽略非法内容 */ }
-            return <div key={message.id} style={{
-              alignSelf: 'stretch', padding: '7px 8px', boxSizing: 'border-box',
-              borderRadius: 8, border: '1px solid #b7d8b9', background: '#e8f5e9',
-              color: '#2f6b4a',
-            }}>
-              <div style={{ fontSize: 9, fontWeight: 700 }}>新的优惠券</div>
-              <div style={{ marginTop: 2, fontSize: 11, fontWeight: 600 }}>{voucher.description ?? '满减优惠券'}</div>
-              <div style={{ marginTop: 1, fontSize: 9, opacity: .8 }}>库存 {voucher.stock ?? 0}</div>
+            return <div key={message.id} style={{ alignSelf: 'stretch' }}>
+              <div style={{ marginBottom: 2, color: '#aaa', fontSize: 8, textAlign: 'center' }}>
+                {cardTimeLabel(message.createdAt)}
+              </div>
+              <div style={{
+                padding: '7px 8px', boxSizing: 'border-box',
+                borderRadius: 8, border: '1px solid #b7d8b9', background: '#e8f5e9',
+                color: '#2f6b4a',
+              }}>
+                <div style={{ fontSize: 9, fontWeight: 700 }}>新的优惠券</div>
+                <div style={{ marginTop: 2, fontSize: 11, fontWeight: 600 }}>{voucher.description ?? '满减优惠券'}</div>
+                <div style={{ marginTop: 1, fontSize: 9, opacity: .8 }}>库存 {voucher.stock ?? 0}</div>
+              </div>
             </div>;
           }
           if (message.msgType === 'ERRAND') {
@@ -177,9 +189,14 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
               <div style={{ marginTop: 2, fontSize: 14, fontWeight: 800 }}>{yuan(errand.rewardCents ?? 0)}</div>
               <div style={{ marginTop: 1, fontSize: 8, opacity: .7 }}>发单人 {errand.publisherName ?? errand.publisherId ?? message.senderId}</div>
             </div>;
-            return clickable
-              ? <a key={message.id} href="#/square" style={{ alignSelf: 'stretch', textDecoration: 'none' }}>{card}</a>
-              : <div key={message.id} style={{ alignSelf: 'stretch', cursor: 'not-allowed' }}>{card}</div>;
+            return <div key={message.id} style={{ alignSelf: 'stretch', cursor: clickable ? 'pointer' : 'not-allowed' }}>
+              <div style={{ marginBottom: 2, color: '#aaa', fontSize: 8, textAlign: 'center' }}>
+                {cardTimeLabel(message.createdAt)}
+              </div>
+              {clickable
+                ? <a href="#/square" style={{ display: 'block', textDecoration: 'none' }}>{card}</a>
+                : card}
+            </div>;
           }
           if (message.msgType === 'SYSTEM' || message.senderRole === 'system') {
             return <div key={message.id} style={{
