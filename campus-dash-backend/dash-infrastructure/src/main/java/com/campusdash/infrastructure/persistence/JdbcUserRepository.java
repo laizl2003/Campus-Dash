@@ -70,7 +70,11 @@ public class JdbcUserRepository implements UserRepository {
 
     @Override
     public int countOnline() {
-        Integer count = jdbc.queryForObject("SELECT COUNT(1) FROM `user` WHERE login_status = 1", Integer.class);
+        // 与管理台一致：login_status=1 且 90 秒内有心跳；避免清理 job 尚未跑时把残留算在线
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(1) FROM `user`
+                 WHERE login_status = 1 AND last_seen_at >= NOW(3) - INTERVAL 90 SECOND
+                """, Integer.class);
         return count == null ? 0 : count;
     }
 
