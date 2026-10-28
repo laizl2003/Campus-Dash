@@ -4,3 +4,6 @@
 
 # 仓库根没有 package.json，这是误生成的锁文件
 /package-lock.json
+
+# 本地测试/编译日志，不入库
+*.log

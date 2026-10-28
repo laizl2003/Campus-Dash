@@ -79,7 +79,12 @@ export default function Square() {
     return result;
   }, [cards, category, query, sort]);
   const available = cards.filter(c => c.status === 'PUBLISHED');
-  const totalReward = cards.reduce((sum, c) => sum + (c.netRewardCents ?? c.rewardCents), 0);
+  // 后端为了雪花 ID 精度会把 Long 序列化成字符串；金额字段求和前必须转 Number，
+  // 否则 reduce 会从字符串拼接开始，出现 ¥9.07e+24 这种结果。
+  const totalReward = cards.reduce(
+    (sum, c) => sum + Number(c.netRewardCents ?? c.rewardCents ?? 0),
+    0,
+  );
   return <div className="square-page">
     <div className="page-head"><div><span className="eyebrow">CAMPUS LIFE, MADE EASIER</span><h1>任务广场<span className="heading-dot">.</span></h1><p>发现校园里的小委托，让每一段顺路都有价值。</p></div><button className="btn btn-ghost" onClick={() => void load()} disabled={loading}><Icon name="refresh" size={15} className={loading ? 'is-spinning' : ''}/>刷新任务</button></div>
     <section className="square-hero"><div className="hero-copy"><span className="soft-label"><Icon name="spark" size={13}/>把小事托付，把时间留给自己</span><h2>刚好顺路，<br/><em>刚好帮你。</em></h2><p>一份热饭、一个包裹、一件小事。<br/>在校园，让互相帮助变得简单。</p><a href="#/publish" className="btn btn-primary">发布我的委托<Icon name="arrow-right" size={15}/></a></div><CampusArt/><span className="hero-caption">THE LITTLE THINGS MATTER</span></section>
