@@ -90,7 +90,7 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
 
   return <section aria-label="广场聊天" style={{
     display: 'flex', flex: '1 1 auto', flexDirection: 'column', gap: 6,
-    minHeight: 190, marginTop: 14, marginBottom: compactBottom ? -24 : 0, minWidth: 0,
+    minHeight: 190, marginTop: 14, marginBottom: compactBottom ? -15 : 0, minWidth: 0,
   }}>
     <div style={{
       display: 'flex', flex: '1 1 auto', flexDirection: 'column', minHeight: 0,

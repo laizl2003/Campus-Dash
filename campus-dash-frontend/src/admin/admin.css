@@ -322,16 +322,16 @@
 
 /* 左侧底部：平台收入在上，用户切换在下，样式对齐广场 sidebar-wallet */
 .admin-side-foot { flex-direction: column; align-items: stretch; justify-content: flex-start; }
-.admin-wallet {
+.admin-side .admin-wallet {
   width: 100%; padding: 10px 7px;
-  border: 1px solid #777777; border-left: 0; border-right: 0;
+  border: 0; border-top: 1px solid #c8c8c8; border-bottom: 1px solid #c8c8c8;
   border-radius: 0; background: transparent; color: #ffffff;
   font-size: 11px; text-align: left;
 }
-.admin-wallet > span { color: #ffffff; }
-.admin-wallet strong { color: #ffffff; font-weight: 600; }
-.admin-wallet:hover { background: transparent; color: #ffffff; }
+.admin-side .admin-wallet > span { color: #ffffff; }
+.admin-side .admin-wallet strong { color: #ffffff; font-weight: 600; }
+.admin-side .admin-wallet:hover { background: transparent; color: #ffffff; }
 @media (max-width: 900px) {
   .admin-side-foot { flex-direction: row; align-items: center; }
-  .admin-wallet { width: auto; border-top: 0; }
+  .admin-side .admin-wallet { width: auto; border-top: 0; border-bottom: 0; }
 }
