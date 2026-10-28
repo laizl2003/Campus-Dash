@@ -305,3 +305,14 @@
 .wallet-voucher-used-at { justify-self: end; width: max-content; margin-left: auto; }
 
 .wallet-voucher-used-at { justify-self: start; width: auto; margin-left: 0; text-align: left; }
+
+/* 优惠券 tab 左边与“我的优惠券”标题文字对齐 */
+.wallet-voucher-tabs { padding: 0 23px 12px; }
+@media (max-width: 800px) { .wallet-voucher-tabs { padding: 0 18px 12px; } }
+
+/* 管理台账号头像字母强制水平/垂直居中 */
+.admin-account-trigger .menu-avatar,
+.admin-account-menu .menu-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; line-height: 1; text-align: center;
+}
