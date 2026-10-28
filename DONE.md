@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 聊天框右上角在线人数
+
+- **目标**：两个聊天框右上角显示在线人数，数据来自 user.login_status。
+- **改动**：
+  - UserRepository 增加 countOnline：SELECT COUNT(1) FROM user WHERE login_status=1。
+  - ChatController 新增 GET /api/chat/online。
+  - SquareChat 每 30 秒拉取并显示“在线 N”，两个端共用。
+- **验证**：/api/chat/online count=4，与 DB login_status=1 的 4 一致。
+
+
 ## 2026-10-28 · 平台收入浅灰边框 + 用户聊天下间距
 
 - **目标**：Admin 平台收入上下边框改浅灰、文字纯白；用户端聊天框底部与钱包留出与 Admin 相近的间距。

@@ -2,6 +2,7 @@ package com.campusdash.presentation;
 
 import com.campusdash.application.usecase.chat.QueryChatHistoryUseCase;
 import com.campusdash.application.usecase.chat.SendChatMessageUseCase;
+import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.chat.model.ChatMessage;
 import com.campusdash.presentation.auth.CurrentUser;
 import com.campusdash.shared.Result;
@@ -23,10 +24,19 @@ public class ChatController {
 
     private final QueryChatHistoryUseCase history;
     private final SendChatMessageUseCase sender;
+    private final UserRepository users;
 
-    public ChatController(QueryChatHistoryUseCase history, SendChatMessageUseCase sender) {
+    public ChatController(QueryChatHistoryUseCase history, SendChatMessageUseCase sender,
+                          UserRepository users) {
         this.history = history;
         this.sender = sender;
+        this.users = users;
+    }
+
+    /** 在线人数直接读 user.login_status，与在线状态心跳保持一致。 */
+    @GetMapping("/online")
+    public Result<Map<String, Object>> online() {
+        return Result.ok(Map.of("count", users.countOnline()));
     }
 
     @GetMapping("/messages")

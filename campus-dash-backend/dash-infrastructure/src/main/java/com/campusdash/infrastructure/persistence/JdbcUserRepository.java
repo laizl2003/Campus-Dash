@@ -69,6 +69,12 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
+    public int countOnline() {
+        Integer count = jdbc.queryForObject("SELECT COUNT(1) FROM `user` WHERE login_status = 1", Integer.class);
+        return count == null ? 0 : count;
+    }
+
+    @Override
     public boolean existsByUsername(String username) {
         Integer count = jdbc.queryForObject("SELECT COUNT(1) FROM `user` WHERE username = ?", Integer.class, username);
         return count != null && count > 0;

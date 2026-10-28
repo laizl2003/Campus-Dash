@@ -193,5 +193,6 @@ class RegisterUserUseCaseTest {
         @Override public void updatePassword(String userId, String hash, Instant at) { }
         @Override public boolean deleteById(String userId) { return byName.remove(byName.entrySet().stream().filter(e -> e.getValue().userId().equals(userId)).map(java.util.Map.Entry::getKey).findFirst().orElse(null)) != null; }
         @Override public java.util.List<UserAccount> findAll() { return new java.util.ArrayList<>(byName.values()); }
+        @Override public int countOnline() { return 0; }
     }
 }

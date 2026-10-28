@@ -23,6 +23,9 @@ public interface UserRepository {
     /** 全量账号（启动时补齐信用分快照用） */
     List<UserAccount> findAll();
 
+    /** 当前在线人数：user.login_status = 1 */
+    int countOnline();
+
     boolean existsByUsername(String username);
 
     boolean existsByPhone(String phone);

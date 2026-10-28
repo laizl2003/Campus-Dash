@@ -34,6 +34,7 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(() => isWsAvailable());
+  const [onlineCount, setOnlineCount] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const selfId = getUserId();
 
@@ -59,6 +60,18 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
     });
     const timer = window.setInterval(() => setOnline(isWsAvailable()), 5000);
     return () => { active = false; unsubscribe(); clearInterval(timer); };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadOnline = () => {
+      api.chatOnline()
+        .then(result => { if (active) setOnlineCount(result.count); })
+        .catch(() => {});
+    };
+    loadOnline();
+    const timer = window.setInterval(loadOnline, 30000);
+    return () => { active = false; clearInterval(timer); };
   }, []);
 
   useEffect(() => {
@@ -105,7 +118,8 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
           {chatIcon}广场聊天
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 'auto', color: '#9a9a9a', fontSize: 9 }}>
-          <i style={{ width: 5, height: 5, borderRadius: '50%', background: online ? '#2fa060' : '#c9c3b8' }}/>{online ? '在线' : '连接中'}
+          <i style={{ width: 5, height: 5, borderRadius: '50%', background: online ? '#2fa060' : '#c9c3b8' }}/>
+          {onlineCount === null ? '在线 —' : `在线 ${onlineCount}`}
         </span>
       </div>
 

@@ -191,6 +191,7 @@ class AuthControllerTest {
         @Override public boolean existsByPhone(String phone) { return false; }
         @Override public void insert(UserAccount account) { byName.put(account.username(), account); }
         @Override public java.util.List<UserAccount> findAll() { return new java.util.ArrayList<>(byName.values()); }
+        @Override public int countOnline() { return 0; }
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
         @Override public void markOnline(String userId) { }
         @Override public void markOffline(String userId) { }
@@ -209,6 +210,7 @@ class AuthControllerTest {
         @Override public boolean existsByPhone(String phone) { return false; }
         @Override public void insert(UserAccount account) { }
         @Override public java.util.List<UserAccount> findAll() { return java.util.List.of(); }
+        @Override public int countOnline() { return 0; }
         @Override public void markLoginSuccess(String userId, Instant at, String ip) { }
         @Override public void markOnline(String userId) { }
         @Override public void markOffline(String userId) { }

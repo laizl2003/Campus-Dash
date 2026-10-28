@@ -521,6 +521,7 @@ export const api = {
   claimVoucher: (type: number) => request<{
     voucherId: string; type: number; description: string; expireTime: string; remainingStock: number;
   }>(`/api/vouchers/${type}/claim`, 'POST'),
+  chatOnline: () => request<{ count: number }>('/api/chat/online'),
   chatHistory: (params: { beforeId?: string; afterId?: string; limit?: number } = {}) => {
     const query = new URLSearchParams();
     if (params.beforeId) query.set('beforeId', params.beforeId);
