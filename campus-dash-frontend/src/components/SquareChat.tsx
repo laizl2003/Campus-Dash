@@ -188,6 +188,8 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
     if (!content) return;
     const clientMsgId = crypto.randomUUID();
     setError('');
+    // 用户主动发送时立刻回到最新位置，不等广播回显
+    jumpLatest();
 
     if (sendWs({ t: 'chat.send', clientMsgId, content })) {
       setText('');
@@ -320,7 +322,7 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
 
       {!atBottom && <button type="button" onClick={jumpLatest} aria-label="回到最新消息"
               style={{
-                position: 'absolute', right: 8, bottom: 50, zIndex: 15,
+                position: 'absolute', right: 20, bottom: 58, zIndex: 15,
                 display: 'grid', placeItems: 'center', width: 28, height: 28,
                 border: '1px solid #e4d79c', borderRadius: '50%', background: 'var(--primary)',
                 color: '#3c3400', fontSize: 14, cursor: 'pointer', boxShadow: '0 2px 8px #00000018',
