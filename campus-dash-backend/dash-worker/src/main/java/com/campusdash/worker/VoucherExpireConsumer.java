@@ -1,5 +1,6 @@
 package com.campusdash.worker;
 
+import com.campusdash.domain.voucher.ports.VoucherClaimPort;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -33,6 +34,7 @@ public class VoucherExpireConsumer {
     private final ClientServiceProvider provider;
     private final ClientConfiguration configuration;
     private final VoucherRepository voucherRepository;
+    private final VoucherClaimPort voucherClaimCache;
     private final String topic;
     private final String group;
 
@@ -41,11 +43,13 @@ public class VoucherExpireConsumer {
     public VoucherExpireConsumer(ClientServiceProvider provider,
                                  ClientConfiguration configuration,
                                  VoucherRepository voucherRepository,
+                                 VoucherClaimPort voucherClaimCache,
                                  @Value("${dash.mq.topic.voucher-expire:voucher-expire}") String topic,
                                  @Value("${dash.mq.group.voucher-expire:dash-voucher-consumer}") String group) {
         this.provider = provider;
         this.configuration = configuration;
         this.voucherRepository = voucherRepository;
+        this.voucherClaimCache = voucherClaimCache;
         this.topic = topic;
         this.group = group;
     }
@@ -61,7 +65,11 @@ public class VoucherExpireConsumer {
                     String body = StandardCharsets.UTF_8.decode(msg.getBody()).toString();
                     try {
                         long voucherId = extractLong(body, "voucherId");
+                        var voucher = voucherRepository.findById(voucherId);
                         int updated = voucherRepository.markExpired(voucherId);
+                        if (updated > 0) {
+                            voucher.ifPresent(v -> voucherClaimCache.release(v.type(), v.userId()));
+                        }
                         log.info("优惠券到期处理 voucherId={} changed={}", voucherId, updated);
                         return ConsumeResult.SUCCESS;
                     } catch (IllegalArgumentException e) {

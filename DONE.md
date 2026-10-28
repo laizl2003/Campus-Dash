@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 优惠券使用/过期释放一人一单标记
+
+- **目标**：券使用或过期后可以再次领取同类型券。
+- **改动**：
+  - VoucherClaimPort 增加 release；Redis 删除 voucher:claimed:{type}:{userId}。
+  - 结算/仲裁把券置 used 后释放；到期消费者把券置 expired 后释放。
+  - VoucherUse 增加 userId，供释放使用。
+- **验证**：券使用后 marker EXISTS 1→0，再次领取返回 OK；DB 同时存在 used 和新的 available。
+
+
 ## 2026-10-28 · 优惠券 Redis 预扣 + MQ 异步落库
 
 - **目标**：高并发领取用 Redis Lua 原子预扣 + RocketMQ 异步落库，防超卖、一人一单、可补偿。

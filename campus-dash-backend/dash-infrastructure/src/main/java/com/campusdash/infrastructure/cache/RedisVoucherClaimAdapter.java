@@ -92,4 +92,9 @@ public class RedisVoucherClaimAdapter implements VoucherClaimPort {
     public void syncStock(int type, int dbStock) {
         reconcile(type, dbStock);
     }
+
+    @Override
+    public void release(int type, String userId) {
+        redis.delete(CLAIMED + type + ":" + userId);
+    }
 }

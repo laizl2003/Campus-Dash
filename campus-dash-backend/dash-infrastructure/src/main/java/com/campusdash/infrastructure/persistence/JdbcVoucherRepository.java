@@ -190,7 +190,7 @@ public class JdbcVoucherRepository implements VoucherRepository {
     @Override
     public Optional<VoucherUse> findUseByErrand(long errandId) {
         List<VoucherUse> rows = jdbc.query("""
-                SELECT vr.voucher_id, vr.voucher_type, vr.runner_bear_cents,
+                SELECT vr.voucher_id, vr.voucher_type, vr.user_id, vr.runner_bear_cents,
                        COALESCE(vs.discount_cents, 0) AS discount_cents
                   FROM voucher_record vr
                   LEFT JOIN voucher_stock vs ON vs.type = vr.voucher_type
@@ -199,6 +199,7 @@ public class JdbcVoucherRepository implements VoucherRepository {
                 """, (rs, n) -> new VoucherUse(
                         rs.getLong("voucher_id"),
                         rs.getInt("voucher_type"),
+                        rs.getString("user_id"),
                         rs.getLong("discount_cents"),
                         rs.getLong("runner_bear_cents")), errandId);
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));

@@ -8,6 +8,7 @@ import com.campusdash.domain.errand.model.ErrandStatus;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.domain.config.ports.PlatformConfigPort;
 import com.campusdash.domain.voucher.model.VoucherUse;
+import com.campusdash.domain.voucher.ports.VoucherClaimPort;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.model.*;
 import com.campusdash.domain.wallet.ports.WalletRepository;
@@ -42,6 +43,7 @@ public class ArbitrateSettleStep {
     private final SnowflakeIdGenerator idGenerator;
     private final CreditRepository creditRepository;
     private final VoucherRepository voucherRepository;
+    private final VoucherClaimPort voucherClaimCache;
     private final PlatformConfigPort config;
 
     public ArbitrateSettleStep(ErrandRepository errandRepository,
@@ -49,12 +51,14 @@ public class ArbitrateSettleStep {
                               SnowflakeIdGenerator idGenerator,
                               CreditRepository creditRepository,
                               VoucherRepository voucherRepository,
+                              VoucherClaimPort voucherClaimCache,
                               PlatformConfigPort config) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.idGenerator = idGenerator;
         this.creditRepository = creditRepository;
         this.voucherRepository = voucherRepository;
+        this.voucherClaimCache = voucherClaimCache;
         this.config = config;
     }
 
@@ -141,6 +145,9 @@ public class ArbitrateSettleStep {
         // 发单人败诉：本分支不再给发单人 +2，统一由 ArbitrateErrandUseCase 记 -8，
         // 保证"跑腿胜诉"时发单人净变化就是 -8，与跑腿败诉的 -8 对称。
         voucherRepository.markUsedByErrand(errandId);
+        if (voucher != null) {
+            voucherClaimCache.release(voucher.type(), voucher.userId());
+        }
         return true;
     }
 

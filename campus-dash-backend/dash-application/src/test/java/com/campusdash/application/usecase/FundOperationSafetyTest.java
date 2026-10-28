@@ -271,7 +271,8 @@ class FundOperationSafetyTest {
 
         SettleErrandUseCase settle() {
             return new SettleErrandUseCase(errands, wallets, audit, fund, ids, cache, credit,
-                    noop(CreditRankingPort.class), new TransactionTemplate(tx), notifier, vouchers(), config());
+                    noop(CreditRankingPort.class), new TransactionTemplate(tx), notifier, vouchers(),
+                    noop(com.campusdash.domain.voucher.ports.VoucherClaimPort.class), config());
         }
 
         RefundErrandUseCase refund() {
@@ -280,7 +281,8 @@ class FundOperationSafetyTest {
         }
 
         ArbitrateErrandUseCase arbitrate() {
-            ArbitrateSettleStep target = new ArbitrateSettleStep(errands, wallets, ids, credit, vouchers(), config());
+            ArbitrateSettleStep target = new ArbitrateSettleStep(errands, wallets, ids, credit, vouchers(),
+                    noop(com.campusdash.domain.voucher.ports.VoucherClaimPort.class), config());
             ProxyFactory proxy = new ProxyFactory(target);
             proxy.addAdvice(new TransactionInterceptor(tx, new AnnotationTransactionAttributeSource()));
             return new ArbitrateErrandUseCase(errands, wallets, refund(), (ArbitrateSettleStep) proxy.getProxy(),

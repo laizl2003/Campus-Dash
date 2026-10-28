@@ -26,4 +26,7 @@ public interface VoucherClaimPort {
 
     /** 管理端改库存后同步 */
     void syncStock(int type, int dbStock);
+
+    /** 券进入 used/expired 终态：释放一人一单标记，允许再次领取 */
+    void release(int type, String userId);
 }

@@ -13,6 +13,7 @@ import com.campusdash.domain.wallet.ports.FundEventPort;
 import com.campusdash.domain.wallet.ports.FundEventPort.FundEvent;
 import com.campusdash.domain.config.ports.PlatformConfigPort;
 import com.campusdash.domain.voucher.model.VoucherUse;
+import com.campusdash.domain.voucher.ports.VoucherClaimPort;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.wallet.ports.WalletRepository;
 import com.campusdash.shared.BizException;
@@ -60,6 +61,7 @@ public class SettleErrandUseCase {
     private final TransactionTemplate transactionTemplate;
     private final RealtimeNotifier notifier;
     private final VoucherRepository voucherRepository;
+    private final VoucherClaimPort voucherClaimCache;
 
     public SettleErrandUseCase(ErrandRepository errandRepository,
                                WalletRepository walletRepository,
@@ -72,6 +74,7 @@ public class SettleErrandUseCase {
                                TransactionTemplate transactionTemplate,
                                RealtimeNotifier notifier,
                                VoucherRepository voucherRepository,
+                               VoucherClaimPort voucherClaimCache,
                                PlatformConfigPort config) {
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
@@ -84,6 +87,7 @@ public class SettleErrandUseCase {
         this.transactionTemplate = transactionTemplate;
         this.notifier = notifier;
         this.voucherRepository = voucherRepository;
+        this.voucherClaimCache = voucherClaimCache;
         this.config = config;
     }
 
@@ -148,6 +152,10 @@ public class SettleErrandUseCase {
                 })));
 
         if (committed) {
+            // 券已 used，释放一人一单标记，允许下次再领
+            if (voucher != null) {
+                voucherClaimCache.release(voucher.type(), voucher.userId());
+            }
             // 状态变为 SETTLED，详情缓存失效。这里事务已提交（publishInTransaction 返回后），
             // 所以 evictAfterCommit 会走"无事务上下文"分支立即删除
             cacheEvict.evictAfterCommit(errandId);
