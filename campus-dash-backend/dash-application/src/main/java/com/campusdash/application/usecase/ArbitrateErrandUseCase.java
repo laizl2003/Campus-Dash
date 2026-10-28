@@ -124,6 +124,17 @@ public class ArbitrateErrandUseCase {
                 notifier.errandStatusChanged(errandId, errand.publisherId(), errand.grabberId(),
                         "REFUNDED", errand.round());
                 notifier.adminDisputeChanged(errandId, "REFUNDED");
+                // 发单人胜诉：与跑腿胜诉的 +2 对称
+                creditRepository.applyEvent(new CreditEvent(
+                        idGenerator.nextId(),
+                        CreditEvent.settlePublisherBizNo(errandId),
+                        errand.publisherId(), CreditEventType.SETTLE,
+                        CreditEventType.SETTLE.delta(), "ERRAND", errandId,
+                        java.time.Instant.now()));
+                int publisherScore = creditRepository.scoreOf(errand.publisherId());
+                creditRankingPort.update(errand.campusId(), errand.publisherId(), publisherScore);
+                notifier.creditChanged(errand.publisherId(), publisherScore,
+                        CreditEventType.SETTLE.delta(), "仲裁胜诉");
                 if (errand.grabberId() != null) {
                     int score = creditRepository.scoreOf(errand.grabberId());
                     creditRankingPort.update(errand.campusId(), errand.grabberId(), score);
