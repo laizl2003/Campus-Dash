@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 聊天发送按钮内嵌 + Admin 平台收入
+
+- **目标**：两个前端发送按钮改为输入框右侧小方形纸飞机；Admin 用户切换上方显示平台收入（佣金账户余额）。
+- **改动**：
+  - SquareChat 发送按钮移入 form，30×30、黄色方块、纸飞机；移除整行发送按钮。
+  - AdminApp 新增 platformIncomeCents，读取 adminLedger(COMMISSION,ALL,0,1).account.balanceCents；侧栏新增“平台收入”行，点击进入资金流水。
+  - admin.css 增加 admin-wallet 深色主题与侧栏底部纵向排列；移动端行布局。
+- **验证**：用户/Admin send 均在 form 内 30×30；Admin 显示“平台收入 ¥488.10”，wallet 位于 profile 上方；用户 wallet top 794，frame bottom 793，互不重叠。
+
+
 ## 2026-10-28 · Admin 聊天输入样式 + 用户栏与右上退出
 
 - **目标**：Admin 聊天点击/输入/发送样式与广场一致；左侧用户栏改成广场 profile 结构但保留绿色；侧栏按钮改为去登录页；退出移到右上头像菜单且不提供注销。

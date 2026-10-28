@@ -45,6 +45,7 @@ export default function AdminApp() {
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [view, setView] = useState<'disputes' | 'ledger' | 'vouchers' | 'settings'>('disputes');
   const [netCents, setNetCents] = useState(0);
+  const [platformIncomeCents, setPlatformIncomeCents] = useState<number | null>(null);
   const [ledgerAccount, setLedgerAccount] = useState<'COMMISSION' | 'MARKETING'>('COMMISSION');
 
   const load = useCallback(async () => {
@@ -77,8 +78,19 @@ export default function AdminApp() {
     Promise.all([
       api.adminLedger('COMMISSION', 'ALL', 0, 1),
       api.adminLedger('MARKETING', 'ALL', 0, 1),
-    ]).then(([commission]) => setNetCents(commission.netCents)).catch(() => {});
+    ]).then(([commission]) => {
+      setNetCents(commission.netCents);
+      setPlatformIncomeCents(commission.account.balanceCents);
+    }).catch(() => {});
   }, [view]);
+
+  useEffect(() => {
+    let active = true;
+    api.adminLedger('COMMISSION', 'ALL', 0, 1)
+      .then(data => { if (active) setPlatformIncomeCents(data.account.balanceCents); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const open = async (id: string) => {
     try {
@@ -129,6 +141,9 @@ export default function AdminApp() {
       setMessage({ text: `裁决完成：${result.result === 'SETTLED' ? '已结算给跑腿' : '已退款给发单人'}`, error: false });
       setSelected(null);
       await load();
+      api.adminLedger('COMMISSION', 'ALL', 0, 1)
+        .then(data => setPlatformIncomeCents(data.account.balanceCents))
+        .catch(() => {});
     } catch (e) {
       setMessage({ text: e instanceof Error ? e.message : '裁决失败，请稍后重试', error: true });
     } finally {
@@ -147,6 +162,10 @@ export default function AdminApp() {
       </nav>
       <div className="admin-chat-slot"><SquareChat compactBottom={false}/></div>
       <div className="admin-side-foot">
+        <button type="button" className="sidebar-wallet admin-wallet" onClick={() => setView('ledger')}>
+          <span><Icon name="wallet" size={16}/>平台收入</span>
+          <strong>{platformIncomeCents === null ? '—' : yuan(platformIncomeCents)}</strong>
+        </button>
         <div className="profile admin-profile" ref={switchRef}>
           <span className="avatar">{(getUsername() ?? 'Admin').slice(0, 1).toUpperCase()}</span>
           <button type="button" className="profile-trigger" disabled={switchBusy}

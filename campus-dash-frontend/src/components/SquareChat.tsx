@@ -147,24 +147,24 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
 
       {error && <div style={{ padding: '0 9px 5px', color: '#b23b32', fontSize: 9 }} role="alert">{error}</div>}
 
-      <form onSubmit={event => { event.preventDefault(); void send(); }} style={{ display: 'flex', alignItems: 'center', padding: '6px 8px 8px', borderTop: '1px solid #f0ece2' }}>
+      <form onSubmit={event => { event.preventDefault(); void send(); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 8px 8px', borderTop: '1px solid #f0ece2' }}>
         <input value={text} onChange={event => setText(event.target.value)} maxLength={500}
                placeholder="说点什么…" aria-label="聊天输入框"
-               style={{ flex: '1 1 auto', minWidth: 0, boxSizing: 'border-box', height: 29, padding: '0 9px', borderRadius: 7, border: '1px solid #e4dfd2', background: '#fff', color: '#333', caretColor: '#333', fontSize: 10, outline: 'none' }}
+               style={{ flex: '1 1 auto', minWidth: 0, boxSizing: 'border-box', height: 30, padding: '0 9px', borderRadius: 7, border: '1px solid #e4dfd2', background: '#fff', color: '#333', caretColor: '#333', fontSize: 10, outline: 'none' }}
                onFocus={event => { event.currentTarget.style.borderColor = '#d6b94a'; event.currentTarget.style.boxShadow = '0 0 0 2px #ffd10033'; }}
                onBlur={event => { event.currentTarget.style.borderColor = '#e4dfd2'; event.currentTarget.style.boxShadow = 'none'; }}/>
+        <button type="submit" disabled={!text.trim()} aria-label="发送消息"
+                style={{
+                  display: 'grid', placeItems: 'center', flex: '0 0 auto',
+                  width: 30, height: 30, padding: 0, border: 0, borderRadius: 7,
+                  background: text.trim() ? 'var(--primary)' : '#f1e6ad',
+                  color: text.trim() ? '#3c3400' : '#8b7d45',
+                  opacity: 1, cursor: text.trim() ? 'pointer' : 'not-allowed',
+                }}>
+          {sendIcon}
+        </button>
       </form>
     </div>
-
-    <button type="button" disabled={!text.trim()} onClick={() => void send()} aria-label="发送消息"
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              width: '100%', height: 32, padding: 0, border: 0, borderRadius: 8,
-              background: text.trim() ? 'var(--primary)' : '#f1e6ad',
-              color: text.trim() ? '#3c3400' : '#8b7d45', fontSize: 11, fontWeight: 700,
-              opacity: 1, cursor: text.trim() ? 'pointer' : 'not-allowed',
-            }}>
-      {sendIcon}发送
-    </button>
   </section>;
 }
