@@ -43,6 +43,13 @@ export default function Publish() {
   const rewardCents = parseReward(reward);
   const category = CATEGORIES.find((item) => item.type === type)!;
 
+  const refreshVouchers = async () => {
+    try {
+      const list = await api.myVouchers();
+      setVouchers(list.filter((v) => v.status === 'available'));
+    } catch { /* 券加载失败不影响发布 */ }
+  };
+
   useEffect(() => {
     let active = true;
     api.wallet().then((wallet) => { if (active) setBalance(wallet.availableCents); }).catch(() => {});
@@ -74,12 +81,19 @@ export default function Publish() {
       const result = await api.publish({
         title: title.trim(), rewardCents, slotTotal: 1, type, voucherId,
       });
+      // 券已被本次发布锁定：立即从本地可选列表移除，并清空选择，
+      // 否则“再发一个任务”会继续展示上一单用过的券。
+      if (voucherId) {
+        setVouchers(prev => prev.filter(v => v.voucherId !== voucherId));
+        setVoucherId(null);
+      }
       setPublished({
         id: result.errandId, title: title.trim(), rewardCents,
         paidCents: Number(result.paidCents ?? result.frozenCents ?? rewardCents),
         discountCents: Number(result.discountCents ?? 0),
       });
       window.dispatchEvent(new Event('dash:changed'));
+      void refreshVouchers();
       api.wallet().then((wallet) => setBalance(wallet.availableCents)).catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : '暂时没有发布成功，请稍后再试。');
@@ -100,7 +114,7 @@ export default function Publish() {
         <div className="task-success-reward"><span>已托管实付</span><strong>{yuan(published.paidCents)}</strong></div>
         {published.discountCents > 0 && <p className="muted">已使用优惠券减 {yuan(published.discountCents)}，悬赏仍为 {yuan(published.rewardCents)}。</p>}
         <p className="muted">完成后确认结算，悬赏会转入跑腿同学的钱包。</p>
-        <div className="task-success-actions"><a className="btn btn-primary" href={`#/detail/${published.id}`}>查看任务进度 <Icon name="arrow-right" size={16} /></a><button className="btn btn-ghost" onClick={() => { setPublished(null); setTitle(''); }}>再发一个任务</button></div>
+        <div className="task-success-actions"><a className="btn btn-primary" href={`#/detail/${published.id}`}>查看任务进度 <Icon name="arrow-right" size={16} /></a><button className="btn btn-ghost" onClick={() => { setPublished(null); setTitle(''); setVoucherId(null); void refreshVouchers(); }}>再发一个任务</button></div>
         <span className="task-order-id">任务编号 {published.id}</span>
       </section>
     </div>
