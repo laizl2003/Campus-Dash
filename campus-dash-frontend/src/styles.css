@@ -546,11 +546,3 @@ button.topbar-avatar:hover { filter: brightness(0.97); }
 .admin-arbitration-history tbody tr:nth-child(even) { background: #fcfaf5; }
 .admin-arbitration-history tbody tr:hover { background: #fff7e0; }
 
-/* 广场/用户端：左侧栏固定，只有右侧工作区滚动 */
-.app { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-.app > .topbar { flex: 0 0 68px; }
-.app > .main { flex: 1 1 auto; min-height: 0; overflow-y: auto; box-sizing: border-box; }
-@media (max-width: 800px) {
-  .app { height: 100vh; }
-  .app > .topbar { flex-basis: 66px; }
-}

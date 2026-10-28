@@ -3,15 +3,14 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
-## 2026-10-28 · Admin 聊天/仲裁布局与左右独立滚动
+## 2026-10-28 · Admin 聊天/仲裁布局（仅左侧栏）
 
-- **目标**：Admin 聊天占满配置与账号之间空白，发送键紧贴账号区；待仲裁限高可滚动；仲裁记录每页 10 条；Admin 与广场左侧栏固定，仅右侧滚动。
+- **目标**：在不动主界面/登录布局的前提下，Admin 聊天填满左侧空白、发送键贴账号区；待仲裁限高可滚；仲裁记录每页 10 条；左侧栏固定。
 - **改动**：
-  - Admin 侧栏改为 100vh sticky，main 独立滚动；聊天 slot flex:1 填满，发送按钮 bottom 与账号区 top 对齐。
-  - 待仲裁/详情固定 360px，列表 ul 与详情 overflow-y:auto。
-  - 仲裁记录接入 adminArbitrations(page,10)，增加上一页/下一页与页码。
-  - 用户端 .app 改为 100vh flex，topbar 固定、.main 独立滚动。
-- **验证**：Admin 1280×900 实测 chat 303.97→844.4，send bottom 844.4 与 foot top 844.4 一致；main scrollTop=185 时 side top=0；仲裁记录第 1/2 页显示 10 条。
+  - 仅 Admin 侧栏：sticky + 100vh，聊天 slot flex:1，发送按钮 bottom 与账号区 top 对齐。
+  - 待仲裁/详情固定 360px，列表 ul 与详情 overflow-y:auto；仲裁记录接入 page,size=10 分页。
+  - 用户端只给 TopBar 加 inline sticky、保留原 sidebar/main 结构；没有改 App/main 的宽度、间距或布局。
+- **验证**：Admin 1280×900 chat 303.97→844.4，send bottom 844.4 = foot top 844.4；待仲裁 360px；仲裁第 1/2 页 10 条；广场滚动后 topbar/sidebar top=0，主内容相对布局未变。
 
 
 ## 2026-10-28 · 广场聊天 v1.0

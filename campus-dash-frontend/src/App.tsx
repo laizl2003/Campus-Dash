@@ -123,11 +123,9 @@ export default function App() {
   else if (path === '/credit') page = <Credit/>;
   else page = <Square/>;
 
-  return <div className="app"
-              style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+  return <div className="app">
     <TopBar route={path} userId={userId} onSwitch={switchIdentity} onLogout={logout} switching={loginBusy !== null}/>
-    <main className="main" id="main-content" tabIndex={-1}
-          style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', boxSizing: 'border-box' }}><div className="content" key={userId}>
+    <main className="main" id="main-content" tabIndex={-1}><div className="content" key={userId}>
       {error && <div className="banner warn" role="alert">{error}<button className="icon-button" aria-label="关闭提示" onClick={() => setError('')}><Icon name="close" size={16}/></button></div>}
       {page}
       <footer className="workspace-footer"><span>CampusDash</span><span>每一份托付，都认真送达。</span><span>校园互助工作台</span></footer>
