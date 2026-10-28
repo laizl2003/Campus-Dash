@@ -180,7 +180,7 @@ export default function Wallet() {
       </section>
       <section className="account-surface wallet-vouchers" aria-label="我的优惠券">
         <div className="account-section-head">
-          <div><h2>我的优惠券</h2><p>领取后 2 天内有效，过期自动作废</p></div>
+          <div><h2>我的优惠券</h2><p>领取后 1 天内有效，过期自动作废</p></div>
           <span className="account-count">{unusedVouchers.length} 张可用</span>
         </div>
         <div className="account-filter-bar wallet-voucher-tabs"><div className="tabs" aria-label="优惠券状态">

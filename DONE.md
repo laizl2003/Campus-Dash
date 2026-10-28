@@ -3,6 +3,13 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 广场锁定券显示已领取 + 有效期文案改为 1 天
+
+- **目标**：locked 券在广场也显示“已领取”不可点击；领取提示改为 1 天。
+- **改动**：Square claimedTypes 过滤 available || locked；Square/Wallet 文案 2 天→1 天。
+- **验证**：持有 locked 券账号打开广场，对应按钮“已领取”且 disabled。
+
+
 ## 2026-10-28 · 修复 locked 券导致优惠券接口 500
 
 - **根因**：发布任务锁券后 voucher_record.status='locked'，但 VoucherStatus 枚举缺少 LOCKED，

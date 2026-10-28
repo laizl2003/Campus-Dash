@@ -39,7 +39,10 @@ export default function Square() {
       // 库存 + 我已持有的可用券：已持有的类型直接显示"已领取"且不可再点
       const [stock, mine] = await Promise.all([api.vouchers(), api.myVouchers()]);
       setVouchers(stock.items);
-      setClaimedTypes(new Set(mine.filter(v => v.status === 'available').map(v => v.type)));
+      // available / locked 都算“已领取”：locked 表示券已随任务发布锁定，不能再次领取
+      setClaimedTypes(new Set(mine
+        .filter(v => v.status === 'available' || v.status === 'locked')
+        .map(v => v.type)));
     } catch { /* 优惠券加载失败不影响任务列表 */ }
   }, []);
 
@@ -52,7 +55,7 @@ export default function Square() {
         item.type === voucher.type ? { ...item, stock: claimed.remainingStock } : item));
       setClaimedTypes(prev => new Set(prev).add(voucher.type));
       window.dispatchEvent(new CustomEvent('dash:notice', {
-        detail: { text: `已领取「${claimed.description}」，领取后 2 天内有效`, error: false },
+        detail: { text: `已领取「${claimed.description}」，领取后 1 天内有效`, error: false },
       }));
     } catch (e) {
       window.dispatchEvent(new CustomEvent('dash:notice', {
@@ -85,7 +88,7 @@ export default function Square() {
       {vouchers.length > 0 && <section className="voucher-strip" aria-label="惊喜优惠">
         <div className="voucher-strip-head">
           <span className="voucher-strip-title"><Icon name="ticket" size={16}/>惊喜优惠</span>
-          <small>满减券 · 领取后 2 天内有效</small>
+          <small>满减券 · 领取后 1 天内有效</small>
         </div>
         <div className="voucher-list">
           {vouchers.map(voucher => {
