@@ -2,6 +2,7 @@ package com.campusdash.application.usecase.chat;
 
 import com.campusdash.domain.chat.model.ChatMessage;
 import com.campusdash.domain.chat.ports.ChatBroadcaster;
+import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.chat.ports.ChatMessageRepository;
 import com.campusdash.domain.errand.model.ErrandType;
 import com.campusdash.shared.SnowflakeIdGenerator;
@@ -19,20 +20,25 @@ public class ChatErrandNoticeUseCase {
 
     private final ChatMessageRepository messages;
     private final ChatBroadcaster broadcaster;
+    private final UserRepository users;
     private final SnowflakeIdGenerator idGenerator;
 
     public ChatErrandNoticeUseCase(ChatMessageRepository messages, ChatBroadcaster broadcaster,
-                                   SnowflakeIdGenerator idGenerator) {
+                                   UserRepository users, SnowflakeIdGenerator idGenerator) {
         this.messages = messages;
         this.broadcaster = broadcaster;
+        this.users = users;
         this.idGenerator = idGenerator;
     }
 
     public void published(long errandId, String publisherId, ErrandType type,
                           String title, long rewardCents) {
+        String publisherName = users.findById(publisherId)
+                .map(user -> user.username())
+                .orElse(publisherId);
         String content = String.format(
-                "{\"type\":\"%s\",\"title\":\"%s\",\"rewardCents\":%d,\"publisherId\":\"%s\"}",
-                type.name(), escape(title), rewardCents, escape(publisherId));
+                "{\"type\":\"%s\",\"title\":\"%s\",\"rewardCents\":%d,\"publisherId\":\"%s\",\"publisherName\":\"%s\"}",
+                type.name(), escape(title), rewardCents, escape(publisherId), escape(publisherName));
         ChatMessage message = new ChatMessage(
                 idGenerator.nextId(), SendChatMessageUseCase.ROOM, 1,
                 publisherId, "发单人", "user", content, "ERRAND",

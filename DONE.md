@@ -3,6 +3,13 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · ERRAND 卡片显示发单人用户名
+
+- **目标**：聊天卡片不再显示发单人 userId，改为 userName。
+- **改动**：ChatErrandNoticeUseCase 查询 user 表写入 publisherName；前端优先展示 publisherName，缺失回退 publisherId。
+- **验证**：卡片 content 含 publisherName="stuhuceap"；页面显示“发单人 stuhuceap”；测试任务/卡片已清理。
+
+
 ## 2026-10-28 · 发单聊天卡片
 
 - **目标**：发单时向聊天室推 ERRAND 卡片，展示任务类型/标题、金额、发单人 userId；PUBLISHED 可点击，抢单后变灰不可点。
