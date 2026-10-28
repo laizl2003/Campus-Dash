@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 在线用户列表浮层
+
+- **目标**：点击聊天右上角在线人数，弹出刚好覆盖聊天框的在线列表；当前用户第一且浅黄，其余按 auth:online score 排序。
+- **改动**：
+  - AuthPort 增加 onlineUserIds()，RedisAuthAdapter 用 ZRANGE auth:online 0 -1（先裁过期）。
+  - ChatController 增加 GET /api/chat/online-users，当前用户置顶并补 username/role。
+  - SquareChat 在线人数变按钮；absolute inset:0 浮层；当前行 #fff7cc。
+- **验证**：API 首项当前用户；浮层 rect 191×283.7 覆盖聊天框 193×285.7；当前行浅黄，列表含 Admin/普通用户。
+
+
 ## 2026-10-28 · 两类消息卡片显示发布时间
 
 - **目标**：ERRAND / VOUCHER 卡片上方显示消息发布时间。

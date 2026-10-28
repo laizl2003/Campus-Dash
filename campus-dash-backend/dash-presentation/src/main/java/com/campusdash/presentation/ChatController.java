@@ -3,6 +3,7 @@ package com.campusdash.presentation;
 import com.campusdash.application.usecase.chat.QueryChatHistoryUseCase;
 import com.campusdash.application.usecase.chat.SendChatMessageUseCase;
 import com.campusdash.domain.auth.ports.AuthPort;
+import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.chat.model.ChatMessage;
 import com.campusdash.presentation.auth.CurrentUser;
 import com.campusdash.shared.Result;
@@ -25,12 +26,26 @@ public class ChatController {
     private final QueryChatHistoryUseCase history;
     private final SendChatMessageUseCase sender;
     private final AuthPort authPort;
+    private final UserRepository users;
 
     public ChatController(QueryChatHistoryUseCase history, SendChatMessageUseCase sender,
-                          AuthPort authPort) {
+                          AuthPort authPort, UserRepository users) {
         this.history = history;
         this.sender = sender;
         this.authPort = authPort;
+        this.users = users;
+    }
+
+    /** 在线用户列表：当前用户第一，其余按 auth:online score 升序。 */
+    @GetMapping("/online-users")
+    public Result<List<Map<String, Object>>> onlineUsers() {
+        String current = CurrentUser.get();
+        List<Map<String, Object>> items = new java.util.ArrayList<>();
+        items.add(userView(current));
+        for (String userId : authPort.onlineUserIds()) {
+            if (!current.equals(userId)) items.add(userView(userId));
+        }
+        return Result.ok(items);
     }
 
     /** 在线人数来自 Redis auth:online ZSET，按 token 过期时间裁剪。 */
@@ -56,6 +71,19 @@ public class ChatController {
     }
 
     record SendRequest(String clientMsgId, String content) {
+    }
+
+    private Map<String, Object> userView(String userId) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("userId", userId);
+        users.findById(userId).ifPresentOrElse(user -> {
+            item.put("username", user.username());
+            item.put("role", user.role());
+        }, () -> {
+            item.put("username", userId);
+            item.put("role", "user");
+        });
+        return item;
     }
 
     private static Map<String, Object> view(ChatMessage m) {

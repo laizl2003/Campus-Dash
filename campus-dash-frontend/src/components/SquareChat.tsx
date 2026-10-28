@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, getUserId, TYPE_TEXT, yuan, type ChatItem } from '../api';
+import { api, getUserId, TYPE_TEXT, yuan, type ChatItem, type OnlineUser } from '../api';
 import { sendWs, subscribeWs } from '../ws';
 
 const chatIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H7l-4 3v-5.6A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></svg>;
@@ -53,6 +53,10 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
+  const [onlineOpen, setOnlineOpen] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [onlineLoading, setOnlineLoading] = useState(false);
+  const [onlineError, setOnlineError] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const selfId = getUserId();
 
@@ -104,6 +108,19 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
     if (list) list.scrollTop = list.scrollHeight;
   }, [messages.length]);
 
+  const openOnline = async () => {
+    setOnlineOpen(true);
+    setOnlineLoading(true);
+    setOnlineError('');
+    try {
+      setOnlineUsers(await api.chatOnlineUsers());
+    } catch (reason) {
+      setOnlineError(reason instanceof Error ? reason.message : '在线用户加载失败');
+    } finally {
+      setOnlineLoading(false);
+    }
+  };
+
   const send = async () => {
     const content = text.trim();
     if (!content) return;
@@ -130,6 +147,7 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
     minHeight: 190, marginTop: 14, marginBottom: compactBottom ? -15 : 0, minWidth: 0,
   }}>
     <div style={{
+      position: 'relative',
       display: 'flex', flex: '1 1 auto', flexDirection: 'column', minHeight: 0,
       border: '1px solid #ddd6c8', borderRadius: 10, background: '#fbfaf7',
       overflow: 'hidden', boxShadow: '0 1px 2px #00000008',
@@ -141,10 +159,13 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#555', fontSize: 11, fontWeight: 700 }}>
           {chatIcon}广场聊天
         </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 'auto', color: '#9a9a9a', fontSize: 9 }}>
+        <button type="button" onClick={() => void openOnline()} aria-label="查看在线用户"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 'auto',
+                         padding: 0, border: 0, background: 'transparent', color: '#9a9a9a',
+                         fontSize: 9, cursor: 'pointer' }}>
           <i style={{ width: 5, height: 5, borderRadius: '50%', background: '#2fa060' }}/>
           {onlineCount === null ? '在线 —' : `在线 ${onlineCount}`}
-        </span>
+        </button>
       </div>
 
       <div ref={listRef} role="log" aria-live="polite" aria-label="聊天消息" style={{
@@ -251,6 +272,41 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
           {sendIcon}
         </button>
       </form>
+
+      {onlineOpen && <div style={{
+        position: 'absolute', inset: 0, zIndex: 20, display: 'flex', flexDirection: 'column',
+        padding: '8px 9px', background: '#fbfaf7',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+          <strong style={{ color: '#555', fontSize: 11 }}>在线用户</strong>
+          <button type="button" aria-label="关闭在线用户" onClick={() => setOnlineOpen(false)}
+                  style={{ marginLeft: 'auto', border: 0, background: 'transparent', color: '#9a9a9a', fontSize: 15, cursor: 'pointer' }}>×</button>
+        </div>
+        {onlineLoading && <div style={{ color: '#aaa', fontSize: 9 }}>正在加载…</div>}
+        {onlineError && <div style={{ color: '#b23b32', fontSize: 9 }}>{onlineError}</div>}
+        {!onlineLoading && !onlineError && <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>
+          {onlineUsers.map(user => {
+            const current = user.userId === selfId;
+            return <div key={user.userId} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '5px 6px',
+              borderRadius: 6, background: current ? '#fff7cc' : 'transparent',
+            }}>
+              <span style={{
+                display: 'grid', placeItems: 'center', width: 22, height: 22, flex: '0 0 auto',
+                borderRadius: '50%', fontSize: 9, fontWeight: 700,
+                background: user.role === 'Admin' ? '#2f6b4a' : 'var(--primary)',
+                color: user.role === 'Admin' ? '#fff' : '#3c3400',
+              }}>{user.username.slice(0, 1).toUpperCase()}</span>
+              <span style={{ minWidth: 0 }}>
+                <strong style={{ display: 'block', color: '#555', fontSize: 10 }}>{user.username}</strong>
+                <small style={{ color: '#9a9a9a', fontSize: 8 }}>
+                  {user.role === 'Admin' ? '管理员' : '普通用户'}{current ? ' · 当前用户' : ''}
+                </small>
+              </span>
+            </div>;
+          })}
+        </div>}
+      </div>}
     </div>
   </section>;
 }

@@ -441,6 +441,12 @@ async function request<T>(path: string, method = 'GET', body?: unknown, retried 
 }
 
 // ── 任务 ──────────────────────────────────────────────
+export interface OnlineUser {
+  userId: string;
+  username: string;
+  role: string;
+}
+
 export interface ChatItem {
   id: string;
   roomId: string;
@@ -525,6 +531,7 @@ export const api = {
     voucherId: string; type: number; description: string; expireTime: string; remainingStock: number;
   }>(`/api/vouchers/${type}/claim`, 'POST'),
   chatOnline: () => request<{ count: number }>('/api/chat/online'),
+  chatOnlineUsers: () => request<OnlineUser[]>('/api/chat/online-users'),
   chatHistory: (params: { beforeId?: string; afterId?: string; limit?: number } = {}) => {
     const query = new URLSearchParams();
     if (params.beforeId) query.set('beforeId', params.beforeId);

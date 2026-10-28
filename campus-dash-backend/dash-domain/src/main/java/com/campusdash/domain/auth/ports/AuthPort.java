@@ -34,6 +34,11 @@ public interface AuthPort {
         return false;
     }
 
+    /** 当前在线用户 id，按 auth:online 的 score 升序；默认空 */
+    default java.util.List<String> onlineUserIds() {
+        return java.util.List.of();
+    }
+
     /** 强制下线：撤销该用户已签发的全部 access/refresh 凭证（默认无操作） */
     default void revokeAllSessions(String userId) {
     }

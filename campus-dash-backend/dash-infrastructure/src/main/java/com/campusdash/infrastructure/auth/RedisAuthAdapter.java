@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -111,6 +113,14 @@ public class RedisAuthAdapter implements AuthPort {
         redis.opsForZSet().removeRangeByScore(ONLINE, Double.NEGATIVE_INFINITY, now);
         Long count = redis.opsForZSet().zCard(ONLINE);
         return count == null ? 0 : count.intValue();
+    }
+
+    @Override
+    public List<String> onlineUserIds() {
+        long now = System.currentTimeMillis();
+        redis.opsForZSet().removeRangeByScore(ONLINE, Double.NEGATIVE_INFINITY, now);
+        Set<String> ids = redis.opsForZSet().range(ONLINE, 0, -1);
+        return ids == null ? List.of() : new ArrayList<>(ids);
     }
 
     @Override
