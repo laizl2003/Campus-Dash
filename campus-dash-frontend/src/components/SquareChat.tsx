@@ -54,6 +54,7 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [atBottom, setAtBottom] = useState(true);
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
   const [onlineOpen, setOnlineOpen] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
@@ -62,6 +63,7 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
   const listRef = useRef<HTMLDivElement>(null);
   const prependRef = useRef(false);
   const olderLoadingRef = useRef(false);
+  const atBottomRef = useRef(true);
   const selfId = getUserId();
 
   useEffect(() => {
@@ -117,8 +119,27 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
       prependRef.current = false;
       return;
     }
-    list.scrollTop = list.scrollHeight;
+    if (atBottomRef.current) {
+      list.scrollTop = list.scrollHeight;
+    }
   }, [messages.length]);
+
+  const jumpLatest = () => {
+    const list = listRef.current;
+    if (!list) return;
+    atBottomRef.current = true;
+    setAtBottom(true);
+    list.scrollTop = list.scrollHeight;
+  };
+
+  const onListScroll = () => {
+    const list = listRef.current;
+    if (!list) return;
+    const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+    atBottomRef.current = nearBottom;
+    setAtBottom(nearBottom);
+    if (list.scrollTop <= 20) void loadOlder();
+  };
 
   const loadOlder = async () => {
     const list = listRef.current;
@@ -210,7 +231,7 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
       </div>
 
       <div ref={listRef} role="log" aria-live="polite" aria-label="聊天消息"
-           onScroll={() => { if ((listRef.current?.scrollTop ?? 1) <= 20) void loadOlder(); }}
+           onScroll={onListScroll}
            style={{
              flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
              display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 9px',
@@ -296,6 +317,14 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
           </div>;
         })}
       </div>
+
+      {!atBottom && <button type="button" onClick={jumpLatest} aria-label="回到最新消息"
+              style={{
+                position: 'absolute', right: 8, bottom: 50, zIndex: 15,
+                display: 'grid', placeItems: 'center', width: 28, height: 28,
+                border: '1px solid #e4d79c', borderRadius: '50%', background: 'var(--primary)',
+                color: '#3c3400', fontSize: 14, cursor: 'pointer', boxShadow: '0 2px 8px #00000018',
+              }}>↓</button>}
 
       {error && <div style={{ padding: '0 9px 5px', color: '#b23b32', fontSize: 9 }} role="alert">{error}</div>}
 
