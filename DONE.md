@@ -3,14 +3,11 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
-## 2026-10-28 · 广场聊天 UI 壳
+## 2026-10-28 · 回滚广场聊天 UI 壳
 
-- **目标**：先在左侧边栏搭出聊天室布局，为后续接入历史消息与 WebSocket 收发做容器。
-- **改动**：
-  - 新增 `SquareChat`：标题、在线状态、折叠、消息列表空态、输入框/发送按钮。
-  - `TopBar` 用 `SquareChat` 替换原 `.sidebar-guide`；Icon 增加 chat/send/chevron-up。
-  - 侧栏样式：固定高度 `clamp(220px,30vh,320px)`、列表 `min-height:0` 滚动、输入行。
-- **验证**：`npm run build` 通过；浏览器实测 `.sidebar-chat` 渲染，消息区/输入框/折叠正常，输入框暂禁用。
+- **目标**：撤回聊天 UI 对 TopBar / Icon / 全局样式的改动，恢复其他页面原布局。
+- **改动**：TopBar、Icon、styles.css 恢复到聊天改动前；删除 SquareChat；保留 TODO #7（JMeter 优惠券压测）。
+- **验证**：`npm run build` 通过；浏览器 `.sidebar-chat=false`、`.sidebar-guide` 恢复。
 
 
 ## 2026-10-28 · Admin 离线状态点改红
