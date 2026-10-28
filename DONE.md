@@ -3,6 +3,14 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 修复 worker 启动失败导致在线状态不清理
+
+- **根因**：worker 组件扫描加载 SendChatMessageUseCase，依赖 ChatBroadcaster（实现只在 presentation），worker 启动失败；UserPresenceSweepJob 停摆，login_status 残留为 1。
+- **改动**：worker 增加 WorkerChatConfig，提供 no-op ChatBroadcaster；不影响 app 的真实 WebSocket 广播。
+- **验证**：worker 已启动；启动后清理 3 个心跳超时账号；DB login_status=1 从 4 降为 1（仅 Admin）。
+- **说明**：平台配置的 online = login_status=1 且 last_seen_at 在 90 秒内；DB 裸查 login_status 会包含未清理的残留，因此此前不一致。
+
+
 ## 2026-10-28 · 聊天框右上角在线人数
 
 - **目标**：两个聊天框右上角显示在线人数，数据来自 user.login_status。
