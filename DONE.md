@@ -10,7 +10,7 @@
   - SquareChat 输入框显式 color=#333 + focus ring；发送按钮禁用态改浅黄色，避免深色侧栏下变暗。
   - AdminApp 左侧使用 .profile/.avatar/.profile-trigger/.icon-button，绿色主题；移除旧“退出”按钮，箭头改为 href="#/login"。
   - admin-top 增加绿色头像下拉，仅“退出登录”，无注销；账号切换逻辑不变。
-- **验证**：input color rgb(51,51,51)；send bottom 824.02 = foot top 824.02；admin-return href #/login；右上菜单仅 1 个退出登录按钮。
+- **验证**：input color rgb(51,51,51)；send bottom 816 与 foot top 824 留 8px 不重叠；左下/右上/下拉头像均为绿色 rgb(47,107,74)，左下 A 居中；admin-return href #/login；右上菜单仅 1 个退出登录按钮。
 
 
 ## 2026-10-28 · Admin 聊天框对齐任务广场间距
