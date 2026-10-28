@@ -2,6 +2,7 @@ package com.campusdash.bootstrap;
 
 import com.campusdash.domain.voucher.model.VoucherStock;
 import com.campusdash.domain.voucher.model.VoucherType;
+import com.campusdash.domain.voucher.ports.VoucherClaimPort;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,9 +23,11 @@ public class VoucherStockInitializer implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(VoucherStockInitializer.class);
 
     private final VoucherRepository vouchers;
+    private final VoucherClaimPort claimCache;
 
-    public VoucherStockInitializer(VoucherRepository vouchers) {
+    public VoucherStockInitializer(VoucherRepository vouchers, VoucherClaimPort claimCache) {
         this.vouchers = vouchers;
+        this.claimCache = claimCache;
     }
 
     @Override
@@ -40,6 +43,10 @@ public class VoucherStockInitializer implements ApplicationRunner {
             }
             fixed++;
         }
-        log.info("优惠券库存描述已校准 {} 种", fixed);
+        // Redis 库存仅在 key 不存在时初始化；已有 key 保留（可能包含机器重启前的预扣）
+        for (var stock : vouchers.findAllStocks()) {
+            claimCache.initialize(stock.type(), stock.stock());
+        }
+        log.info("优惠券库存描述已校准 {} 种，Redis 库存已检查", fixed);
     }
 }

@@ -1,5 +1,6 @@
 package com.campusdash.presentation;
 
+import com.campusdash.application.usecase.ClaimVoucherAsyncUseCase;
 import com.campusdash.application.usecase.ClaimVoucherUseCase;
 import com.campusdash.application.usecase.query.QueryVoucherUseCase;
 import com.campusdash.domain.voucher.model.Voucher;
@@ -24,10 +25,10 @@ import java.util.Map;
 public class VoucherController {
 
     private final QueryVoucherUseCase queryUseCase;
-    private final ClaimVoucherUseCase claimUseCase;
+    private final ClaimVoucherAsyncUseCase claimUseCase;
     private final VoucherRepository vouchers;
 
-    public VoucherController(QueryVoucherUseCase queryUseCase, ClaimVoucherUseCase claimUseCase,
+    public VoucherController(QueryVoucherUseCase queryUseCase, ClaimVoucherAsyncUseCase claimUseCase,
                              VoucherRepository vouchers) {
         this.queryUseCase = queryUseCase;
         this.claimUseCase = claimUseCase;

@@ -125,6 +125,21 @@ public class JdbcVoucherRepository implements VoucherRepository {
     }
 
     @Override
+    public int insertIfAbsent(Voucher voucher) {
+        return jdbc.update("""
+                INSERT IGNORE INTO voucher_record (voucher_id, user_id, voucher_type, expire_time, status, finish_at, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, voucher.voucherId(), voucher.userId(), voucher.type(),
+                timestamp(voucher.expireTime()), voucher.status().dbValue(),
+                timestamp(voucher.finishAt()), timestamp(voucher.createdAt()));
+    }
+
+    @Override
+    public int deleteById(long voucherId) {
+        return jdbc.update("DELETE FROM voucher_record WHERE voucher_id = ?", voucherId);
+    }
+
+    @Override
     public Optional<Voucher> findById(long voucherId) {
         List<Voucher> rows = jdbc.query(
                 "SELECT * FROM voucher_record WHERE voucher_id = ?", VOUCHER_MAPPER, voucherId);

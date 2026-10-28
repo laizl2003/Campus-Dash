@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 优惠券 Redis 预扣 + MQ 异步落库
+
+- **目标**：高并发领取用 Redis Lua 原子预扣 + RocketMQ 异步落库，防超卖、一人一单、可补偿。
+- **实现**：
+  - VoucherClaimPort/RedisVoucherClaimAdapter：voucher:stock、pending:count、pending:id、claimed 四类 key，Lua 一次完成库存判断/扣减/pending/一人一单标记。
+  - ClaimVoucherAsyncUseCase：Lua 预扣成功后投递 voucher-claim；发送失败立即 Lua 回滚，MQ 关闭时回退旧同步用例。
+  - VoucherClaimConsumer：INSERT IGNORE + DB CAS 扣库存 + 到期 local_message；重复消息幂等；重试 5 次失败按落库结果 confirm/rollback。
+  - VoucherStockInitializer 启动 SETNX 初始化；Admin 改库存 write-through；worker 每分钟 reconcile(DB - pending)。
+- **验证**：领取成功 Redis 43/pending0、DB available、stock43；重复领取 VOUCHER_ALREADY_CLAIMED；MQ 发送失败库存回滚（INTERNAL_ERROR 后 stock 不变）。
+
+
 ## 2026-10-28 · 发单人仲裁胜诉 +2，胜负信用完全对称
 
 - **目标**：判给发单人时发单人也 +2；与判给跑腿时跑腿 +2 对称。

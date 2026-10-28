@@ -5,6 +5,7 @@ import com.campusdash.application.usecase.query.QueryErrandListUseCase;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.domain.voucher.model.VoucherStock;
+import com.campusdash.domain.voucher.ports.VoucherClaimPort;
 import com.campusdash.domain.voucher.model.VoucherType;
 import com.campusdash.domain.voucher.model.VoucherUse;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
@@ -65,6 +66,7 @@ public class AdminController {
     private final ForceLogoutPort forceLogoutPort;
     private final UserRepository userRepository;
     private final AuthPort authPort;
+    private final VoucherClaimPort voucherClaimCache;
 
     public AdminController(QueryErrandListUseCase queryUseCase,
                            ErrandRepository errandRepository,
@@ -77,7 +79,8 @@ public class AdminController {
                            WsSessionRegistry wsSessionRegistry,
                            ForceLogoutPort forceLogoutPort,
                            UserRepository userRepository,
-                           AuthPort authPort) {
+                           AuthPort authPort,
+                           VoucherClaimPort voucherClaimCache) {
         this.queryUseCase = queryUseCase;
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
@@ -90,6 +93,7 @@ public class AdminController {
         this.forceLogoutPort = forceLogoutPort;
         this.userRepository = userRepository;
         this.authPort = authPort;
+        this.voucherClaimCache = voucherClaimCache;
     }
 
     public record ArbitrateRequest(String favor) {
@@ -248,6 +252,7 @@ public class AdminController {
         if (voucherRepository.updateStock(type, req.stock()) == 0) {
             throw new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type);
         }
+        voucherClaimCache.syncStock(type, req.stock());
         return Result.ok(null);
     }
 

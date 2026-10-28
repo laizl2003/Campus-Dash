@@ -38,6 +38,12 @@ public interface VoucherRepository {
 
     void insert(Voucher voucher);
 
+    /** 幂等插入：voucher_id 已存在返回 0 */
+    int insertIfAbsent(Voucher voucher);
+
+    /** 删除领取记录（worker 落库冲突回滚用） */
+    int deleteById(long voucherId);
+
     Optional<Voucher> findById(long voucherId);
 
     /** 某用户某类型当前可用的券数量（用于限制同类型只能持有一张） */
