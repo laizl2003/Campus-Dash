@@ -269,6 +269,8 @@
 .admin-user-actions .btn-danger { background: #b23b32; color: #fff; }
 .admin-user-actions .btn-danger:hover { background: #9c322a; }
 .admin-user-actions .btn-success { background: #2f6b4a; color: #fff; }
+.admin-user-actions .btn.admin-mute { background: #d97706; border-color: #d97706; color: #fff; }
+.admin-user-actions .btn.admin-mute:hover:not(:disabled) { background: #b45309; border-color: #b45309; color: #fff; }
 .admin-user-actions .btn-success:hover { background: #25573c; }
 
 /* 红绿按钮 hover 保持本色，只加深，不变白 */

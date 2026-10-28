@@ -64,6 +64,7 @@ public enum ErrorCode {
     // 聊天
     CHAT_INVALID_CONTENT("消息内容不合法"),
     CHAT_RATE_LIMITED("发得太快了，请稍后再试"),
+    CHAT_MUTED("你已被管理员禁言"),
 
     // 通用
     UNAUTHORIZED("未登录或会话已过期"),

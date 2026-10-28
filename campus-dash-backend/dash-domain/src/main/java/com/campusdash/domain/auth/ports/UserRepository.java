@@ -47,6 +47,11 @@ public interface UserRepository {
     /** 启用/禁用账号：status 1=启用，0=禁用 */
     void updateStatus(String userId, boolean enabled);
 
+    /** 聊天发言权限：user.message_status = 1 */
+    boolean messageAllowed(String userId);
+
+    void updateMessageStatus(String userId, boolean allowed);
+
     void markLoginFailure(String userId);
 
     /** 修改密码：只更新 password_hash / password_updated_at / updated_at */

@@ -1,6 +1,7 @@
 package com.campusdash.presentation;
 
 import com.campusdash.application.usecase.ArbitrateErrandUseCase;
+import com.campusdash.application.usecase.chat.ChatNoticeUseCase;
 import com.campusdash.application.usecase.query.QueryErrandListUseCase;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.ports.ErrandRepository;
@@ -67,6 +68,7 @@ public class AdminController {
     private final UserRepository userRepository;
     private final AuthPort authPort;
     private final VoucherClaimPort voucherClaimCache;
+    private final ChatNoticeUseCase chatNoticeUseCase;
 
     public AdminController(QueryErrandListUseCase queryUseCase,
                            ErrandRepository errandRepository,
@@ -80,7 +82,8 @@ public class AdminController {
                            ForceLogoutPort forceLogoutPort,
                            UserRepository userRepository,
                            AuthPort authPort,
-                           VoucherClaimPort voucherClaimCache) {
+                           VoucherClaimPort voucherClaimCache,
+                           ChatNoticeUseCase chatNoticeUseCase) {
         this.queryUseCase = queryUseCase;
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
@@ -94,6 +97,7 @@ public class AdminController {
         this.userRepository = userRepository;
         this.authPort = authPort;
         this.voucherClaimCache = voucherClaimCache;
+        this.chatNoticeUseCase = chatNoticeUseCase;
     }
 
     public record ArbitrateRequest(String favor) {
@@ -161,6 +165,20 @@ public class AdminController {
         return Result.ok(data);
     }
 
+    /** 禁言/解禁：更新 message_status，并在聊天室广播系统消息 */
+    @PostMapping("/users/{userId}/message-status")
+    public Result<Void> updateMessageStatus(@PathVariable String userId,
+                                            @RequestBody MessageStatusRequest request) {
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new BizException(ErrorCode.ACCOUNT_NOT_FOUND, "userId=" + userId));
+        userRepository.updateMessageStatus(userId, request.allowed());
+        chatNoticeUseCase.messageStatusChanged(user.username(), !request.allowed());
+        return Result.ok(null);
+    }
+
+    public record MessageStatusRequest(boolean allowed) {
+    }
+
     /** 强制下线：关闭该用户全部 WS 连接，并打上标记，重新登录前拒绝请求 */
     @PostMapping("/users/{userId}/force-logout")
     public Result<Void> forceLogout(@PathVariable String userId) {
@@ -190,6 +208,7 @@ public class AdminController {
                     boolean online = authPort.isOnline(row.userId());
                     item.put("online", online);
                     item.put("enabled", row.enabled());
+                    item.put("messageStatus", row.messageStatus());
                     item.put("loginStatus", row.loginStatus());
                     item.put("lastSeenAt", row.lastSeenAt() == null ? "" : row.lastSeenAt().toString());
                     item.put("lastLoginAt", row.lastLoginAt() == null ? "" : row.lastLoginAt().toString());

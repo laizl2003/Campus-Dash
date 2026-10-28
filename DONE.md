@@ -3,6 +3,18 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · Admin 禁言/解禁与聊天系统通知
+
+- **目标**：平台配置用户表最后一列增加禁言/解禁；禁言后不能发聊天消息；操作后聊天室显示灰色居中系统消息。
+- **改动**：
+  - user 增加 message_status TINYINT DEFAULT 1（migrate-message-status.sql）。
+  - AdminController 增加 POST /api/admin/users/{id}/message-status；AdminUserQuery 返回 messageStatus。
+  - SendChatMessageUseCase 校验 messageAllowed，禁言返回 CHAT_MUTED。
+  - ChatNoticeUseCase 写 SYSTEM 消息并 WS 广播；ChatController/Broadcaster 返回 msgType。
+  - Admin 表格按钮：禁言橙色 admin-mute，解禁绿色 btn-success；SquareChat 居中灰色系统消息。
+- **验证**：禁言后 DB message_status=0、聊天发送 CHAT_MUTED；解禁后发送 OK；SYSTEM 内容为“stuhuceap已被禁言/已解除禁言”；系统消息样式 rgb(153) 灰、background #f0f0f0、align center；表格禁言按钮 rgb(217,119,6)。
+
+
 ## 2026-10-28 · 聊天在线点常绿 + HighLight 补 ZSET 亮点
 
 - **目标**：聊天框在线提示不再先灰后绿，始终绿色；把 ZSET 多端登录/踢人/在线统计写进简历素材。

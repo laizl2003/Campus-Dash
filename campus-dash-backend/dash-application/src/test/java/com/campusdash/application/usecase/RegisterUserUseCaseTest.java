@@ -189,6 +189,8 @@ class RegisterUserUseCaseTest {
         @Override public void markOffline(String userId) { }
         @Override public int sweepOffline(Instant cutoff) { return 0; }
         @Override public void updateStatus(String userId, boolean enabled) { }
+        @Override public boolean messageAllowed(String userId) { return true; }
+        @Override public void updateMessageStatus(String userId, boolean allowed) { }
         @Override public void markLoginFailure(String userId) { }
         @Override public void updatePassword(String userId, String hash, Instant at) { }
         @Override public boolean deleteById(String userId) { return byName.remove(byName.entrySet().stream().filter(e -> e.getValue().userId().equals(userId)).map(java.util.Map.Entry::getKey).findFirst().orElse(null)) != null; }

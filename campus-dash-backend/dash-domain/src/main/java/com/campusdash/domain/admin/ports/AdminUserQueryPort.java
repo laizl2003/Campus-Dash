@@ -9,7 +9,7 @@ public interface AdminUserQueryPort {
     Page page(int offset, int limit);
 
     record Row(String userId, String username, Instant lastLoginAt, long balanceCents,
-               boolean loginStatus, Instant lastSeenAt, boolean enabled) {
+               boolean loginStatus, Instant lastSeenAt, boolean enabled, boolean messageStatus) {
     }
 
     record Page(List<Row> items, long total) {

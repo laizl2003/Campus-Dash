@@ -130,6 +130,13 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
           <div style={{ color: '#666', fontSize: 10, lineHeight: 1.55 }}>还没有消息，来和大家打个招呼吧。</div>
         </div>}
         {messages.map(message => {
+          if (message.msgType === 'SYSTEM' || message.senderRole === 'system') {
+            return <div key={message.id} style={{
+              alignSelf: 'center', maxWidth: '92%', padding: '3px 9px',
+              borderRadius: 999, background: '#f0f0f0', color: '#999999',
+              fontSize: 9, textAlign: 'center', lineHeight: 1.6,
+            }}>{message.content}</div>;
+          }
           const mine = message.senderId === selfId;
           return <div key={message.id} style={{
             display: 'flex', gap: 6, alignItems: 'flex-start',

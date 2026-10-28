@@ -19,7 +19,7 @@ public class JdbcAdminUserQuery implements AdminUserQueryPort {
     @Override
     public Page page(int offset, int limit) {
         List<Row> rows = jdbc.query("""
-                SELECT u.user_id, u.username, u.last_login_at, u.login_status, u.last_seen_at, u.status,
+                SELECT u.user_id, u.username, u.last_login_at, u.login_status, u.last_seen_at, u.status, u.message_status,
                        COALESCE(wa.available, 0) AS balance
                   FROM user u
                   LEFT JOIN wallet_account wa ON wa.owner_id = u.user_id AND wa.owner_type = 'USER'
@@ -33,7 +33,8 @@ public class JdbcAdminUserQuery implements AdminUserQueryPort {
                         rs.getLong("balance"),
                         rs.getInt("login_status") == 1,
                         rs.getTimestamp("last_seen_at") == null ? null : rs.getTimestamp("last_seen_at").toInstant(),
-                        rs.getInt("status") == 1),
+                        rs.getInt("status") == 1,
+                        rs.getInt("message_status") == 1),
                 limit, offset);
         Long total = jdbc.queryForObject("SELECT COUNT(*) FROM user WHERE role = 'user'", Long.class);
         return new Page(rows, total == null ? 0 : total);

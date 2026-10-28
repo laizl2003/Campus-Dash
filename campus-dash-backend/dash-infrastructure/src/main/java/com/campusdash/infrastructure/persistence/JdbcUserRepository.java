@@ -154,6 +154,19 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
+    public boolean messageAllowed(String userId) {
+        Integer value = jdbc.queryForObject(
+                "SELECT message_status FROM `user` WHERE user_id = ?", Integer.class, userId);
+        return value == null || value == 1;
+    }
+
+    @Override
+    public void updateMessageStatus(String userId, boolean allowed) {
+        jdbc.update("UPDATE `user` SET message_status = ? WHERE user_id = ?",
+                allowed ? 1 : 0, userId);
+    }
+
+    @Override
     public int sweepOffline(Instant cutoff) {
         return jdbc.update("""
                 UPDATE `user` SET login_status = 0

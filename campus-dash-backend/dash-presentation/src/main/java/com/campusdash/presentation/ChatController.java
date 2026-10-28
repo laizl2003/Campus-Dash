@@ -66,6 +66,7 @@ public class ChatController {
         item.put("senderName", m.senderName());
         item.put("senderRole", m.senderRole());
         item.put("content", m.content());
+        item.put("msgType", m.msgType());
         item.put("createdAt", m.createdAt().toString());
         item.put("clientMsgId", m.clientMsgId());
         return item;

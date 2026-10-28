@@ -32,6 +32,7 @@ public class ChatWebSocketBroadcaster implements ChatBroadcaster {
         payload.put("senderName", message.senderName());
         payload.put("senderRole", message.senderRole());
         payload.put("content", message.content());
+        payload.put("msgType", message.msgType());
         payload.put("createdAt", message.createdAt().toString());
         payload.put("clientMsgId", message.clientMsgId());
         try {

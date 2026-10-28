@@ -288,6 +288,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   campus_id           BIGINT       NOT NULL DEFAULT 1 COMMENT '所属校区（分片键预留）',
   credit_score        INT          NOT NULL DEFAULT 60 COMMENT '冗余：登录页/列表直接显示，免回表 credit_score',
   status              TINYINT      NOT NULL DEFAULT 1 COMMENT '1 正常 / 0 禁用',
+  message_status      TINYINT      NOT NULL DEFAULT 1 COMMENT '1 允许发言 / 0 禁言',
   last_login_at       DATETIME(3)  NULL COMMENT '冗余：最近登录时间，安全审计用',
   last_login_ip       VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '冗余：最近登录 IP',
   login_status        TINYINT      NOT NULL DEFAULT 0 COMMENT '1=已登录/在线，0=离线',

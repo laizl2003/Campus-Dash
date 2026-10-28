@@ -582,6 +582,15 @@ function SettingsPanel() {
     } catch (e) { setError(e instanceof Error ? e.message : '状态更新失败'); }
   };
 
+  const toggleMessage = async (userId: string, allowed: boolean, username: string) => {
+    setError('');
+    try {
+      await api.adminUpdateMessageStatus(userId, !allowed);
+      setToast(allowed ? `已禁言用户${username}` : `已解除${username}的禁言`);
+      setUsers(await api.adminUsers(page, 20));
+    } catch (e) { setError(e instanceof Error ? e.message : '禁言状态更新失败'); }
+  };
+
   const forceLogout = async (userId: string, username: string) => {
     setError('');
     try {
@@ -638,6 +647,11 @@ function SettingsPanel() {
               <button type="button" className="btn btn-ghost admin-danger" disabled={!user.online}
                       title={user.online ? '强制该用户下线' : '用户已离线'}
                       onClick={() => void forceLogout(user.userId, user.username)}>强制下线</button>
+              <button type="button"
+                      className={`btn ${user.messageStatus === false ? 'btn-success' : 'admin-mute'}`}
+                      onClick={() => void toggleMessage(user.userId, user.messageStatus !== false, user.username)}>
+                {user.messageStatus === false ? '解除禁言' : '禁言'}
+              </button>
             </td>
           </tr>)}</tbody>
         </table></div>}
