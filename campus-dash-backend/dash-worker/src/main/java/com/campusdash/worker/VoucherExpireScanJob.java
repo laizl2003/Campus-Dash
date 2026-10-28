@@ -1,5 +1,6 @@
 package com.campusdash.worker;
 
+import com.campusdash.domain.voucher.ports.VoucherClaimPort;
 import com.campusdash.domain.voucher.ports.VoucherRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,15 +25,23 @@ public class VoucherExpireScanJob {
     private static final int BATCH_LIMIT = 200;
 
     private final VoucherRepository vouchers;
+    private final VoucherClaimPort claimCache;
 
-    public VoucherExpireScanJob(VoucherRepository vouchers) {
+    public VoucherExpireScanJob(VoucherRepository vouchers, VoucherClaimPort claimCache) {
         this.vouchers = vouchers;
+        this.claimCache = claimCache;
     }
 
     @Scheduled(fixedDelayString = "${dash.voucher.expire-scan-ms:60000}",
                initialDelayString = "${dash.voucher.expire-scan-initial-ms:15000}")
     public void scan() {
-        int expired = vouchers.expireOverdue(BATCH_LIMIT);
+        int expired = 0;
+        for (var voucher : vouchers.findExpiredAvailable(BATCH_LIMIT)) {
+            if (vouchers.markExpired(voucher.voucherId()) == 1) {
+                claimCache.release(voucher.type(), voucher.userId());
+                expired++;
+            }
+        }
         if (expired > 0) {
             log.info("优惠券过期扫描：本次作废 {} 张", expired);
         }
