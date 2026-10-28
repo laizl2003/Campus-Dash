@@ -587,7 +587,7 @@ function SettingsPanel() {
                       onClick={() => void toggleUser(user.userId, user.enabled !== false, user.username)}>
                 {user.enabled === false ? '启用' : '禁用'}
               </button>
-              <button type="button" className="btn btn-danger" disabled={!user.online}
+              <button type="button" className="btn btn-ghost admin-danger" disabled={!user.online}
                       title={user.online ? '强制该用户下线' : '用户已离线'}
                       onClick={() => void forceLogout(user.userId, user.username)}>强制下线</button>
             </td>
