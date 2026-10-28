@@ -28,13 +28,18 @@ export default function SelectMenu({ value, options, onChange, ariaLabel, classN
       setOpen(false);
     };
     const close = () => setOpen(false);
+    const onScroll = (event: Event) => {
+      // 菜单自身滚动（滚轮 / 拖动滚动条）不关闭；只关闭页面滚动
+      if (menuRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onDown);
     window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       document.removeEventListener('mousedown', onDown);
       window.removeEventListener('resize', close);
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [open]);
 

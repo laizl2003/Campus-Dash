@@ -3,6 +3,13 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-29 · 修复优惠券下拉菜单滚动即关闭
+
+- **目标**：优惠券 SelectMenu 在滚轮/拖动菜单滚动条时不关闭，仅页面滚动时关闭。
+- **改动**：SelectMenu 的 capture scroll 监听判断 event.target 是否在菜单内，菜单自身滚动忽略。
+- **验证**：打开优惠券菜单 7 项；菜单内 dispatch scroll 后仍打开；window 滚动后关闭。
+
+
 ## 2026-10-29 · 修复优惠券异步领取丢单/已持有状态
 
 - **根因**：聊天缓存新增 ObjectMapper 注入后，worker 没有该 Bean，启动即退出；领取接口只做 Redis 预扣 + 发 MQ 就返回成功，worker 未消费导致 voucher_record 不落库，claimed/pending 键残留。
