@@ -52,19 +52,26 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
   const [onlineOpen, setOnlineOpen] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [onlineLoading, setOnlineLoading] = useState(false);
   const [onlineError, setOnlineError] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
+  const prependRef = useRef(false);
+  const olderLoadingRef = useRef(false);
   const selfId = getUserId();
 
   useEffect(() => {
     let active = true;
     api.chatHistory({ limit: 50 })
       .then(result => {
-        if (active) setMessages(prev => mergeMessages(prev, result.items));
+        if (active) {
+          setMessages(prev => mergeMessages(prev, result.items));
+          setHasMore(result.items.length >= 50);
+        }
       })
       .catch(() => { if (active) setError('聊天记录加载失败'); })
       .finally(() => { if (active) setLoading(false); });
@@ -105,8 +112,42 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
 
   useEffect(() => {
     const list = listRef.current;
-    if (list) list.scrollTop = list.scrollHeight;
+    if (!list) return;
+    if (prependRef.current) {
+      prependRef.current = false;
+      return;
+    }
+    list.scrollTop = list.scrollHeight;
   }, [messages.length]);
+
+  const loadOlder = async () => {
+    const list = listRef.current;
+    if (!list || olderLoadingRef.current || loadingOlder || !hasMore || messages.length === 0) return;
+    olderLoadingRef.current = true;
+    setLoadingOlder(true);
+    const beforeId = messages[0].id;
+    try {
+      const result = await api.chatHistory({ beforeId, limit: 50 });
+      if (result.items.length === 0) {
+        setHasMore(false);
+        return;
+      }
+      const previousHeight = list.scrollHeight;
+      prependRef.current = true;
+      setMessages(prev => mergeMessages(result.items, prev));
+      setHasMore(result.items.length >= 50);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          list.scrollTop = list.scrollHeight - previousHeight;
+        });
+      });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '更早消息加载失败');
+    } finally {
+      olderLoadingRef.current = false;
+      setLoadingOlder(false);
+    }
+  };
 
   const openOnline = async () => {
     setOnlineOpen(true);
@@ -168,10 +209,14 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
         </button>
       </div>
 
-      <div ref={listRef} role="log" aria-live="polite" aria-label="聊天消息" style={{
-        flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
-        display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 9px',
-      }}>
+      <div ref={listRef} role="log" aria-live="polite" aria-label="聊天消息"
+           onScroll={() => { if ((listRef.current?.scrollTop ?? 1) <= 20) void loadOlder(); }}
+           style={{
+             flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
+             display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 9px',
+           }}>
+        {loadingOlder && <div style={{ alignSelf: 'center', color: '#aaa', fontSize: 9 }}>加载更早消息…</div>}
+        {!hasMore && messages.length > 0 && <div style={{ alignSelf: 'center', color: '#bbb', fontSize: 8 }}>没有更早消息了</div>}
         {loading && <div style={{ alignSelf: 'center', color: '#aaa', fontSize: 9 }}>正在加载聊天…</div>}
         {!loading && messages.length === 0 && <div style={{ alignSelf: 'flex-start', maxWidth: '94%', padding: '7px 9px', borderRadius: '4px 10px 10px 10px', background: '#fff', border: '1px solid #ece7db' }}>
           <div style={{ marginBottom: 2, color: '#9a9a9a', fontSize: 8 }}>CampusDash</div>
