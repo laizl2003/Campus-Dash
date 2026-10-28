@@ -51,6 +51,10 @@ public class ClaimVoucherAsyncUseCase {
         if (!stock.online()) {
             throw new BizException(ErrorCode.VOUCHER_NOT_AVAILABLE, "该优惠券已下架");
         }
+        // Redis 的 claimed 键可能因 worker 异常/过期而缺失；DB 才是最终事实。
+        if (vouchers.countAvailable(userId, typeCode, Instant.now()) > 0) {
+            throw new BizException(ErrorCode.VOUCHER_ALREADY_CLAIMED, "type=" + typeCode);
+        }
 
         long voucherId = idGenerator.nextId();
         Instant expireAt = Instant.now().plus(Duration.ofHours(expireHours));

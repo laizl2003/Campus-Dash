@@ -120,6 +120,7 @@ services:
     # 复用 app 镜像，只换 ENTRYPOINT
     image: dash-app:local
     container_name: dash-worker
+    restart: unless-stopped
     entrypoint: ["java","-XX:MaxRAMPercentage=70","-jar","/app/worker.jar"]
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/campus_dash?useSSL=false&serverTimezone=Asia/Shanghai

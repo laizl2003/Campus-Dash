@@ -27,11 +27,10 @@ public class RedisChatHistoryCache implements ChatHistoryCachePort {
     private static final Duration TTL = Duration.ofHours(24);
 
     private final StringRedisTemplate redis;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public RedisChatHistoryCache(StringRedisTemplate redis, ObjectMapper objectMapper) {
+    public RedisChatHistoryCache(StringRedisTemplate redis) {
         this.redis = redis;
-        this.objectMapper = objectMapper;
     }
 
     @Override

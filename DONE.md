@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-29 · 修复优惠券异步领取丢单/已持有状态
+
+- **根因**：聊天缓存新增 ObjectMapper 注入后，worker 没有该 Bean，启动即退出；领取接口只做 Redis 预扣 + 发 MQ 就返回成功，worker 未消费导致 voucher_record 不落库，claimed/pending 键残留。
+- **修复**：
+  - RedisChatHistoryCache 自带 ObjectMapper，不再依赖 Web 容器 Bean。
+  - worker 增加 restart: unless-stopped。
+  - ClaimVoucherAsyncUseCase 预扣前先查 DB countAvailable，避免 Redis 键缺失时假领取成功。
+- **验证**：worker 正常启动且 VoucherClaimConsumer 启动；pending:id=0，Redis/DB 库存一致；laizl/stuf4cpvh 历史 pending 全部落库，30-6(type14) 已在钱包；新生效 type1 领取后 3 秒内 DB/我的券可见；重复领取返回 VOUCHER_ALREADY_CLAIMED。
+
+
 ## 2026-10-29 · 聊天缓存扩到 2000 条
 
 - **目标**：最近消息缓存从 200 条提高到 2000 条，验证新消息是否即时入缓存。
