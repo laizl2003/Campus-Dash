@@ -3,6 +3,13 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-29 · 聊天缓存扩到 2000 条
+
+- **目标**：最近消息缓存从 200 条提高到 2000 条，验证新消息是否即时入缓存。
+- **改动**：RedisChatHistoryCache.MAX_SIZE=2000；QueryChatHistoryUseCase.CACHE_WARM_SIZE=2000。
+- **验证**：清空缓存后 GET history 回填 ZCARD=2000；MEMORY USAGE≈791592 B（约 773 KiB，约 396 B/条）；发送一条消息后 ZREVRANGE 第一条即为该消息，ZCARD 仍 2000。
+
+
 ## 2026-10-29 · Admin WS 灌入 1 万条雪花 ID 消息
 
 - **目标**：删除 seed-chat 伪 ID 数据，改由 Admin 通过 WS 发送 10000 条消息，验证真实雪花 ID 排序与缓存。

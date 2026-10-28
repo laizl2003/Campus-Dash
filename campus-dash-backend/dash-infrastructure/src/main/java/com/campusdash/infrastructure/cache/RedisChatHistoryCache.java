@@ -22,7 +22,7 @@ import java.util.Set;
 public class RedisChatHistoryCache implements ChatHistoryCachePort {
 
     private static final Logger log = LoggerFactory.getLogger(RedisChatHistoryCache.class);
-    private static final int MAX_SIZE = 200;
+    private static final int MAX_SIZE = 2000;
     private static final String PREFIX = "chat:recent:";
     private static final Duration TTL = Duration.ofHours(24);
 
@@ -40,7 +40,7 @@ public class RedisChatHistoryCache implements ChatHistoryCachePort {
         try {
             redis.opsForZSet().add(key, objectMapper.writeValueAsString(toMap(message)),
                     message.id());
-            // ZSET 按 id 升序，删除排名 0 到 -(MAX_SIZE+1)，保留最后 200 条
+            // ZSET 按 id 升序，删除排名 0 到 -(MAX_SIZE+1)，保留最后 2000 条
             redis.opsForZSet().removeRange(key, 0, -(MAX_SIZE + 1));
             redis.expire(key, TTL);
         } catch (Exception e) {
