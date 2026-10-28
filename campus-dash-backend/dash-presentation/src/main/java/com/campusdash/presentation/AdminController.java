@@ -164,13 +164,7 @@ public class AdminController {
     /** 强制下线：关闭该用户全部 WS 连接，并打上标记，重新登录前拒绝请求 */
     @PostMapping("/users/{userId}/force-logout")
     public Result<Void> forceLogout(@PathVariable String userId) {
-        for (var session : wsSessionRegistry.of(userId)) {
-            try {
-                session.close(CloseStatus.POLICY_VIOLATION);
-            } catch (Exception ignored) {
-                // 连接可能已断，忽略
-            }
-        }
+        wsSessionRegistry.closeUser(userId);
         // 先撤销该用户全部已签发凭证，再打强制下线标记；成本只发生在这一个动作上
         authPort.revokeAllSessions(userId);
         forceLogoutPort.force(userId);

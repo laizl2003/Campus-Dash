@@ -4,6 +4,7 @@ import com.campusdash.application.usecase.LoginUserUseCase;
 import com.campusdash.domain.auth.model.UserAccount;
 import com.campusdash.domain.auth.ports.AuthPort;
 import com.campusdash.domain.auth.ports.ForceLogoutPort;
+import com.campusdash.presentation.realtime.WsSessionRegistry;
 import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.auth.ports.RefreshTokenPort;
 import com.campusdash.shared.BizException;
@@ -35,17 +36,20 @@ public class AuthController {
     private final LoginUserUseCase loginUseCase;
     private final UserRepository users;
     private final ForceLogoutPort forceLogoutPort;
+    private final WsSessionRegistry wsSessions;
     private final boolean demoLoginEnabled;
 
     public AuthController(AuthPort authPort,
                           LoginUserUseCase loginUseCase,
                           UserRepository users,
                           ForceLogoutPort forceLogoutPort,
+                          WsSessionRegistry wsSessions,
                           @Value("${dash.auth.demo-login:true}") boolean demoLoginEnabled) {
         this.authPort = authPort;
         this.loginUseCase = loginUseCase;
         this.users = users;
         this.forceLogoutPort = forceLogoutPort;
+        this.wsSessions = wsSessions;
         this.demoLoginEnabled = demoLoginEnabled;
     }
 
@@ -151,7 +155,10 @@ public class AuthController {
                                @RequestBody(required = false) LogoutRequest body) {
         if (auth != null && auth.startsWith("Bearer ")) {
             String access = auth.substring(7).trim();
-            authPort.resolve(access).ifPresent(users::markOffline);
+            authPort.resolve(access).ifPresent(userId -> {
+                users.markOffline(userId);
+                if (wsSessions != null) wsSessions.closeUser(userId);
+            });
             authPort.logout(access);
         }
         // access token 进黑名单只挡住剩余有效期；refresh 若留在 Redis，登出后仍能换新 access

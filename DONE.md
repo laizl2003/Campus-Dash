@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · WS 注册表在线人数与登出关闭
+
+- **目标**：后端直接查询所有 WS 连接 userId；登出关闭连接并删除 map key；在线人数用 WS map。
+- **改动**：
+  - WsSessionRegistry 增加 onlineUserIds() 与 closeUser()。
+  - AuthController.logout 关闭该用户全部 WS；Admin forceLogout 复用 closeUser。
+  - ChatController /online 改为 wsSessions.onlineUsers()，不再读 DB 标记。
+- **验证**：初始在线 1 → 打开 user WS 变 2 → 调 logout 后变 1，且 WS readyState=3（已关闭）。
+
+
 ## 2026-10-28 · 修复 worker 启动失败导致在线状态不清理
 
 - **根因**：worker 组件扫描加载 SendChatMessageUseCase，依赖 ChatBroadcaster（实现只在 presentation），worker 启动失败；UserPresenceSweepJob 停摆，login_status 残留为 1。
