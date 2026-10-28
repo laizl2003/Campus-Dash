@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, logout, yuan, getUsername, getUserId, listAccounts, switchAccount, type StoredAccount } from '../api';
 import Icon from '../components/Icon';
+import SquareChat from '../components/SquareChat';
 import { subscribeWs } from '../ws';
 import './admin.css';
 
@@ -134,6 +135,7 @@ export default function AdminApp() {
         <button type="button" className={view === 'vouchers' ? 'is-active' : ''} onClick={() => setView('vouchers')}><Icon name="ticket" size={16}/>优惠券管理</button>
         <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}><Icon name="wallet" size={16}/>平台配置</button>
       </nav>
+      <div className="admin-chat-slot"><SquareChat compactBottom={false}/></div>
       <div className="admin-side-foot">
         <div className="admin-account" ref={switchRef}>
           <button type="button" className="admin-account-trigger" disabled={switchBusy}

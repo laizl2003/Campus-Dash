@@ -1,6 +1,9 @@
 // 连接生命周期与主动断开分离，避免退出或切换身份后旧连接继续重试。
 import { getToken } from './api';
-export interface WsEvent { type: 'errand.status' | 'notification.new' | 'credit.changed' | 'admin.dispute'; payload: Record<string, unknown> }
+export interface WsEvent {
+  type: 'errand.status' | 'notification.new' | 'credit.changed' | 'admin.dispute' | 'chat.message' | 'chat.error';
+  payload: Record<string, unknown>;
+}
 type Handler = (event: WsEvent) => void;
 const handlers = new Set<Handler>();
 let socket: WebSocket | null = null;
@@ -10,6 +13,13 @@ let reconnectTimer: number | undefined;
 let wsAvailable = false;
 let generation = 0;
 export function isWsAvailable() { return wsAvailable; }
+
+/** 向当前 WebSocket 发送一帧；未连接时返回 false，由调用方提示重试。 */
+export function sendWs(payload: unknown): boolean {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+  socket.send(JSON.stringify(payload));
+  return true;
+}
 export function subscribeWs(handler: Handler): () => void { handlers.add(handler); return () => { handlers.delete(handler); }; }
 export function disconnectWs() {
   generation++;

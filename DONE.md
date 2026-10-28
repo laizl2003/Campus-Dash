@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 广场聊天 v1.0
+
+- **目标**：广场左侧栏支持公共聊天，Admin 与普通用户共用同一房间，消息落库并实时广播。
+- **后端**：
+  - `chat_message` 表（雪花 id、room_id、sender_name/role 快照、client_msg_id 幂等）。
+  - `SendChatMessageUseCase` / `QueryChatHistoryUseCase`、JDBC 仓储、Redis 限流。
+  - `GET/POST /api/chat/messages`；`WsHandler` 增加 `chat.send`；`ChatWebSocketBroadcaster` 广播 `chat.message`。
+- **前端**：`SquareChat` 接历史、WS 实时消息、HTTP 兜底、发送失败提示；Admin 侧栏复用同一组件，Admin 绿色头像、普通用户黄色头像。
+- **验证**：HTTP 发送 200，A/B 两个 WS 均收到；同一 clientMsgId 重发返回同一 id；Admin 消息 senderRole=Admin；历史接口返回消息。
+
+
 ## 2026-10-28 · 广场左侧栏聊天框 UI
 
 - **目标**：只替换广场左侧栏下半部分，做出聊天框 + 输入框 + 发送按钮。

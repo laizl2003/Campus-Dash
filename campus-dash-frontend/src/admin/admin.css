@@ -284,3 +284,7 @@
 /* 仲裁待处理数量：绿色背景，仲裁完成后随列表归零消失 */
 .admin-nav-count { margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 6px; background: #dff0e4; color: #2f6b4a; font-size: 10px; text-align: center; }
 .admin-pending-count { display: inline-block; min-width: 22px; padding: 2px 8px; border-radius: 7px; background: #dff0e4; color: #2f6b4a; text-align: center; }
+
+/* Admin 侧栏聊天：只占左侧栏，移动端隐藏 */
+.admin-chat-slot { display: flex; flex: 0 0 auto; height: clamp(220px, 30vh, 300px); min-height: 0; margin-top: 2px; }
+@media (max-width: 800px) { .admin-chat-slot { display: none; } }

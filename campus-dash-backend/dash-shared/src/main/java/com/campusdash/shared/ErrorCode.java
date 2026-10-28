@@ -61,6 +61,10 @@ public enum ErrorCode {
     VOUCHER_INVALID("优惠券类型不存在"),
     VOUCHER_NOT_AVAILABLE("优惠券不可用"),
 
+    // 聊天
+    CHAT_INVALID_CONTENT("消息内容不合法"),
+    CHAT_RATE_LIMITED("发得太快了，请稍后再试"),
+
     // 通用
     UNAUTHORIZED("未登录或会话已过期"),
     ERRAND_NOT_FOUND("任务不存在"),

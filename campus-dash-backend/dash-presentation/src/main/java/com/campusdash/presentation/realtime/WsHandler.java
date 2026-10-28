@@ -1,5 +1,12 @@
 package com.campusdash.presentation.realtime;
 
+import com.campusdash.application.usecase.chat.SendChatMessageUseCase;
+import com.campusdash.domain.chat.model.ChatMessage;
+import com.campusdash.shared.BizException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -7,31 +14,35 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
- * WebSocket 连接处理器：只管连接生命周期，消息内容全由服务端主动推。
- *
- * 不做"客户端订阅任务"协议：本项目量级下按 userId 广播足够，
- * 订阅协议会带来"订阅状态与业务状态漂移"这类新问题。
- *
- * 客户端可以发 ping，服务端回 pong（心跳保活，防中间设备断连）。
+ * WebSocket 连接处理器：服务端推送 + 客户端 chat.send。
+ * ping/pong 保持原协议；其他未知消息忽略。
  */
 @Component
 @ConditionalOnProperty(name = "dash.ws.enabled", havingValue = "true", matchIfMissing = true)
 public class WsHandler extends TextWebSocketHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(WsHandler.class);
     public static final String ATTR_USER_ID = "wsUserId";
 
     private final WsSessionRegistry registry;
+    private final SendChatMessageUseCase sendChatMessage;
+    private final ObjectMapper objectMapper;
 
-    public WsHandler(WsSessionRegistry registry) {
+    public WsHandler(WsSessionRegistry registry, SendChatMessageUseCase sendChatMessage,
+                     ObjectMapper objectMapper) {
         this.registry = registry;
+        this.sendChatMessage = sendChatMessage;
+        this.objectMapper = objectMapper;
     }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         String userId = (String) session.getAttributes().get(ATTR_USER_ID);
         if (userId == null) {
-            // 握手拦截器已挡掉未认证连接，这里是双保险
             try {
                 session.close(CloseStatus.POLICY_VIOLATION);
             } catch (Exception ignored) {
@@ -43,10 +54,47 @@ public class WsHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        if ("ping".equals(message.getPayload())) {
+        String payload = message.getPayload();
+        if ("ping".equals(payload)) {
             session.sendMessage(new TextMessage("pong"));
+            return;
         }
-        // 其他客户端消息一律忽略：本协议只有服务端 -> 客户端方向有业务语义
+
+        String userId = (String) session.getAttributes().get(ATTR_USER_ID);
+        if (userId == null) return;
+
+        String clientMsgId = null;
+        try {
+            JsonNode node = objectMapper.readTree(payload);
+            if (!"chat.send".equals(node.path("t").asText())) {
+                return;
+            }
+            clientMsgId = node.path("clientMsgId").asText(null);
+            ChatMessage sent = sendChatMessage.send(userId, clientMsgId, node.path("content").asText(""));
+            log.debug("聊天消息已发送 id={} sender={}", sent.id(), userId);
+        } catch (BizException e) {
+            sendError(session, clientMsgId, e.code().name(), e.getMessage());
+        } catch (Exception e) {
+            log.warn("聊天消息处理失败 sender={}", userId, e);
+            sendError(session, clientMsgId, "INTERNAL_ERROR", "消息发送失败，请稍后再试");
+        }
+    }
+
+    private void sendError(WebSocketSession session, String clientMsgId, String code, String message) {
+        if (session == null || !session.isOpen()) return;
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("clientMsgId", clientMsgId);
+        payload.put("code", code);
+        payload.put("message", message);
+        try {
+            String json = objectMapper.writeValueAsString(Map.of(
+                    "type", "chat.error", "payload", payload));
+            synchronized (session) {
+                session.sendMessage(new TextMessage(json));
+            }
+        } catch (Exception e) {
+            log.debug("聊天错误帧发送失败", e);
+        }
     }
 
     @Override

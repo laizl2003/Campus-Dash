@@ -441,6 +441,17 @@ async function request<T>(path: string, method = 'GET', body?: unknown, retried 
 }
 
 // ── 任务 ──────────────────────────────────────────────
+export interface ChatItem {
+  id: string;
+  roomId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: string;
+  content: string;
+  createdAt: string;
+  clientMsgId: string;
+}
+
 export interface ErrandCard {
   /** 后端以字符串返回：雪花 ID 超过 JS 安全整数（2^53），
    *  按 number 解析会截断精度，全程必须按 string 处理 */
@@ -510,6 +521,15 @@ export const api = {
   claimVoucher: (type: number) => request<{
     voucherId: string; type: number; description: string; expireTime: string; remainingStock: number;
   }>(`/api/vouchers/${type}/claim`, 'POST'),
+  chatHistory: (params: { beforeId?: string; afterId?: string; limit?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.beforeId) query.set('beforeId', params.beforeId);
+    if (params.afterId) query.set('afterId', params.afterId);
+    query.set('limit', String(params.limit ?? 50));
+    return request<{ items: ChatItem[] }>(`/api/chat/messages?${query.toString()}`);
+  },
+  sendChatMessage: (clientMsgId: string, content: string) =>
+    request<ChatItem>('/api/chat/messages', 'POST', { clientMsgId, content }),
   me: () => request<{ userId: string; username: string; role: string }>('/api/auth/me'),
   deleteAccount: () => request<null>('/api/account', 'DELETE'),
   heartbeat: () => request<null>('/api/auth/heartbeat', 'POST'),
