@@ -30,21 +30,24 @@ public class JdbcChatMessageRepository implements ChatMessageRepository {
                     rs.getString("sender_role"),
                     rs.getString("content"),
                     rs.getString("msg_type"),
+                    rs.getObject("errand_id") == null ? null : rs.getLong("errand_id"),
+                    rs.getString("errand_status"),
                     rs.getString("client_msg_id"),
                     rs.getInt("status"),
                     rs.getTimestamp("created_at").toInstant());
 
     private static final String COLUMNS =
-            "id, room_id, campus_id, sender_id, sender_name, sender_role, content, msg_type, client_msg_id, status, created_at";
+            "id, room_id, campus_id, sender_id, sender_name, sender_role, content, msg_type, " +
+            "errand_id, errand_status, client_msg_id, status, created_at";
 
     @Override
     public void save(ChatMessage m) {
         jdbc.update("""
                 INSERT INTO chat_message (id, room_id, campus_id, sender_id, sender_name, sender_role,
-                                          content, msg_type, client_msg_id, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                          content, msg_type, errand_id, errand_status, client_msg_id, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, m.id(), m.roomId(), m.campusId(), m.senderId(), m.senderName(), m.senderRole(),
-                m.content(), m.msgType(), m.clientMsgId(), m.status(),
+                m.content(), m.msgType(), m.errandId(), m.errandStatus(), m.clientMsgId(), m.status(),
                 Timestamp.from(m.createdAt()));
     }
 

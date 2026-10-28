@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, getUserId, type ChatItem } from '../api';
+import { api, getUserId, TYPE_TEXT, yuan, type ChatItem } from '../api';
 import { sendWs, subscribeWs } from '../ws';
 
 const chatIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H7l-4 3v-5.6A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/></svg>;
@@ -22,6 +22,17 @@ function mergeMessages(a: ChatItem[], b: ChatItem[]) {
 function timeLabel(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+interface ErrandPayload {
+  type?: string;
+  title?: string;
+  rewardCents?: number;
+  publisherId?: string;
+}
+
+function parseErrand(content: string): ErrandPayload {
+  try { return JSON.parse(content) as ErrandPayload; } catch { return {}; }
 }
 
 /**
@@ -55,6 +66,14 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
       }
       if (event.type === 'chat.error') {
         setError(typeof event.payload.message === 'string' ? event.payload.message : '消息发送失败');
+      }
+      if (event.type === 'errand.status') {
+        const errandId = String(event.payload.errandId ?? '');
+        const status = String(event.payload.status ?? '');
+        if (errandId) {
+          setMessages(prev => prev.map(message =>
+            message.errandId === errandId ? { ...message, errandStatus: status } : message));
+        }
       }
     });
     return () => { active = false; unsubscribe(); };
@@ -130,6 +149,24 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
           <div style={{ color: '#666', fontSize: 10, lineHeight: 1.55 }}>还没有消息，来和大家打个招呼吧。</div>
         </div>}
         {messages.map(message => {
+          if (message.msgType === 'ERRAND') {
+            const errand = parseErrand(message.content);
+            const clickable = message.errandStatus === 'PUBLISHED';
+            const card = <div style={{
+              width: '100%', padding: '7px 8px', boxSizing: 'border-box',
+              borderRadius: 8, border: `1px solid ${clickable ? '#ead48d' : '#e2e2e2'}`,
+              background: clickable ? '#fff8e3' : '#f1f1f1',
+              color: clickable ? '#5f4b16' : '#999999',
+            }}>
+              <div style={{ fontSize: 8, opacity: .75 }}>{TYPE_TEXT[errand.type ?? ''] ?? errand.type ?? '任务'}</div>
+              <div style={{ marginTop: 1, fontSize: 10, fontWeight: 600, lineHeight: 1.35 }}>{errand.title ?? '校园任务'}</div>
+              <div style={{ marginTop: 2, fontSize: 14, fontWeight: 800 }}>{yuan(errand.rewardCents ?? 0)}</div>
+              <div style={{ marginTop: 1, fontSize: 8, opacity: .7 }}>发单人 {errand.publisherId ?? message.senderId}</div>
+            </div>;
+            return clickable
+              ? <a key={message.id} href="#/square" style={{ alignSelf: 'stretch', textDecoration: 'none' }}>{card}</a>
+              : <div key={message.id} style={{ alignSelf: 'stretch', cursor: 'not-allowed' }}>{card}</div>;
+          }
           if (message.msgType === 'SYSTEM' || message.senderRole === 'system') {
             return <div key={message.id} style={{
               alignSelf: 'center', maxWidth: '92%', padding: '3px 9px',

@@ -31,7 +31,7 @@ public class ChatNoticeUseCase {
         String content = username + (muted ? "已被禁言" : "已解除禁言");
         ChatMessage message = new ChatMessage(
                 idGenerator.nextId(), SendChatMessageUseCase.ROOM, 1,
-                "system", "系统", "system", content, "SYSTEM", null, 1, Instant.now());
+                "system", "系统", "system", content, "SYSTEM", null, null, null, 1, Instant.now());
         messages.save(message);
         try {
             broadcaster.broadcast(message);

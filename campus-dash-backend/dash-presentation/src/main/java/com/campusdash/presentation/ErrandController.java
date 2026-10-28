@@ -1,6 +1,7 @@
 package com.campusdash.presentation;
 
 import com.campusdash.application.usecase.*;
+import com.campusdash.application.usecase.chat.ChatErrandNoticeUseCase;
 import com.campusdash.application.usecase.query.ErrandActionResolver;
 import com.campusdash.application.usecase.query.GetErrandDetailUseCase;
 import com.campusdash.application.usecase.query.QueryErrandListUseCase;
@@ -31,6 +32,8 @@ import java.util.UUID;
 @RequestMapping("/api/errands")
 public class ErrandController {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ErrandController.class);
+
     private final PublishErrandUseCase publishUseCase;
     private final GrabErrandUseCase grabUseCase;
     private final ConfirmErrandUseCase confirmUseCase;
@@ -46,6 +49,7 @@ public class ErrandController {
     private final ErrandRepository errandRepository;
     private final UserRepository users;
     private final VoucherRepository vouchers;
+    private final ChatErrandNoticeUseCase chatErrandNotice;
     private final double commissionRate;
 
     public ErrandController(PublishErrandUseCase publishUseCase,
@@ -63,6 +67,7 @@ public class ErrandController {
                             ErrandRepository errandRepository,
                             UserRepository users,
                             VoucherRepository vouchers,
+                             ChatErrandNoticeUseCase chatErrandNotice,
                             @org.springframework.beans.factory.annotation.Value("${dash.settle.commission-rate:0.08}")
                             double commissionRate) {
         this.publishUseCase = publishUseCase;
@@ -80,6 +85,7 @@ public class ErrandController {
         this.errandRepository = errandRepository;
         this.users = users;
         this.vouchers = vouchers;
+        this.chatErrandNotice = chatErrandNotice;
         this.commissionRate = commissionRate;
     }
 
@@ -97,7 +103,14 @@ public class ErrandController {
                 req.rewardCents(),
                 req.slotTotal() == null ? 1 : req.slotTotal(),
                 req.voucherId());
-        return Result.ok(publishUseCase.publish(cmd));
+        var result = publishUseCase.publish(cmd);
+        try {
+            chatErrandNotice.published(result.errandId(), userId, cmd.type(), cmd.title(), cmd.rewardCents());
+        } catch (RuntimeException e) {
+            // 发单已成功，聊天卡片失败不影响主流程
+            log.warn("发单聊天卡片写入失败 errandId={}", result.errandId(), e);
+        }
+        return Result.ok(result);
     }
 
     /** 任务广场：默认只看 PUBLISHED */

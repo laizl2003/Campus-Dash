@@ -66,7 +66,7 @@ public class SendChatMessageUseCase {
         }
         ChatMessage message = new ChatMessage(
                 idGenerator.nextId(), ROOM, user.campusId(), senderId,
-                user.username(), user.role(), content, "TEXT", key, 1, Instant.now());
+                user.username(), user.role(), content, "TEXT", null, null, key, 1, Instant.now());
         messages.save(message);
 
         // 实时广播失败不回滚：DB 是事实源，客户端靠 history/afterId 补洞

@@ -260,5 +260,8 @@ public class JdbcErrandRepository implements ErrandRepository {
                 INSERT INTO errand_status_log (campus_id, errand_id, from_status, to_status, round, operator_id)
                 VALUES ((SELECT campus_id FROM errand WHERE id = ?), ?, ?, ?, ?, ?)
                 """, errandId, errandId, from.name(), to.name(), round, operatorId);
+        // ERRAND 聊天卡片跟随任务状态；历史记录也返回最新状态
+        jdbc.update("UPDATE chat_message SET errand_status = ? WHERE errand_id = ?",
+                to.name(), errandId);
     }
 }

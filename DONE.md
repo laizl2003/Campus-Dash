@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-28 · 发单聊天卡片
+
+- **目标**：发单时向聊天室推 ERRAND 卡片，展示任务类型/标题、金额、发单人 userId；PUBLISHED 可点击，抢单后变灰不可点。
+- **改动**：
+  - chat_message 增加 errand_id / errand_status；migrate-chat-errand.sql。
+  - ChatErrandNoticeUseCase 在发单成功后写 ERRAND 消息并广播；content 为 JSON。
+  - appendStatusLog 同步 chat_message.errand_status；前端监听 errand.status 更新卡片。
+  - 前端卡片：黄色可点击跳广场；非 PUBLISHED 灰色禁用。
+- **验证**：发单后 card=ERRAND/PUBLISHED，content 含 type/title/rewardCents/publisherId；抢单后 DB=errand_status LOCKED；页面 PUBLISHED 卡片为 A 链接黄色，LOCKED 为 DIV 灰色无链接。
+
+
 ## 2026-10-28 · 清理禁言错误里的 sender 调试信息
 
 - **目标**：禁言提示只显示“你已被管理员禁言”，不暴露 userId。

@@ -33,6 +33,8 @@ public class ChatWebSocketBroadcaster implements ChatBroadcaster {
         payload.put("senderRole", message.senderRole());
         payload.put("content", message.content());
         payload.put("msgType", message.msgType());
+        payload.put("errandId", message.errandId() == null ? null : String.valueOf(message.errandId()));
+        payload.put("errandStatus", message.errandStatus());
         payload.put("createdAt", message.createdAt().toString());
         payload.put("clientMsgId", message.clientMsgId());
         try {

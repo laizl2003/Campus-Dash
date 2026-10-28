@@ -362,13 +362,16 @@ CREATE TABLE IF NOT EXISTS chat_message (
   sender_name   VARCHAR(32)  NOT NULL COMMENT '发送时用户名快照',
   sender_role   VARCHAR(16)  NOT NULL DEFAULT 'user' COMMENT '发送时角色：user / Admin',
   content       VARCHAR(500) NOT NULL COMMENT '纯文本，最多 500 码点',
-  msg_type      VARCHAR(16)  NOT NULL DEFAULT 'TEXT' COMMENT 'TEXT，预留 IMAGE/SYSTEM',
+  msg_type      VARCHAR(16)  NOT NULL DEFAULT 'TEXT' COMMENT 'TEXT / SYSTEM / ERRAND',
+  errand_id     BIGINT       NULL COMMENT 'ERRAND 消息关联的任务 id',
+  errand_status VARCHAR(16)  NULL COMMENT 'ERRAND 卡片当前任务状态',
   client_msg_id VARCHAR(64)  NULL COMMENT '客户端幂等键',
   status        TINYINT      NOT NULL DEFAULT 1 COMMENT '1 正常 / 0 撤回 / 2 屏蔽',
   created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (id),
   UNIQUE KEY uk_chat_client (sender_id, client_msg_id),
   KEY idx_chat_room (room_id, id),
+  KEY idx_chat_errand (errand_id),
   KEY idx_chat_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='广场聊天消息';
 

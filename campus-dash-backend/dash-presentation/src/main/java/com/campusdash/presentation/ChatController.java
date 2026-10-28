@@ -67,6 +67,8 @@ public class ChatController {
         item.put("senderRole", m.senderRole());
         item.put("content", m.content());
         item.put("msgType", m.msgType());
+        item.put("errandId", m.errandId() == null ? null : String.valueOf(m.errandId()));
+        item.put("errandStatus", m.errandStatus());
         item.put("createdAt", m.createdAt().toString());
         item.put("clientMsgId", m.clientMsgId());
         return item;

@@ -12,6 +12,8 @@ public record ChatMessage(
         String senderRole,
         String content,
         String msgType,
+        Long errandId,
+        String errandStatus,
         String clientMsgId,
         int status,
         Instant createdAt) {

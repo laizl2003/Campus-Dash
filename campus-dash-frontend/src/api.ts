@@ -449,6 +449,8 @@ export interface ChatItem {
   senderRole: string;
   content: string;
   msgType?: string;
+  errandId?: string | null;
+  errandStatus?: string | null;
   createdAt: string;
   clientMsgId: string;
 }
