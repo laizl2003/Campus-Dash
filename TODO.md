@@ -345,3 +345,45 @@
 - `campus-dash-backend/bench/scripts/seed.sql`
 - `cleanup-test-data.ps1`
 
+## 8. 聊天消息归档到 history_message + 上翻历史分页（未完成）
+
+**目标**：`chat_message` 只保留最近 24 小时的聊天消息；worker 每 4 小时把更早的消息批量归档到结构完全一致的 `history_message`；广场上翻在实时表消息读完后，继续按 `beforeId` 从历史表分页加载。
+
+### 现状与差距
+
+- 已有：`chat_message` 表（TEXT / SYSTEM / ERRAND / VOUCHER，含 `errand_id`、`errand_status`、`client_msg_id`）、`JdbcChatMessageRepository`、`QueryChatHistoryUseCase`、`ChatController` 的 `GET /api/chat/messages`、`SquareChat` 的 `beforeId` 上翻。
+- 已有：Redis `chat:{square}:recent` 只缓存最近 2000 条 payload；它不负责历史归档。
+- 缺口：`history_message` 尚未建表；worker 没有归档任务；`QueryChatHistoryUseCase` 只查 `chat_message`，实时表删空后无法继续上翻。
+- 归档边界暂按“当前时间 - 24 小时”实现；如果必须按“上一个自然日”归档，再把 cutoff 改成 `CURDATE()`，不要同时用两套边界。
+- 两个表要求结构一致，因此不额外加 `archived_at` 等字段；归档幂等依靠主键 `id`。
+
+### 实现步骤
+
+1. 建表：在 `init.sql` 增加 `history_message`，用 `CREATE TABLE history_message LIKE chat_message`（或等价 DDL），保证列、索引、默认值一致；增加迁移脚本 `migrate-history-message.sql`。
+2. 在 worker 新增 `ChatMessageArchiveJob`：`@Scheduled(cron = "0 0 */4 * * *")`，每次以 `NOW() - INTERVAL 1 DAY` 为 cutoff；用 Redis `SETNX` 锁防止多 worker 重复执行。
+3. 分页归档：每批 1000 条，按 `id` 升序读取 `chat_message WHERE created_at < cutoff`；同一事务内 `INSERT IGNORE INTO history_message SELECT ...` 后按 id `DELETE FROM chat_message`；失败回滚并记录日志。
+4. 归档前后要处理 Redis 热缓存：归档只删 DB，不直接依赖缓存；至少保证 `chat:{square}:recent` 不会因归档出现“DB 已无、缓存仍有”的永久脏数据（必要时按归档 id 精确剔除或让缓存 TTL 自然淘汰）。
+5. 扩展 `QueryChatHistoryUseCase`：`beforeId` 查询先查 `chat_message`，不足 limit 时继续查 `history_message WHERE id < beforeId`；`afterId` 同样兼容实时/历史，结果按 id 升序合并，返回给前端结构保持不变。
+6. 前端 `SquareChat` 继续使用现有 `beforeId` 上翻；确认实时表读空时后端仍返回历史分页，不能因某次返回空就把 `hasMore` 永久置 false（除非历史表也无数据）。
+7. 增加测试：24h 边界内/外数据、跨表 beforeId、跨表 afterId、重复归档幂等、归档失败回滚、两个 worker 并发只执行一次。
+8. 用真实账号验证：构造超过 24h 的消息，手动触发 job，确认 `chat_message` 数量减少、`history_message` 增加且 id/内容一致，页面可继续上翻。
+
+### 验收标准
+
+- [ ] `history_message` 与 `chat_message` 的列、类型、索引一致
+- [ ] 每 4 小时 job 只归档 `created_at < NOW()-1天` 的消息，重复执行不产生重复行
+- [ ] 归档后 `chat_message` 保留最近 24h，`history_message` 内容与 id 完整
+- [ ] 广场先加载实时表，实时表读完后可用 `beforeId` 继续加载 `history_message`
+- [ ] `afterId` 断线补洞在实时/历史表边界上仍正确
+- [ ] 多 worker 并发时归档任务只执行一次
+- [ ] 超 24h 数据不会在聊天窗口丢失，刷新后仍能上翻查看
+
+### 参考文件
+
+- `campus-dash-backend/docker/init.sql`、`docker/migrate-chat-errand.sql`
+- `campus-dash-backend/dash-domain/src/main/java/com/campusdash/domain/chat/model/ChatMessage.java`
+- `campus-dash-backend/dash-application/src/main/java/com/campusdash/application/usecase/chat/QueryChatHistoryUseCase.java`
+- `campus-dash-backend/dash-infrastructure/src/main/java/com/campusdash/infrastructure/persistence/JdbcChatMessageRepository.java`
+- `campus-dash-backend/dash-worker/src/main/java/com/campusdash/worker`
+- `campus-dash-frontend/src/components/SquareChat.tsx`
+
