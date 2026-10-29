@@ -238,6 +238,14 @@ public class JdbcVoucherRepository implements VoucherRepository {
     }
 
     @Override
+    public List<Voucher> findActiveClaims() {
+        return jdbc.query("""
+                SELECT * FROM voucher_record
+                 WHERE status IN ('available', 'locked') AND expire_time > NOW(3)
+                """, VOUCHER_MAPPER);
+    }
+
+    @Override
     public int expireOverdue(int limit) {
         return jdbc.update("""
                 UPDATE voucher_record

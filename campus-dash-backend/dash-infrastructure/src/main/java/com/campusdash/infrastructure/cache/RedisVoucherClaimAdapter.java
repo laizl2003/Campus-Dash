@@ -124,4 +124,10 @@ public class RedisVoucherClaimAdapter implements VoucherClaimPort {
     public void release(int type, String userId) {
         redis.delete(CLAIMED + type + ":" + userId);
     }
+
+    @Override
+    public void seedClaimed(int type, String userId, Instant expireAt) {
+        long ttl = Math.max(60, Duration.between(Instant.now(), expireAt).toSeconds() + 3600);
+        redis.opsForValue().setIfAbsent(CLAIMED + type + ":" + userId, "1", Duration.ofSeconds(ttl));
+    }
 }

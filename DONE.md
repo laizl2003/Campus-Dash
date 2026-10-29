@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-30 · Redis 启动预热审计与已领取标记重建
+
+- **目标**：排查重启后哪些 Redis key 必须从 DB 重建，补齐优惠券“一人一单”标记，避免重启后重复领取。
+- **改动**：
+  - 新增 `VoucherClaimInitializer`：启动时把 `voucher_record` 中 available/locked 且未过期的券写回 `voucher:claimed:{type}:{userId}`。
+  - `VoucherClaimPort.seedClaimed` + `VoucherRepository.findActiveClaims`，TTL 取券过期时间 + 1 小时。
+  - 现有预热：`VoucherStockInitializer`（ONLINE 库存）、`GrabSlotInitializer`（PUBLISHED 名额）、`CreditScoreInitializer`（信用分/榜单）。
+- **验证**：app 启动日志“已领取标记已从 DB 重建 34 个”；DB active claims=34，Redis `voucher:claimed:*`=34；上架券库存 key 14 个齐备。
+
+
 ## 2026-10-30 · Admin 优惠券操作同步 Redis
 
 - **目标**：新增加缓存、保存重建缓存、下架删库存缓存、上架重建缓存、删除清全部缓存；DB 先写，Redis 后同步，同一事务方法内失败可回滚 DB。

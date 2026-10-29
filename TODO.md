@@ -391,3 +391,44 @@
 - `campus-dash-backend/dash-worker/src/main/java/com/campusdash/worker`
 - `campus-dash-frontend/src/components/SquareChat.tsx`
 
+
+## 9. 聊天广场 1000→10000 在线用户与 WebSocket 压测（未完成）
+
+**目标**：验证聊天广场在 1000、3000、5000、10000 个长连接同时在线时的连接成功率、广播延迟、消息丢失/重复、断线重连补洞与服务端资源边界，形成可复现的容量结论。
+
+### 现状与差距
+
+- 已有：`WsHandler` 的 `chat.send`、`ChatWebSocketBroadcaster`、`WsSessionRegistry`、Redis 聊天历史缓存（最近 10000 条）、`RedisChatRateLimiter`、`history_message` 跨表分页/断线 `afterId` 补洞。
+- 缺口：没有批量建号与批量登录脚本，没有可配置并发的 WebSocket 压测客户端，没有统一的连接数/广播 P99/错误率/资源采样报告，也没有明确的最大安全在线数。
+- 压测会同时打 Tomcat 线程、WebSocket session、Redis、MySQL；需要与 TODO #7 的优惠券 JMeter 分轮执行，避免互相污染指标。
+
+### 实现步骤
+
+1. 固定环境：单机 Docker Compose、记录 app/worker/MySQL/Redis 容器资源上限与 JVM 参数，压测前清空测试任务和聊天消息，记录基线。
+2. 批量准备 1000/3000/5000/10000 个测试账号：优先直接写 `user` 表 + 批量登录拿 token；token 写入 CSV，避免压测过程中登录接口成为瓶颈。
+3. 编写 WebSocket 压测客户端（Node `ws` 或 JMeter WebSocket Sampler）：支持 ramp-up、每连接鉴权、加入广场、定时 `chat.send`、记录 connect 成功率/首条消息延迟/广播延迟、断线重连。
+4. 分档执行：1000 → 3000 → 5000 → 10000，每档稳定运行 5–10 分钟；每档采集 app CPU/内存/GC、Tomcat busy threads、WS session 数、Redis 内存与命令延迟、MySQL QPS/连接数。
+5. 广播正确性：固定发送 N 条带序号消息，统计每个在线连接收到的条数、重复数、乱序数；验证发送者回显和他人广播一致。
+6. 断线补洞：随机断开 5%–10% 连接后重连，验证 `afterId` 补回缺失消息且不重复；再验证上翻历史跨 `chat_message`/`history_message` 边界。
+7. 找到边界：记录首次出现连接失败、广播 P99 超阈值、OOM/线程耗尽或 Redis/MySQL 饱和的并发档位；给出建议最大在线数和扩容方向。
+8. 清理测试账号、聊天消息、Redis key 和测试任务，把脚本、CSV 生成器、采样 SQL 与报告放到 `bench/scripts` 或 `tests/ws-load`。
+
+### 验收标准
+
+- [ ] 1000 在线连接成功率 ≥ 99%，广播 P99 可量化
+- [ ] 3000/5000 在线连接成功率、错误率、资源曲线有记录
+- [ ] 10000 在线档位明确“通过/不通过”，并给出首个瓶颈（线程/内存/Redis/MySQL）
+- [ ] 每条测试消息在每个在线连接上恰好收到一次，无重复、无不可接受的乱序
+- [ ] 断线重连后 `afterId` 补洞正确，跨历史表上翻不丢消息
+- [ ] 压测报告包含环境、脚本、原始指标、结论与建议最大在线数
+- [ ] 压测后测试账号/消息/Redis key 全部清理
+
+### 参考文件
+
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/realtime/WsHandler.java`
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/realtime/ChatWebSocketBroadcaster.java`
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/realtime/WsSessionRegistry.java`
+- `campus-dash-backend/dash-infrastructure/src/main/java/com/campusdash/infrastructure/cache/RedisChatHistoryCache.java`
+- `campus-dash-frontend/src/components/SquareChat.tsx`
+- `campus-dash-backend/dash-bench`
+

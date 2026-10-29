@@ -38,4 +38,7 @@ public interface VoucherClaimPort {
 
     /** 券进入 used/expired 终态：释放一人一单标记，允许再次领取 */
     void release(int type, String userId);
+
+    /** 启动重建：把 DB 中仍有效的已领取券写回一人一单标记 */
+    void seedClaimed(int type, String userId, Instant expireAt);
 }

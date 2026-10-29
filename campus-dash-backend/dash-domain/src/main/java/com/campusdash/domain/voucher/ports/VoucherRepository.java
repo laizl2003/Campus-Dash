@@ -62,6 +62,11 @@ public interface VoucherRepository {
     /** 兜底扫描前查出待过期券（带 userId，用于释放一人一单标记） */
     List<Voucher> findExpiredAvailable(int limit);
 
+    /** 启动重建 Redis 一人一单标记：仍可用的 available/locked 券 */
+    default List<Voucher> findActiveClaims() {
+        return List.of();
+    }
+
     /**
      * 发布任务时锁定券：只有"本人 + available + 未过期"才能锁定。
      * 返回 1 表示锁定成功；0 表示已被用掉/过期/不属于本人。
