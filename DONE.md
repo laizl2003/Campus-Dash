@@ -3,6 +3,13 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-30 · 归档时同步 ERRAND 当前状态
+
+- **目标**：避免历史卡片在归档/任务状态变化时停留在旧状态。
+- **改动**：JdbcChatArchiveRepository 的 INSERT SELECT 关联 errand，ERRAND 行的 errand_status 使用 COALESCE(e.status, cm.errand_status)；appendStatusLog 已同时更新 chat_message 与 history_message。
+- **验证**：worker 启动归档 10025 条后，live ERRAND 卡片 6 条、history ERRAND 卡片 2 条，关联 errand 查询无状态不一致。
+
+
 ## 2026-10-30 · 固定消息中心外层列宽
 
 - **目标**：消息中心外层 border/列宽不随筛选栏内容或右侧条数变化。

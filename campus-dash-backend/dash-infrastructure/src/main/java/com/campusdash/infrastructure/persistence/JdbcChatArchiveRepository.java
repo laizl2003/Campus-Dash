@@ -18,6 +18,17 @@ public class JdbcChatArchiveRepository implements ChatArchivePort {
             "id, room_id, campus_id, sender_id, sender_name, sender_role, content, msg_type, " +
             "errand_id, errand_status, client_msg_id, status, created_at";
 
+    /** 归档时按 errand 当前状态覆盖快照，避免归档瞬间卡片状态落后于任务。 */
+    private static final String SELECT_COLUMNS = """
+            cm.id, cm.room_id, cm.campus_id, cm.sender_id, cm.sender_name, cm.sender_role,
+            cm.content, cm.msg_type, cm.errand_id,
+            CASE WHEN cm.msg_type = 'ERRAND'
+                 THEN COALESCE(e.status, cm.errand_status)
+                 ELSE cm.errand_status
+            END AS errand_status,
+            cm.client_msg_id, cm.status, cm.created_at
+            """;
+
     private final JdbcTemplate jdbc;
 
     public JdbcChatArchiveRepository(JdbcTemplate jdbc) {
@@ -39,7 +50,9 @@ public class JdbcChatArchiveRepository implements ChatArchivePort {
         Object[] args = ids.toArray();
 
         jdbc.update("INSERT IGNORE INTO history_message (" + COLUMNS + ") "
-                + "SELECT " + COLUMNS + " FROM chat_message WHERE id IN (" + in + ")", args);
+                + "SELECT " + SELECT_COLUMNS
+                + " FROM chat_message cm LEFT JOIN errand e ON e.id = cm.errand_id"
+                + " WHERE cm.id IN (" + in + ")", args);
         jdbc.update("DELETE FROM chat_message WHERE id IN (" + in + ")", args);
         return ids.size();
     }
