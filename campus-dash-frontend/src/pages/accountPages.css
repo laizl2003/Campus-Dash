@@ -18,6 +18,27 @@
 .account-filter-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 23px 14px; border-bottom: 1px solid var(--line); }
 .account-filter-bar .tabs { flex-wrap: wrap; }
 .account-filter-bar .tab { white-space: nowrap; }
+
+/* 消息中心五个筛选项必须保持一行；右侧条数再长也不换行，超出时只让 tabs 横向滚动 */
+.account-filter-bar.account-message-filter {
+  flex-wrap: nowrap;
+}
+.account-filter-bar.account-message-filter .tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.account-filter-bar.account-message-filter .tabs::-webkit-scrollbar {
+  display: none;
+}
+.account-filter-bar.account-message-filter .tab {
+  flex: 0 0 auto;
+}
+.account-filter-bar.account-message-filter .account-count {
+  flex: 0 0 auto;
+}
 .account-select-label { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 11px; }
 .account-select-label select { border: 1px solid var(--line); border-radius: 7px; background: var(--white); color: #555555; padding: 7px 27px 7px 10px; max-width: 150px; }
 .account-select-label select:focus-visible, .account-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
