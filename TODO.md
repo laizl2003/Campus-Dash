@@ -366,7 +366,8 @@
 5. 扩展 `QueryChatHistoryUseCase`：`beforeId` 查询先查 `chat_message`，不足 limit 时继续查 `history_message WHERE id < beforeId`；`afterId` 同样兼容实时/历史，结果按 id 升序合并，返回给前端结构保持不变。
 6. 前端 `SquareChat` 继续使用现有 `beforeId` 上翻；确认实时表读空时后端仍返回历史分页，不能因某次返回空就把 `hasMore` 永久置 false（除非历史表也无数据）。
 7. 增加测试：24h 边界内/外数据、跨表 beforeId、跨表 afterId、重复归档幂等、归档失败回滚、两个 worker 并发只执行一次。
-8. 用真实账号验证：构造超过 24h 的消息，手动触发 job，确认 `chat_message` 数量减少、`history_message` 增加且 id/内容一致，页面可继续上翻。
+8. 兼容 ERRAND 卡片状态：归档后 `JdbcErrandRepository.appendStatusLog` 仍需同时更新 `history_message` 中对应的 ERRAND 行，或只归档任务已进入终态的卡片；否则历史卡片状态会停在 PUBLISHED。
+9. 用真实账号验证：构造超过 24h 的消息，手动触发 job，确认 `chat_message` 数量减少、`history_message` 增加且 id/内容一致，页面可继续上翻。
 
 ### 验收标准
 
@@ -377,6 +378,7 @@
 - [ ] `afterId` 断线补洞在实时/历史表边界上仍正确
 - [ ] 多 worker 并发时归档任务只执行一次
 - [ ] 超 24h 数据不会在聊天窗口丢失，刷新后仍能上翻查看
+- [ ] 已归档 ERRAND 卡片在任务状态变化后仍能更新为正确状态
 
 ### 参考文件
 
