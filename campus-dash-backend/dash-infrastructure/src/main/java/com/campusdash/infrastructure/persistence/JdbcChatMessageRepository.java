@@ -80,4 +80,22 @@ public class JdbcChatMessageRepository implements ChatMessageRepository {
         return jdbc.query("SELECT " + COLUMNS + " FROM chat_message WHERE room_id = ? AND status = 1 AND id > ? ORDER BY id ASC LIMIT ?",
                 MAPPER, roomId, afterId, limit);
     }
+
+    @Override
+    public List<ChatMessage> latestHistory(String roomId, int limit) {
+        return jdbc.query("SELECT " + COLUMNS + " FROM history_message WHERE room_id = ? AND status = 1 ORDER BY id DESC LIMIT ?",
+                MAPPER, roomId, limit);
+    }
+
+    @Override
+    public List<ChatMessage> beforeHistory(String roomId, long beforeId, int limit) {
+        return jdbc.query("SELECT " + COLUMNS + " FROM history_message WHERE room_id = ? AND status = 1 AND id < ? ORDER BY id DESC LIMIT ?",
+                MAPPER, roomId, beforeId, limit);
+    }
+
+    @Override
+    public List<ChatMessage> afterHistory(String roomId, long afterId, int limit) {
+        return jdbc.query("SELECT " + COLUMNS + " FROM history_message WHERE room_id = ? AND status = 1 AND id > ? ORDER BY id ASC LIMIT ?",
+                MAPPER, roomId, afterId, limit);
+    }
 }

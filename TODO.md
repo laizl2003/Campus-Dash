@@ -345,7 +345,7 @@
 - `campus-dash-backend/bench/scripts/seed.sql`
 - `cleanup-test-data.ps1`
 
-## 8. 聊天消息归档到 history_message + 上翻历史分页（未完成）
+## 8. 聊天消息归档到 history_message + 上翻历史分页（已完成 2026-10-29）
 
 **目标**：`chat_message` 只保留最近 24 小时的聊天消息；worker 每 4 小时把更早的消息批量归档到结构完全一致的 `history_message`；广场上翻在实时表消息读完后，继续按 `beforeId` 从历史表分页加载。
 
@@ -371,14 +371,16 @@
 
 ### 验收标准
 
-- [ ] `history_message` 与 `chat_message` 的列、类型、索引一致
-- [ ] 每 4 小时 job 只归档 `created_at < NOW()-1天` 的消息，重复执行不产生重复行
-- [ ] 归档后 `chat_message` 保留最近 24h，`history_message` 内容与 id 完整
-- [ ] 广场先加载实时表，实时表读完后可用 `beforeId` 继续加载 `history_message`
-- [ ] `afterId` 断线补洞在实时/历史表边界上仍正确
-- [ ] 多 worker 并发时归档任务只执行一次
-- [ ] 超 24h 数据不会在聊天窗口丢失，刷新后仍能上翻查看
-- [ ] 已归档 ERRAND 卡片在任务状态变化后仍能更新为正确状态
+- [x] `history_message` 与 `chat_message` 的列、类型、索引一致
+- [x] 每 4 小时 job 只归档 `created_at < NOW()-1天` 的消息，重复执行不产生重复行
+- [x] 归档后 `chat_message` 保留最近 24h，`history_message` 内容与 id 完整
+- [x] 广场先加载实时表，实时表读完后可用 `beforeId` 继续加载 `history_message`
+- [x] `afterId` 断线补洞在实时/历史表边界上仍正确
+- [x] 多 worker 并发时归档任务只执行一次
+- [x] 超 24h 数据不会在聊天窗口丢失，刷新后仍能上翻查看
+- [x] 已归档 ERRAND 卡片在任务状态变化后仍能更新为正确状态
+
+**完成记录**：2026-10-29。worker 启动自动归档 12 条；beforeId 从实时最小 id 查询返回历史 12 条；afterId 从历史最大 id 查询返回实时 50 条；停 app 插入消息后重连，页面自动补出 RECONNECT_AFTERID_OK；worker 重启归档 0 条。history_message 由 CREATE TABLE LIKE chat_message 创建，ERRAND 状态同时更新两张表。
 
 ### 参考文件
 

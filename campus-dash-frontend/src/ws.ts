@@ -1,7 +1,7 @@
 // 连接生命周期与主动断开分离，避免退出或切换身份后旧连接继续重试。
 import { getToken } from './api';
 export interface WsEvent {
-  type: 'errand.status' | 'notification.new' | 'credit.changed' | 'admin.dispute' | 'chat.message' | 'chat.error';
+  type: 'errand.status' | 'notification.new' | 'credit.changed' | 'admin.dispute' | 'chat.message' | 'chat.error' | 'ws.open';
   payload: Record<string, unknown>;
 }
 type Handler = (event: WsEvent) => void;
@@ -40,6 +40,7 @@ export function connectWs() {
     connection.onopen = () => {
       if (current !== generation) { connection.close(); return; }
       wsAvailable = true; reconnectDelay = 1000;
+      handlers.forEach(h => h({ type: 'ws.open', payload: {} }));
       heartbeatTimer = window.setInterval(() => { if (connection.readyState === WebSocket.OPEN) connection.send('ping'); }, 30000);
     };
     connection.onmessage = msg => {

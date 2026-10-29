@@ -375,3 +375,6 @@ CREATE TABLE IF NOT EXISTS chat_message (
   KEY idx_chat_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='广场聊天消息';
 
+-- 历史聊天消息：结构与 chat_message 完全一致，id 保持不变，供归档和上翻历史使用。
+CREATE TABLE IF NOT EXISTS history_message LIKE chat_message;
+

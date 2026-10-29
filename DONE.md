@@ -3,6 +3,24 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-29 · 聊天归档 history_message + afterId 补洞
+
+- **目标**：chat_message 只保留 24 小时；worker 每 4 小时归档到结构一致的 history_message；前后端支持跨表 beforeId 上翻和 afterId 断线补洞。
+- **实现**：
+  - 新增 history_message（CREATE TABLE LIKE chat_message）及迁移脚本。
+  - 新增 ChatArchivePort / JdbcChatArchiveRepository，分批事务 INSERT IGNORE + DELETE。
+  - 新增 ChatArchiveJob：每 4 小时 + worker 启动补一次；Redis 锁 chat:{archive}:lock 防重复。
+  - QueryChatHistoryUseCase 合并实时表/历史表，beforeId、afterId、latest 均兼容。
+  - appendStatusLog 同时更新 chat_message 和 history_message 的 ERRAND 状态。
+  - ws.ts 新增 ws.open；SquareChat 维护 newestIdRef，重连后循环 afterId 拉取直到补齐。
+- **验证**：
+  - worker 启动自动归档 12 条；重启归档 0 条，无重复。
+  - beforeId 从实时最小 id 查询返回历史 12 条；afterId 从历史最大 id 查询返回实时 50 条。
+  - 停 app 期间插入 RECONNECT_AFTERID_OK，恢复后页面自动补出该消息。
+  - 前端构建、后端编译通过。
+- **说明**：归档 cutoff 为 NOW()-24h；如果改按自然日归档，只需调整 cutoff。
+
+
 ## 2026-10-29 · 修复广场实收合计科学计数法 + 清理测试日志
 
 - **原因**：后端 Long 金额字段统一序列化为字符串，Square 的 reduce 从 0 开始做字符串拼接，出现 9.07e+24。

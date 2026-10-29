@@ -20,4 +20,13 @@ public interface ChatMessageRepository {
 
     /** 补洞：id 大于 afterId，升序 */
     List<ChatMessage> after(String roomId, long afterId, int limit);
+
+    /** 历史表：最近 N 条，倒序 */
+    List<ChatMessage> latestHistory(String roomId, int limit);
+
+    /** 历史表：id 小于 beforeId，倒序 */
+    List<ChatMessage> beforeHistory(String roomId, long beforeId, int limit);
+
+    /** 历史表：id 大于 afterId，升序 */
+    List<ChatMessage> afterHistory(String roomId, long afterId, int limit);
 }

@@ -64,7 +64,31 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
   const prependRef = useRef(false);
   const olderLoadingRef = useRef(false);
   const atBottomRef = useRef(true);
+  const newestIdRef = useRef<string | null>(null);
+  const backfillRef = useRef(false);
   const selfId = getUserId();
+
+  // WS 重连后从“最后看到的最新消息 id”补洞，循环拉 until 不足 50 条
+  const backfillAfter = async () => {
+    if (backfillRef.current) return;
+    const afterId = newestIdRef.current;
+    if (!afterId) return;
+    backfillRef.current = true;
+    try {
+      let cursor = afterId;
+      for (;;) {
+        const result = await api.chatHistory({ afterId: cursor, limit: 50 });
+        if (result.items.length === 0) break;
+        setMessages(prev => mergeMessages(prev, result.items));
+        cursor = result.items[result.items.length - 1].id;
+        if (result.items.length < 50) break;
+      }
+    } catch {
+      // 补洞失败不阻塞聊天；下一次重连或刷新会再拉
+    } finally {
+      backfillRef.current = false;
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -96,6 +120,9 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
             message.errandId === errandId ? { ...message, errandStatus: status } : message));
         }
       }
+      if (event.type === 'ws.open') {
+        void backfillAfter();
+      }
     });
     return () => { active = false; unsubscribe(); };
   }, []);
@@ -111,6 +138,11 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
     const timer = window.setInterval(loadOnline, 30000);
     return () => { active = false; clearInterval(timer); };
   }, []);
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (last) newestIdRef.current = last.id;
+  }, [messages]);
 
   useEffect(() => {
     const list = listRef.current;
