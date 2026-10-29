@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-30 · Admin 优惠券操作同步 Redis
+
+- **目标**：新增加缓存、保存重建缓存、下架删库存缓存、上架重建缓存、删除清全部缓存；DB 先写，Redis 后同步，同一事务方法内失败可回滚 DB。
+- **改动**：
+  - VoucherClaimPort 增加 rebuildStock / evictStock / evictAll。
+  - RedisVoucherClaimAdapter pending key 带 type，支持按类型删 pending；evictStock 保留 claimed，evictAll 连 claimed 一起删。
+  - AdminController 新增 rebuildStock，库存保存 rebuildStock，下架 evictStock，上架 rebuildStock，删除 evictAll；四个方法加 @Transactional。
+  - VoucherStockInitializer 启动时只初始化 ONLINE 券，OFFLINE 券主动清缓存。
+- **验证**：新建 stock=12 → Redis 12；保存 12 → Redis 12；下架 → stock/pending key 均不存在；上架 → Redis 12；删除 → stock 不存在且 claimed=0；启动后 14 个 ONLINE 券缓存齐备。
+
+
 ## 2026-10-30 · Admin 优惠券按钮/弹窗配色
 
 - **目标**：下架橙色、上架绿色、删除红色；保存/上架/下架/删除成功弹窗颜色分别绿/绿/橙/红；下架聊天卡片改橙色。

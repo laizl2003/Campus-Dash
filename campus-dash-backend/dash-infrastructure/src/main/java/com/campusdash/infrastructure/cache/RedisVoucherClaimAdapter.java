@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 /** 优惠券 Redis 库存：Lua 保证扣库存、一人一单、pending 计数原子完成 */
 @Component
@@ -47,6 +48,10 @@ public class RedisVoucherClaimAdapter implements VoucherClaimPort {
 
     private final StringRedisTemplate redis;
 
+    private static String pendingKey(int type, long voucherId) {
+        return PENDING + type + ":" + voucherId;
+    }
+
     public RedisVoucherClaimAdapter(StringRedisTemplate redis) {
         this.redis = redis;
     }
@@ -55,7 +60,7 @@ public class RedisVoucherClaimAdapter implements VoucherClaimPort {
     public ReserveResult reserve(int type, String userId, long voucherId, Instant expireAt) {
         long ttl = Math.max(60, Duration.between(Instant.now(), expireAt).toSeconds() + 3600);
         Long result = redis.execute(RESERVE,
-                List.of(STOCK + type, PENDING_COUNT + type, PENDING + voucherId, CLAIMED + type + ":" + userId),
+                List.of(STOCK + type, PENDING_COUNT + type, pendingKey(type, voucherId), CLAIMED + type + ":" + userId),
                 String.valueOf(ttl));
         if (result == null) return ReserveResult.SOLD_OUT;
         if (result == -1) return ReserveResult.ALREADY_CLAIMED;
@@ -66,12 +71,12 @@ public class RedisVoucherClaimAdapter implements VoucherClaimPort {
     @Override
     public void rollback(int type, String userId, long voucherId) {
         redis.execute(ROLLBACK,
-                List.of(STOCK + type, PENDING_COUNT + type, PENDING + voucherId, CLAIMED + type + ":" + userId));
+                List.of(STOCK + type, PENDING_COUNT + type, pendingKey(type, voucherId), CLAIMED + type + ":" + userId));
     }
 
     @Override
     public void confirm(int type, long voucherId) {
-        redis.execute(CONFIRM, List.of(PENDING_COUNT + type, PENDING + voucherId));
+        redis.execute(CONFIRM, List.of(PENDING_COUNT + type, pendingKey(type, voucherId)));
     }
 
     @Override
@@ -91,6 +96,28 @@ public class RedisVoucherClaimAdapter implements VoucherClaimPort {
     @Override
     public void syncStock(int type, int dbStock) {
         reconcile(type, dbStock);
+    }
+
+    @Override
+    public void rebuildStock(int type, int dbStock) {
+        evictStock(type);
+        redis.opsForValue().set(STOCK + type, String.valueOf(dbStock));
+        redis.opsForValue().set(PENDING_COUNT + type, "0");
+    }
+
+    @Override
+    public void evictStock(int type) {
+        redis.delete(STOCK + type);
+        redis.delete(PENDING_COUNT + type);
+        Set<String> pending = redis.keys(PENDING + type + ":*");
+        if (pending != null && !pending.isEmpty()) redis.delete(pending);
+    }
+
+    @Override
+    public void evictAll(int type) {
+        evictStock(type);
+        Set<String> claimed = redis.keys(CLAIMED + type + ":*");
+        if (claimed != null && !claimed.isEmpty()) redis.delete(claimed);
     }
 
     @Override

@@ -254,6 +254,7 @@ public class AdminController {
         String description = "满" + moneyText(threshold) + "元减" + moneyText(discount) + "元";
         voucherRepository.insertStock(new VoucherStock(type, stock, "ONLINE", threshold, discount,
                 description, Instant.now()));
+        voucherClaimCache.rebuildStock(type, stock);
         chatVoucherNoticeUseCase.voucherCreated(description, stock);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("type", type);
@@ -262,6 +263,7 @@ public class AdminController {
 
     /** 优惠券管理：修改库存 */
     @PutMapping("/vouchers/{type}/stock")
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Result<Void> updateVoucherStock(@PathVariable int type, @RequestBody VoucherStockRequest req) {
         if (req == null || req.stock() == null || req.stock() < 0) {
             throw new BizException(ErrorCode.INVALID_AMOUNT, "库存不能为负");
@@ -271,13 +273,14 @@ public class AdminController {
         if (voucherRepository.updateStock(type, req.stock()) == 0) {
             throw new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type);
         }
-        voucherClaimCache.syncStock(type, req.stock());
+        voucherClaimCache.rebuildStock(type, req.stock());
         chatVoucherNoticeUseCase.voucherStockChanged(stock.description(), req.stock());
         return Result.ok(null);
     }
 
     /** 优惠券管理：上架 / 下架 */
     @PostMapping("/vouchers/{type}/status")
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Result<Void> updateVoucherStatus(@PathVariable int type, @RequestBody VoucherStatusRequest req) {
         String status = req == null || req.status() == null ? "" : req.status().toUpperCase();
         if (!"ONLINE".equals(status) && !"OFFLINE".equals(status)) {
@@ -289,8 +292,10 @@ public class AdminController {
             throw new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type);
         }
         if ("ONLINE".equals(status)) {
+            voucherClaimCache.rebuildStock(type, stock.stock());
             chatVoucherNoticeUseCase.voucherOnline(stock.description(), stock.stock());
         } else {
+            voucherClaimCache.evictStock(type);
             chatVoucherNoticeUseCase.voucherOffline(stock.description(), stock.stock());
         }
         return Result.ok(null);
@@ -306,6 +311,7 @@ public class AdminController {
         if (voucherRepository.deleteStock(type) == 0) {
             throw new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type);
         }
+        voucherClaimCache.evictAll(type);
         chatVoucherNoticeUseCase.voucherDeleted(stock.description(), stock.stock());
         return Result.ok(null);
     }

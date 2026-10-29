@@ -43,9 +43,14 @@ public class VoucherStockInitializer implements ApplicationRunner {
             }
             fixed++;
         }
-        // Redis 库存仅在 key 不存在时初始化；已有 key 保留（可能包含机器重启前的预扣）
+        // 上架券：Redis 库存仅在 key 不存在时初始化；已有 key 保留（可能包含机器重启前的预扣）
+        // 下架券：启动时清掉残留库存，避免重启后又变成可领
         for (var stock : vouchers.findAllStocks()) {
-            claimCache.initialize(stock.type(), stock.stock());
+            if ("ONLINE".equals(stock.status())) {
+                claimCache.initialize(stock.type(), stock.stock());
+            } else {
+                claimCache.evictStock(stock.type());
+            }
         }
         log.info("优惠券库存描述已校准 {} 种，Redis 库存已检查", fixed);
     }

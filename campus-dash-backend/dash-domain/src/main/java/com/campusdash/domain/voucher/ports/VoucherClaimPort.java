@@ -27,6 +27,15 @@ public interface VoucherClaimPort {
     /** 管理端改库存后同步 */
     void syncStock(int type, int dbStock);
 
+    /** 管理端保存库存：清空该类型的库存/pending，再用 DB 库存重建 */
+    void rebuildStock(int type, int dbStock);
+
+    /** 下架：删除该类型的库存与 pending，保留用户已领取标记 */
+    void evictStock(int type);
+
+    /** 删除券类型：删除库存、pending 与用户已领取标记 */
+    void evictAll(int type);
+
     /** 券进入 used/expired 终态：释放一人一单标记，允许再次领取 */
     void release(int type, String userId);
 }
