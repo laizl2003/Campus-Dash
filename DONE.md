@@ -3,6 +3,14 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-30 · 修复优惠券领取 INTERNAL_ERROR
+
+- **现象**：优惠券库存 Redis 键存在且与 DB 一致（例如 type8=47），但领取返回 INTERNAL_ERROR。
+- **根因**：RocketMQ broker 重启后 topic 丢失；mq-init 的 topic 清单没有 voucher-claim，publisher 发送失败，ClaimVoucherAsyncUseCase 回滚并返回 INTERNAL_ERROR。不是 Redis 库存未加载。
+- **修复**：mq-init 增加 voucher-claim 的创建、快速检查、校验，以及 dash-voucher-claim 消费组；当前 broker 手动补建 topic/group。
+- **验证**：laizl 领取 type8 返回 OK，remaining=46；3 秒内 voucher_record 新增 available 记录，pending=0，Redis/DB 库存同步为 46。
+
+
 ## 2026-10-29 · 聊天最近消息缓存扩到 10000
 
 - **目标**：把聊天 ZSET/Hash 热缓存上限从 2000 提高到 10000。
