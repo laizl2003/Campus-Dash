@@ -17,7 +17,7 @@ public class QueryChatHistoryUseCase {
 
     public static final int DEFAULT_LIMIT = 50;
     public static final int MAX_LIMIT = 100;
-    private static final int CACHE_WARM_SIZE = 2000;
+    private static final int CACHE_WARM_SIZE = 10000;
 
     private final ChatMessageRepository messages;
     private final ChatHistoryCachePort cache;
@@ -36,7 +36,7 @@ public class QueryChatHistoryUseCase {
             return afterAcrossTables(roomId, afterId, size);
         }
 
-        // 首页只读最近 2000 条热缓存；缓存不足时回源实时表并回填
+        // 首页只读最近 10000 条热缓存；缓存不足时回源实时表并回填
         List<ChatMessage> cached = cache.latest(roomId, size);
         if (cached.size() >= size) {
             return cached;

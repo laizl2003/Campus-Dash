@@ -3,6 +3,14 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-29 · 聊天最近消息缓存扩到 10000
+
+- **目标**：把聊天 ZSET/Hash 热缓存上限从 2000 提高到 10000。
+- **改动**：RedisChatHistoryCache.MAX_SIZE=10000；QueryChatHistoryUseCase.CACHE_WARM_SIZE=10000；HighLight 文档同步。
+- **验证**：清空缓存后 GET history 预热 ZCARD=10000、HLEN=10000，耗时约 1.8s；再发送一条消息后仍保持 10000，最旧 id 被挤出、payload 同步淘汰。
+- **说明**：ZSET 仍然按 Lua 中的 ZCARD/ZRANGE/ZREMRANGEBYRANK 规则裁剪，不依赖 TTL 控制条数。
+
+
 ## 2026-10-29 · 聊天归档 history_message + afterId 补洞
 
 - **目标**：chat_message 只保留 24 小时；worker 每 4 小时归档到结构一致的 history_message；前后端支持跨表 beforeId 上翻和 afterId 断线补洞。

@@ -352,7 +352,7 @@
 ### 现状与差距
 
 - 已有：`chat_message` 表（TEXT / SYSTEM / ERRAND / VOUCHER，含 `errand_id`、`errand_status`、`client_msg_id`）、`JdbcChatMessageRepository`、`QueryChatHistoryUseCase`、`ChatController` 的 `GET /api/chat/messages`、`SquareChat` 的 `beforeId` 上翻。
-- 已有：Redis `chat:{square}:recent` 只缓存最近 2000 条 payload；它不负责历史归档。
+- 已有：Redis `chat:{square}:recent` 只缓存最近 10000 条 payload；它不负责历史归档。
 - 缺口：`history_message` 尚未建表；worker 没有归档任务；`QueryChatHistoryUseCase` 只查 `chat_message`，实时表删空后无法继续上翻。
 - 归档边界暂按“当前时间 - 24 小时”实现；如果必须按“上一个自然日”归档，再把 cutoff 改成 `CURDATE()`，不要同时用两套边界。
 - 两个表要求结构一致，因此不额外加 `archived_at` 等字段；归档幂等依靠主键 `id`。

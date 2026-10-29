@@ -32,7 +32,7 @@ import java.util.Set;
 public class RedisChatHistoryCache implements ChatHistoryCachePort {
 
     private static final Logger log = LoggerFactory.getLogger(RedisChatHistoryCache.class);
-    private static final int MAX_SIZE = 2000;
+    private static final int MAX_SIZE = 10000;
     private static final Duration TTL = Duration.ofHours(24);
 
     private static final DefaultRedisScript<Long> ADD = new DefaultRedisScript<>("""

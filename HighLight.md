@@ -110,7 +110,7 @@ HSET payload messageId json
 ZADD recent messageId messageId
 HSET errand errandId messageId
 HSET message-errand messageId errandId
-超过 2000 条 → ZREMRANGEBYRANK 删除最旧
+超过 10000 条 → ZREMRANGEBYRANK 删除最旧
 HDEL 被淘汰消息的 payload / 反向索引 / errand 索引
 EXPIRE 24h
 ```
@@ -139,7 +139,7 @@ Lua 再校验索引和 payload 存在后 HSET
 
 **简历表述**
 
-> 基于 Redis ZSET + Hash 实现聊天最近 2000 条消息缓存：ZSET 只存消息 id、Hash 存 payload，
+> 基于 Redis ZSET + Hash 实现聊天最近 10000 条消息缓存：ZSET 只存消息 id、Hash 存 payload，
 > 通过 HMGET 批量读取；用 Lua 原子维护 ZSET、payload、errand 索引及淘汰，任务状态只更新对应卡片，
 > 避免整份缓存失效，并使用 Redis Cluster hash tag 保证多 key 脚本同 slot。
 
