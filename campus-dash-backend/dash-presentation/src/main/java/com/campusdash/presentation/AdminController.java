@@ -266,10 +266,13 @@ public class AdminController {
         if (req == null || req.stock() == null || req.stock() < 0) {
             throw new BizException(ErrorCode.INVALID_AMOUNT, "库存不能为负");
         }
+        var stock = voucherRepository.findStock(type)
+                .orElseThrow(() -> new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type));
         if (voucherRepository.updateStock(type, req.stock()) == 0) {
             throw new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type);
         }
         voucherClaimCache.syncStock(type, req.stock());
+        chatVoucherNoticeUseCase.voucherStockChanged(stock.description(), req.stock());
         return Result.ok(null);
     }
 
@@ -280,8 +283,15 @@ public class AdminController {
         if (!"ONLINE".equals(status) && !"OFFLINE".equals(status)) {
             throw new BizException(ErrorCode.INVALID_AMOUNT, "status 只能是 ONLINE / OFFLINE");
         }
+        var stock = voucherRepository.findStock(type)
+                .orElseThrow(() -> new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type));
         if (voucherRepository.updateStatus(type, status) == 0) {
             throw new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type);
+        }
+        if ("ONLINE".equals(status)) {
+            chatVoucherNoticeUseCase.voucherOnline(stock.description(), stock.stock());
+        } else {
+            chatVoucherNoticeUseCase.voucherOffline(stock.description(), stock.stock());
         }
         return Result.ok(null);
     }
@@ -290,10 +300,13 @@ public class AdminController {
     @DeleteMapping("/vouchers/{type}")
     @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public Result<Void> deleteVoucher(@PathVariable int type) {
+        var stock = voucherRepository.findStock(type)
+                .orElseThrow(() -> new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type));
         voucherRepository.deleteRecordsByType(type);
         if (voucherRepository.deleteStock(type) == 0) {
             throw new BizException(ErrorCode.VOUCHER_INVALID, "type=" + type);
         }
+        chatVoucherNoticeUseCase.voucherDeleted(stock.description(), stock.stock());
         return Result.ok(null);
     }
 

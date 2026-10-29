@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-30 · Admin 优惠券库存/上下架/删除聊天卡片
+
+- **目标**：Admin 修改库存、上架、下架、删除完成后推送 VOUCHER 聊天卡片；修改/上架绿色，下架/删除红色。
+- **改动**：
+  - ChatVoucherNoticeUseCase 增加 STOCK / ONLINE / OFFLINE / DELETED 事件，content 带 event/description/stock；有事务时 afterCommit 再写消息。
+  - AdminController 四个操作落库后调用通知。
+  - SquareChat VOUCHER 卡片按 event 显示标题和绿/红配色。
+- **验证**：创建/改库存/下架/上架/删除连续操作生成 5 条 VOUCHER 消息，event 分别为 CREATED/STOCK/OFFLINE/ONLINE/DELETED；UI 库存更新/上架背景 rgb(232,245,233)，下架/删除 rgb(253,236,234)；测试数据已清理。
+
+
 ## 2026-10-30 · 归档时同步 ERRAND 当前状态
 
 - **目标**：避免历史卡片在归档/任务状态变化时停留在旧状态。

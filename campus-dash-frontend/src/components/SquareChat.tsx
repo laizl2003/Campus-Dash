@@ -279,20 +279,31 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
         </div>}
         {messages.map(message => {
           if (message.msgType === 'VOUCHER') {
-            let voucher: { description?: string; stock?: number } = {};
+            let voucher: { event?: string; description?: string; stock?: number } = {};
             try { voucher = JSON.parse(message.content); } catch { /* 忽略非法内容 */ }
+            const event = voucher.event ?? 'CREATED';
+            const red = event === 'OFFLINE' || event === 'DELETED';
+            const title = event === 'STOCK' ? '优惠券库存更新'
+              : event === 'ONLINE' ? '优惠券上架'
+              : event === 'OFFLINE' ? '优惠券下架'
+              : event === 'DELETED' ? '优惠券删除'
+              : '新的优惠券';
             return <div key={message.id} style={{ alignSelf: 'stretch' }}>
               <div style={{ marginBottom: 2, color: '#aaa', fontSize: 8, textAlign: 'center' }}>
                 {cardTimeLabel(message.createdAt)}
               </div>
               <div style={{
                 padding: '7px 8px', boxSizing: 'border-box',
-                borderRadius: 8, border: '1px solid #b7d8b9', background: '#e8f5e9',
-                color: '#2f6b4a',
+                borderRadius: 8,
+                border: `1px solid ${red ? '#e8b4b0' : '#b7d8b9'}`,
+                background: red ? '#fdecea' : '#e8f5e9',
+                color: red ? '#a33a32' : '#2f6b4a',
               }}>
-                <div style={{ fontSize: 9, fontWeight: 700 }}>新的优惠券</div>
+                <div style={{ fontSize: 9, fontWeight: 700 }}>{title}</div>
                 <div style={{ marginTop: 2, fontSize: 11, fontWeight: 600 }}>{voucher.description ?? '满减优惠券'}</div>
-                <div style={{ marginTop: 1, fontSize: 9, opacity: .8 }}>库存 {voucher.stock ?? 0}</div>
+                <div style={{ marginTop: 1, fontSize: 9, opacity: .8 }}>
+                  {event === 'DELETED' ? '原库存' : '库存'} {voucher.stock ?? 0}
+                </div>
               </div>
             </div>;
           }
