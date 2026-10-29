@@ -258,6 +258,17 @@ public class JdbcErrandRepository implements ErrandRepository {
     }
 
     @Override
+    public List<Errand> findPublished() {
+        return jdbc.query("""
+                SELECT id, campus_id, publisher_id, type, title, reward_amount, slot_total,
+                       grabber_id, status, slot_taken, round, version, locked_at, delivered_at
+                  FROM errand
+                 WHERE status = 'PUBLISHED'
+                 ORDER BY id
+                """, MAPPER);
+    }
+
+    @Override
     public void appendStatusLog(long errandId, ErrandStatus from, ErrandStatus to, int round, String operatorId) {
         jdbc.update("""
                 INSERT INTO errand_status_log (campus_id, errand_id, from_status, to_status, round, operator_id)

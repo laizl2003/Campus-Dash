@@ -47,6 +47,11 @@ public interface ErrandRepository {
     /** 兜底扫描：捞出确认超时仍停留在 LOCKED 的任务（走 idx_timeout_scan） */
     List<Errand> findConfirmTimeout(long timeoutSeconds, int limit);
 
+    /** 启动重建抢单名额用；默认空实现兼容测试 fake */
+    default List<Errand> findPublished() {
+        return List.of();
+    }
+
     /** 跑腿取货：ACCEPTED -> PICKED_UP */
     int casPickUp(long errandId, String runnerId, long expectedVersion);
 

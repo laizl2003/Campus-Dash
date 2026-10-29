@@ -3,6 +3,14 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-30 · 修复 PUBLISHED 任务全部不可抢
+
+- **现象**：DB 中任务是 PUBLISHED，但点击抢单返回 ERRAND_NOT_GRABBABLE。
+- **根因**：Redis 重启/清空后 errand:slot:{errandId} 全部丢失；抢单 Lua 发现名额键不存在返回 -3，未从 DB 重建。
+- **修复**：ErrandRepository 增加 findPublished；新增 GrabSlotInitializer，启动时按 PUBLISHED 任务的 slot_total-slot_taken 重建缺失名额键，TTL 7 天。
+- **验证**：启动日志“抢单名额已从 DB 重建 6 个”，Redis slot key=6；stutwr7xe 抢单成功返回 OK，DB 变为 LOCKED、slot_taken=1。
+
+
 ## 2026-10-30 · 修复优惠券领取 INTERNAL_ERROR
 
 - **现象**：优惠券库存 Redis 键存在且与 DB 一致（例如 type8=47），但领取返回 INTERNAL_ERROR。
