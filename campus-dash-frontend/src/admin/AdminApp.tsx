@@ -196,9 +196,17 @@ export default function AdminApp() {
         <div><span className="eyebrow">ADMIN CONSOLE</span><h1>{view === 'disputes' ? '仲裁工作台' : view === 'vouchers' ? '优惠券管理' : view === 'settings' ? '平台配置' : '平台资金流水'}<span className="heading-dot">.</span></h1>
           <p>{view === 'disputes' ? '处理争议任务，决定托管资金流向跑腿或发单人。' : view === 'vouchers' ? '维护满减券的类型、库存与上下架状态。' : view === 'settings' ? '调整佣金与优惠券抽成比例，查看平台用户。' : '佣金账户与营销账户的每一笔入账/出账。'}</p></div>
         <div className="admin-top-actions">
-          {view !== 'vouchers' && view !== 'settings' && <button type="button" className="btn btn-ghost" onClick={() => void load()} disabled={loading}>
-            <Icon name="refresh" size={15} className={loading ? 'is-spinning' : ''}/>刷新
-          </button>}
+          <button type="button" className="btn btn-ghost"
+                  onClick={() => {
+                    if (view === 'vouchers' || view === 'settings') {
+                      window.location.reload();
+                    } else {
+                      void load();
+                    }
+                  }}
+                  disabled={view !== 'vouchers' && view !== 'settings' && loading}>
+            <Icon name="refresh" size={15} className={view !== 'vouchers' && view !== 'settings' && loading ? 'is-spinning' : ''}/>刷新
+          </button>
           <div className="admin-top-account" ref={topAccountRef}>
             <button type="button" className="topbar-avatar admin-top-avatar"
                     aria-haspopup="menu" aria-expanded={accountMenu}

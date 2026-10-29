@@ -3,6 +3,13 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-30 · Admin 平台配置/优惠券管理增加刷新按钮
+
+- **目标**：平台配置、优惠券管理右上角用户名左侧增加刷新按钮，样式与资金流水刷新一致。
+- **改动**：AdminApp 顶部 actions 始终渲染 btn btn-ghost + refresh 图标；vouchers/settings 点击执行 window.location.reload()，其他视图保持原 load()。
+- **验证**：页面检查两个视图顶部按钮顺序为“刷新 → 头像”，accountNext=刷新，按钮样式与其他视图一致。
+
+
 ## 2026-10-30 · 修复 PUBLISHED 任务全部不可抢
 
 - **现象**：DB 中任务是 PUBLISHED，但点击抢单返回 ERRAND_NOT_GRABBABLE。
