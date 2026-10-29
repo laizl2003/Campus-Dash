@@ -282,7 +282,8 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
             let voucher: { event?: string; description?: string; stock?: number } = {};
             try { voucher = JSON.parse(message.content); } catch { /* 忽略非法内容 */ }
             const event = voucher.event ?? 'CREATED';
-            const red = event === 'OFFLINE' || event === 'DELETED';
+            const deleted = event === 'DELETED';
+            const offline = event === 'OFFLINE';
             const title = event === 'STOCK' ? '优惠券库存更新'
               : event === 'ONLINE' ? '优惠券上架'
               : event === 'OFFLINE' ? '优惠券下架'
@@ -295,9 +296,9 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
               <div style={{
                 padding: '7px 8px', boxSizing: 'border-box',
                 borderRadius: 8,
-                border: `1px solid ${red ? '#e8b4b0' : '#b7d8b9'}`,
-                background: red ? '#fdecea' : '#e8f5e9',
-                color: red ? '#a33a32' : '#2f6b4a',
+                border: `1px solid ${deleted ? '#e8b4b0' : offline ? '#f0c58a' : '#b7d8b9'}`,
+                background: deleted ? '#fdecea' : offline ? '#fff4e5' : '#e8f5e9',
+                color: deleted ? '#a33a32' : offline ? '#a65f00' : '#2f6b4a',
               }}>
                 <div style={{ fontSize: 9, fontWeight: 700 }}>{title}</div>
                 <div style={{ marginTop: 2, fontSize: 11, fontWeight: 600 }}>{voucher.description ?? '满减优惠券'}</div>

@@ -496,6 +496,8 @@ button.topbar-avatar:hover { filter: brightness(0.97); }
 .floating-notice.is-success .floating-notice-icon { background: #e3f4e8; color: #2f6b4a; }
 .floating-notice.is-error .floating-notice-card { background: #fdf2f1; border-color: #f3c7c2; }
 .floating-notice.is-error .floating-notice-icon { background: #fdecec; color: #b23b32; }
+.floating-notice.is-warning .floating-notice-card { background: #fff7e6; border-color: #f0d39b; }
+.floating-notice.is-warning .floating-notice-icon { background: #fdf0d5; color: #b26a00; }
 
 /* 页面内原有的 banner 全部升级为悬浮卡片，不再占布局 */
 .banner { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); z-index: 210;

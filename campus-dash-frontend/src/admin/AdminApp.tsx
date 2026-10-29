@@ -402,7 +402,7 @@ function VoucherManager() {
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [pendingDelete, setPendingDelete] = useState<{ type: number; description: string } | null>(null);
-  const [toast, setToast] = useState<{ text: string; kind: 'ok' | 'danger' } | null>(null);
+  const [toast, setToast] = useState<{ text: string; kind: 'ok' | 'warning' | 'danger' } | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -438,7 +438,9 @@ function VoucherManager() {
   const toggle = async (type: number, status: string) => {
     setError('');
     try {
-      await api.adminUpdateVoucherStatus(type, status === 'ONLINE' ? 'OFFLINE' : 'ONLINE');
+      const next = status === 'ONLINE' ? 'OFFLINE' : 'ONLINE';
+      await api.adminUpdateVoucherStatus(type, next);
+      setToast({ text: next === 'ONLINE' ? '上架成功' : '下架成功', kind: next === 'ONLINE' ? 'ok' : 'warning' });
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : '状态更新失败'); }
   };
@@ -464,6 +466,7 @@ function VoucherManager() {
     try {
       await api.adminUpdateVoucherStock(type, Math.round(value));
       setDrafts(prev => { const next = { ...prev }; delete next[type]; return next; });
+      setToast({ text: '库存保存成功', kind: 'ok' });
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : '库存更新失败'); }
   };
@@ -485,7 +488,7 @@ function VoucherManager() {
 
     <section className="admin-voucher-list">
       <div className="admin-list-head"><h2>优惠券列表 <span>{items.length}</span></h2><small>删除会同时清除该类型的全部领取记录</small></div>
-      {toast && <div className={`floating-notice ${toast.kind === 'ok' ? 'is-success' : 'is-error'}`} role="status">
+      {toast && <div className={`floating-notice ${toast.kind === 'ok' ? 'is-success' : toast.kind === 'warning' ? 'is-warning' : 'is-error'}`} role="status">
         <div className="floating-notice-card">
           <span className="floating-notice-icon">{toast.kind === 'ok' ? '✓' : '!'}</span>
           <div className="floating-notice-body"><strong>{toast.text}</strong></div>
@@ -514,10 +517,11 @@ function VoucherManager() {
                        value={drafts[item.type] ?? String(item.stock)}
                        onChange={e => setDrafts(prev => ({ ...prev, [item.type]: e.target.value }))}/>
                 <button type="button" className="btn btn-ghost" onClick={() => void saveStock(item.type, item.stock)}>保存</button>
-                <button type="button" className="btn btn-ghost" onClick={() => void toggle(item.type, item.status)}>
+                <button type="button" className={`btn ${online ? 'admin-voucher-offline' : 'admin-voucher-online'}`}
+                        onClick={() => void toggle(item.type, item.status)}>
                   {online ? '下架' : '上架'}
                 </button>
-                <button type="button" className="btn btn-ghost admin-danger"
+                <button type="button" className="btn admin-voucher-delete"
                         onClick={() => setPendingDelete({ type: item.type, description: item.description })}>删除</button>
               </div>
             </div>;
