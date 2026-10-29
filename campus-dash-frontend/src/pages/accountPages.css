@@ -19,12 +19,27 @@
 .account-filter-bar .tabs { flex-wrap: wrap; }
 .account-filter-bar .tab { white-space: nowrap; }
 
+/* 消息中心固定外层列宽：筛选栏内容不能把 account-surface 撑宽 */
+.account-message-layout {
+  min-width: 0;
+}
+.account-message-layout > .account-surface {
+  width: 100%;
+  min-width: 0;
+}
+
 /* 消息中心五个筛选项必须保持一行；右侧条数再长也不换行，超出时只让 tabs 横向滚动 */
 .account-filter-bar.account-message-filter {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   flex-wrap: nowrap;
 }
 .account-filter-bar.account-message-filter .tabs {
-  flex: 1 1 auto;
+  /* 不伸缩撑满，保持内容自身的边框宽度 */
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: 100%;
   min-width: 0;
   flex-wrap: nowrap;
   overflow-x: auto;
@@ -38,6 +53,9 @@
 }
 .account-filter-bar.account-message-filter .account-count {
   flex: 0 0 auto;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .account-select-label { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 11px; }
 .account-select-label select { border: 1px solid var(--line); border-radius: 7px; background: var(--white); color: #555555; padding: 7px 27px 7px 10px; max-width: 150px; }
