@@ -7,7 +7,7 @@
       </elementProp>
     </TestPlan>
     <hashTree>
-      <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="优惠券抢单">
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="优惠券抢单">
         <intProp name="ThreadGroup.num_threads">200</intProp>
         <intProp name="ThreadGroup.ramp_time">1</intProp>
         <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
@@ -16,11 +16,11 @@
           <stringProp name="LoopController.loops">1</stringProp>
           <boolProp name="LoopController.continue_forever">false</boolProp>
         </elementProp>
-      </SetupThreadGroup>
+      </ThreadGroup>
       <hashTree>
         <SyncTimer guiclass="TestBeanGUI" testclass="SyncTimer" testname="同步定时器">
           <intProp name="groupSize">200</intProp>
-          <longProp name="timeoutInMs">1000</longProp>
+          <longProp name="timeoutInMs">30000</longProp>
         </SyncTimer>
         <hashTree/>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP请求">
@@ -105,12 +105,12 @@
       <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="CSV 数据文件设置">
         <stringProp name="delimiter">,</stringProp>
         <stringProp name="fileEncoding">UTF-8</stringProp>
-        <stringProp name="filename">D:/Code/Campus_PaoTui/campus-dash-1/jmeter-stu-tokens-200.csv</stringProp>
-        <boolProp name="ignoreFirstLine">false</boolProp>
+        <stringProp name="filename">D:/Code/Campus_PaoTui/campus-dash-1/jmeter-stu-tokens-1000.csv</stringProp>
+        <boolProp name="ignoreFirstLine">true</boolProp>
         <boolProp name="quotedData">false</boolProp>
-        <boolProp name="recycle">true</boolProp>
+        <boolProp name="recycle">false</boolProp>
         <stringProp name="shareMode">shareMode.all</stringProp>
-        <boolProp name="stopThread">false</boolProp>
+        <boolProp name="stopThread">true</boolProp>
         <stringProp name="variableNames">username,password,userId,accessToken,refreshToken</stringProp>
       </CSVDataSet>
       <hashTree/>

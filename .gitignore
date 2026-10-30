@@ -7,3 +7,8 @@
 
 # 本地测试/编译日志，不入库
 *.log
+
+# JMeter 本地产物：token 含登录凭证，jtl/report 是压测结果，不入库
+jmeter-stu-tokens-*.csv
+result-*.jtl
+report-*/

@@ -105,7 +105,7 @@
       <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="CSV 数据文件设置">
         <stringProp name="delimiter">,</stringProp>
         <stringProp name="fileEncoding">UTF-8</stringProp>
-        <stringProp name="filename">D:/Code/Campus_PaoTui/campus-dash-1/jmeter-stu-tokens-500.csv</stringProp>
+        <stringProp name="filename">D:/Code/Campus_PaoTui/campus-dash-1/jmeter-stu-tokens-1000.csv</stringProp>
         <boolProp name="ignoreFirstLine">true</boolProp>
         <boolProp name="quotedData">false</boolProp>
         <boolProp name="recycle">false</boolProp>
