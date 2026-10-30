@@ -78,7 +78,7 @@ public class PublishErrandUseCase {
     }
 
     public record Result(long errandId, ErrandStatus status, long frozenCents,
-                         long discountCents, long paidCents) {
+                         long discountCents, long paidCents, long netRewardCents) {
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -171,6 +171,10 @@ public class PublishErrandUseCase {
         grabSlotPort.initSlot(errandId, cmd.slotTotal(), SLOT_TTL_SECONDS);
         cache.registerExisting(errandId);
 
-        return new Result(errandId, ErrandStatus.PUBLISHED, paidCents, discountCents, paidCents);
+        // 广场卡片展示跑腿实收：悬赏 - 平台佣金 - 券面跑腿承担部分
+        long commissionCents = (long) Math.floor(cmd.rewardCents() * config.commissionRate());
+        long netRewardCents = Math.max(0L, cmd.rewardCents() - commissionCents - runnerBearCents);
+        return new Result(errandId, ErrandStatus.PUBLISHED, paidCents, discountCents,
+                paidCents, netRewardCents);
     }
 }

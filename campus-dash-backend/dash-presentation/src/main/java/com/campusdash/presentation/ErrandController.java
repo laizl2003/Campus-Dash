@@ -105,7 +105,8 @@ public class ErrandController {
                 req.voucherId());
         var result = publishUseCase.publish(cmd);
         try {
-            chatErrandNotice.published(result.errandId(), userId, cmd.type(), cmd.title(), cmd.rewardCents());
+            chatErrandNotice.published(result.errandId(), userId, cmd.type(), cmd.title(),
+                    cmd.rewardCents(), result.netRewardCents());
         } catch (RuntimeException e) {
             // 发单已成功，聊天卡片失败不影响主流程
             log.warn("发单聊天卡片写入失败 errandId={}", result.errandId(), e);

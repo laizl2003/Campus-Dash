@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-30 · 发布卡片显示实收金额 + Redis/Docker 学习笔记
+
+- **目标**：广场 ERRAND 卡片展示跑腿实收，而不是发布悬赏；并把 Redis Pub/Sub 与 Docker 基础沉淀到 Learn.md。
+- **改动**：
+  - PublishErrandUseCase.Result 增加 netRewardCents：悬赏 - 平台佣金 - 券面跑腿承担。
+  - ChatErrandNoticeUseCase 的 ERRAND content 增加 netRewardCents。
+  - SquareChat 卡片优先显示 netRewardCents，并标注“实收”；旧卡无字段时回退 rewardCents。
+  - 新增 Learn.md：Redis Pub/Sub、Docker 容器/网络/卷/Compose、多实例 WS 广播。
+- **验证**：测试发布 rewardCents=1000 的任务，API 返回 netRewardCents=900，chat_message content 为 `{"rewardCents":1000,"netRewardCents":900,...}`；测试任务已取消并清理。
+
+
 ## 2026-10-30 · 优惠券两类压测总结
 
 - **目标**：用多用户抢券与同一用户重复抢券两类场景，分别验证防超卖和一人一单。

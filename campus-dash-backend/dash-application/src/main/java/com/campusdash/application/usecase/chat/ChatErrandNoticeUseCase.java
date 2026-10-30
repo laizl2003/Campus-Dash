@@ -32,13 +32,13 @@ public class ChatErrandNoticeUseCase {
     }
 
     public void published(long errandId, String publisherId, ErrandType type,
-                          String title, long rewardCents) {
+                          String title, long rewardCents, long netRewardCents) {
         String publisherName = users.findById(publisherId)
                 .map(user -> user.username())
                 .orElse(publisherId);
         String content = String.format(
-                "{\"type\":\"%s\",\"title\":\"%s\",\"rewardCents\":%d,\"publisherId\":\"%s\",\"publisherName\":\"%s\"}",
-                type.name(), escape(title), rewardCents, escape(publisherId), escape(publisherName));
+                "{\"type\":\"%s\",\"title\":\"%s\",\"rewardCents\":%d,\"netRewardCents\":%d,\"publisherId\":\"%s\",\"publisherName\":\"%s\"}",
+                type.name(), escape(title), rewardCents, netRewardCents, escape(publisherId), escape(publisherName));
         ChatMessage message = new ChatMessage(
                 idGenerator.nextId(), SendChatMessageUseCase.ROOM, 1,
                 publisherId, "发单人", "user", content, "ERRAND",

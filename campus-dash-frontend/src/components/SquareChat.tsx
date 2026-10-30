@@ -35,6 +35,7 @@ interface ErrandPayload {
   type?: string;
   title?: string;
   rewardCents?: number;
+  netRewardCents?: number;
   publisherId?: string;
   publisherName?: string;
 }
@@ -319,7 +320,7 @@ export default function SquareChat({ compactBottom = true }: { compactBottom?: b
             }}>
               <div style={{ fontSize: 8, opacity: .75 }}>{TYPE_TEXT[errand.type ?? ''] ?? errand.type ?? '任务'}</div>
               <div style={{ marginTop: 1, fontSize: 10, fontWeight: 600, lineHeight: 1.35 }}>{errand.title ?? '校园任务'}</div>
-              <div style={{ marginTop: 2, fontSize: 14, fontWeight: 800 }}>{yuan(errand.rewardCents ?? 0)}</div>
+              <div style={{ marginTop: 2, fontSize: 14, fontWeight: 800 }}>实收 {yuan(errand.netRewardCents ?? errand.rewardCents ?? 0)}</div>
               <div style={{ marginTop: 1, fontSize: 8, opacity: .7 }}>发单人 {errand.publisherName ?? errand.publisherId ?? message.senderId}</div>
             </div>;
             return <div key={message.id} style={{ alignSelf: 'stretch', cursor: clickable ? 'pointer' : 'not-allowed' }}>
