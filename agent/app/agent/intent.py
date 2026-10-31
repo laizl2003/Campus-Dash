@@ -40,6 +40,8 @@ class Intent(str, Enum):
     CHITCHAT = "CHITCHAT"
     # 要求清空任务内容
     CLEAR_DESCRIPTION = "CLEAR_DESCRIPTION"
+    # 要求重新展示任务卡片
+    SHOW_DRAFT = "SHOW_DRAFT"
 
 
 INTENT_LABELS: dict[Intent, str] = {
@@ -51,6 +53,7 @@ INTENT_LABELS: dict[Intent, str] = {
     Intent.CANCEL: "要求取消",
     Intent.CHITCHAT: "无关闲聊",
     Intent.CLEAR_DESCRIPTION: "清空任务内容",
+    Intent.SHOW_DRAFT: "重新展示任务卡片",
 }
 
 # 模型输出常带的包裹字符，解析前统一剥掉
@@ -70,13 +73,15 @@ INTENT_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿助手的意图分类器
 - CANCEL   要求取消这次任务（如"算了""不发了""取消"）
 - CHITCHAT 与任务无关的话（如"你是谁""今天天气怎么样"）
 - CLEAR_DESCRIPTION 要求清空任务内容（如"把任务内容删掉""清空备注""不要任务内容了""去掉刚才那些说明"）
+- SHOW_DRAFT 要求再看一次任务卡片（如"再给我看下任务""卡片呢""刚才那个单子再发一遍""重新展示一下""看看现在长什么样"）
 
 判断原则：
 1. 只要是在描述任务相关的细节，就是 APPEND；
 2. 明确表达"提交/发布/确认"是 PUBLISH；
 3. 指出某个字段要改是 EDIT；
 4. 明确要求删除/清空任务内容（不是删除整个任务）是 CLEAR_DESCRIPTION；
-5. 拿不准时选 APPEND（补充内容不会造成数据损坏）。
+5. 明确要求"再看一次/重新展示"任务卡片是 SHOW_DRAFT；
+6. 拿不准时选 APPEND（补充内容不会造成数据损坏）。
 
 重要：只输出标签本身（例如 APPEND），不要解释、不要标点、不要 JSON。"""
 
@@ -123,6 +128,18 @@ _CHITCHAT_PATTERN = re.compile(
     r"(你是谁|你叫什么|天气|几点钟|讲个笑话|你能做什么|怎么用)"
 )
 _CLEAR_PATTERN = re.compile(rf"{_CLEAR_VERB}.{{0,6}}{_CLEAR_NOUN}|{_CLEAR_NOUN}.{{0,6}}{_CLEAR_VERB}")
+
+# 重新展示卡片：要有"再看一次"的语义。
+# 注意和 QUERY 区分："多少钱"是问某个值，SHOW_DRAFT 是要求把整张卡片再发一遍。
+_SHOW_PATTERN = re.compile(
+    r"(再看看|再看一下|再看一遍|看一眼|给我看|看看|展示|显示|发一遍|发一下|"
+    r"重新来一遍|再来一次|长什么样|什么样了|"
+    r"(任务|单子|卡片|草稿).{0,4}(呢|再|一遍|一下)|呢[？?]?$)"
+)
+# 问具体字段走 QUERY 不走 SHOW_DRAFT。
+# 必须是疑问句才算："删掉取件码改成9933"虽然含"取件码"，但那是在下指令。
+_QUESTION_TAIL = re.compile(r"(吗|呢|多少|哪|几|什么|是不是|有没有)[？?]?$")
+_QUERY_SPECIFIC = re.compile(r"(多少钱|几块|什么时间|几点|送到哪|从哪里|标题是什么)")
 # 客套话只有整句都是它时才算闲聊；"尽快还，谢谢"里带任务信息，应算补充内容
 _POLITE_WORDS = ("谢谢", "辛苦了", "感谢", "谢谢啦", "多谢", "哈", "你好", "在吗")
 
@@ -159,6 +176,11 @@ def guess_intent_by_rules(message: str) -> Intent:
         return Intent.EDIT
     if any(word in text for word in _PUBLISH_WORDS):
         return Intent.PUBLISH
+    # 问具体字段优先当 QUERY；只有"再看一次"这类才展示卡片
+    if _QUERY_SPECIFIC.search(text) or (("取件码" in text or "金额" in text) and _QUESTION_TAIL.search(text)):
+        return Intent.QUERY
+    if _SHOW_PATTERN.search(text):
+        return Intent.SHOW_DRAFT
     if _QUERY_PATTERN.search(text):
         return Intent.QUERY
     if _CHITCHAT_PATTERN.search(text):

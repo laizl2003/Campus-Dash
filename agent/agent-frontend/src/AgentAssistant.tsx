@@ -35,6 +35,10 @@ interface ApiReply {
   /** READY 后识别出的意图：APPEND/FINISH/PUBLISH/EDIT/QUERY/CANCEL/CHITCHAT */
   intent?: string | null;
   can_publish?: boolean;
+  /** 用户要求重新展示卡片 */
+  show_draft?: boolean;
+  /** 用户清空了任务内容 */
+  cleared?: boolean;
 }
 
 interface DraftPayload {
@@ -563,6 +567,25 @@ export default function AgentAssistant() {
         });
         localStorage.removeItem(SESSION_KEY);
         setSessionId(null);
+        return;
+      }
+
+      // 用户要求"再看看"：在聊天窗底部再插一张当前草稿的卡片，
+      // 而不是把旧卡片挪过去——用户就是想在当前位置再看一遍。
+      if (reply.status === 'READY' && reply.show_draft) {
+        setMessages(prev => {
+          const latestDraft = [...prev].reverse().find(item => item.draft)?.draft;
+          const next = [...prev, { ...assistant, draft: latestDraft ?? assistant.draft }];
+          writeHistory([{
+            id: sid,
+            title: next.find(item => item.role === 'user')?.content.slice(0, 16) || '新的任务对话',
+            preview: assistant.content,
+            time: nowLabel(),
+            messages: next,
+          }, ...readHistory().filter(item => item.id !== sid)]);
+          setHistory(readHistory());
+          return next;
+        });
         return;
       }
 

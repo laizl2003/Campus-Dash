@@ -57,6 +57,8 @@ class AgentState(TypedDict, total=False):
     intent: Intent | None
     # 本轮是否清空了任务内容
     cleared: bool
+    # 本轮是否要求重新展示卡片
+    show_draft: bool
 
 
 class AgentReply(TypedDict, total=False):
@@ -68,6 +70,7 @@ class AgentReply(TypedDict, total=False):
     intent: str | None
     can_publish: bool
     cleared: bool
+    show_draft: bool
 
 
 def build_graph(extractor: Extractor):
@@ -98,6 +101,15 @@ def build_graph(extractor: Extractor):
             if intent in (Intent.QUERY, Intent.CHITCHAT, Intent.CANCEL):
                 # 这三类不改草稿，只回话
                 return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
+            if intent == Intent.SHOW_DRAFT:
+                # 要求再看一次卡片：不改草稿，只让前端重新插一张卡片
+                return {
+                    "draft": current,
+                    "extracted": {},
+                    "appended": False,
+                    "show_draft": True,
+                    "intent": intent,
+                }
             if intent == Intent.CLEAR_DESCRIPTION:
                 # 清空任务内容，其余字段保持不动
                 return {
@@ -157,6 +169,7 @@ def build_graph(extractor: Extractor):
             "appended": state.get("appended"),
             "intent": state.get("intent"),
             "cleared": state.get("cleared"),
+            "show_draft": state.get("show_draft"),
         }
 
     def route_after_check(state: AgentState) -> str:
@@ -283,6 +296,7 @@ INTENT_MESSAGES: dict[Intent, str] = {
     Intent.CHITCHAT: "我是校园跑腿助手，帮你把需求整理成任务。要继续补充任务内容，还是点「确认发布」？",
     Intent.FINISH: READY_STOP_MESSAGE,
     Intent.CLEAR_DESCRIPTION: "已清空任务内容，其他信息保持不变。需要补充可以继续告诉我。",
+    Intent.SHOW_DRAFT: "这是当前的任务卡片，需要调整哪里可以直接说。",
 }
 
 
@@ -296,7 +310,7 @@ def draft_to_reply(
 ) -> AgentReply:
     if status == "READY":
         if intent in (Intent.PUBLISH, Intent.EDIT, Intent.QUERY, Intent.CANCEL,
-                      Intent.CHITCHAT, Intent.CLEAR_DESCRIPTION):
+                      Intent.CHITCHAT, Intent.CLEAR_DESCRIPTION, Intent.SHOW_DRAFT):
             text = INTENT_MESSAGES[intent]
         elif intent == Intent.FINISH:
             text = READY_STOP_MESSAGE
@@ -319,6 +333,8 @@ def draft_to_reply(
         # READY + PUBLISH 时前端可以直接调发布，不用再让用户点一次
         "can_publish": bool(status == "READY" and intent is not Intent.CANCEL),
         "cleared": bool(intent is Intent.CLEAR_DESCRIPTION),
+        # 前端据此在聊天窗里再插一张相同的任务卡片
+        "show_draft": bool(intent is Intent.SHOW_DRAFT),
     }
 
 

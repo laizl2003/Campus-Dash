@@ -65,6 +65,30 @@ def test_finish_sentences_with_prefix_suffix():
         assert guess_intent_by_rules(text) is Intent.FINISH, text
 
 
+def test_show_draft_intent_rules():
+    """要求再看一次卡片。"""
+    for text in ("再给我看下任务", "卡片呢", "刚才那个单子再发一遍", "重新展示一下",
+                 "看看现在长什么样", "再看看"):
+        assert guess_intent_by_rules(text) is Intent.SHOW_DRAFT, text
+
+
+def test_specific_field_question_is_query_not_show_draft():
+    """"多少钱""是问字段，不是要求展示卡片。"""
+    for text in ("多少钱", "几点开始", "送到哪", "取件码是什么"):
+        assert guess_intent_by_rules(text) is Intent.QUERY, text
+
+
+def test_show_draft_keeps_draft_and_flags_frontend():
+    voice = _ready_service(Intent.SHOW_DRAFT)
+    service, sid = voice
+    reply = service.chat(sid, "再给我看下任务")
+    assert reply["draft"]["title"] == "帮忙还书"
+    assert reply["draft"]["description"] is None
+    assert reply["show_draft"] is True
+    assert reply["cleared"] is False
+    assert "任务卡片" in reply["message"]
+
+
 def test_colloquial_confirmation_is_finish():
     """口语确认词（ok了/好的/行）表示认可，不能写进任务内容。"""
     for text in ("ok了", "OK了", "ok", "好的", "行", "可以", "没问题", "嗯", "收到", "好嘞", "行行"):
