@@ -385,25 +385,6 @@ def _extract(extractor: Extractor, message: str, draft: TaskDraft) -> dict[str, 
     if not patch.get("expired_at"):
         patch = {**patch, **_deadline_fallback(message)}
     return patch
-
-
-def _extract_deadline(extractor: Extractor, message: str, draft: TaskDraft) -> dict[str, object]:
-    """从"补充内容"阶段的一句话里单独捞出截止时间。
-
-    只认 expired_at 一个字段：其它字段在这个阶段被顺口提到（比如"外卖"），
-    不应该改变已完成的信息，否则又回到"随口一句就把草稿改乱"的老问题。
-    模型没抽到时用规则兜底，避免"明天下午三点"被整段写进任务内容。
-    """
-    try:
-        patch = extractor.extract(message, draft)
-    except Exception:
-        patch = {}
-    value = patch.get("expired_at")
-    if value not in (None, ""):
-        return {"expired_at": value}
-    return _deadline_fallback(message)
-
-
 def _apply_pending_answer(
     message: str,
     draft: TaskDraft,
