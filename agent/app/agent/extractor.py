@@ -542,7 +542,7 @@ class CircuitBreakerExtractor(Extractor):
         if time.time() < self._open_until:
             return self.fallback.extract(message, draft, history)
         try:
-            patch = self.primary.extract(message, draft)
+            patch = self.primary.extract(message, draft, history)
             self._failures = 0
             return patch
         except Exception:
@@ -550,7 +550,7 @@ class CircuitBreakerExtractor(Extractor):
             if self._failures >= self.failure_threshold:
                 self._open_until = time.time() + self.cooldown_seconds
                 self._failures = 0
-            return self.fallback.extract(message, draft)
+            return self.fallback.extract(message, draft, history)
 
     # 包装器必须把新方法透传给 primary，否则会静默落到基类默认实现（返回 None），
     # 表现为"功能写了但完全不生效"。意图识别和内容整理都踩过这个坑。

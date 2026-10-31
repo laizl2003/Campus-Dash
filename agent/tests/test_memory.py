@@ -108,3 +108,34 @@ def test_service_passes_history_to_extractor():
     assert extractor.seen[0] == []
     assert extractor.seen[1], "第二轮应该带上短期记忆"
     assert extractor.seen[1][0]["content"] == "帮我取快递"
+
+
+class PanelMemoryStore(MemoryStore):
+    """按面板返回历史，模拟"跨会话也能接上上下文"。"""
+
+    def panel_messages(self, panel_id: str, limit: int = 200, before_id=None):
+        rows: list[dict] = []
+        for session in self.sessions:
+            if session.panel_id == panel_id:
+                rows.extend(self.rows.get(session.id, []))
+        return rows[-limit:]
+
+
+def test_history_covers_previous_session_in_same_panel():
+    """上一单发布后换会话，新会话仍能拿到上一单的对话。"""
+    extractor = RecordingExtractor()
+    store = PanelMemoryStore()
+    service = ChatService(extractor=extractor, store=store)
+
+    first = store.create(panel_id="p1")
+    service.chat(first.id, "帮我取快递")
+    service.chat(first.id, "菜鸟驿站东门")
+
+    # 模拟发布后换会话
+    second = store.create(panel_id="p1")
+    extractor.seen.clear()
+    service.chat(second.id, "再帮我买杯奶茶")
+
+    contents = [row["content"] for row in (extractor.seen[-1] or [])]
+    assert "帮我取快递" in contents
+    assert "菜鸟驿站东门" in contents

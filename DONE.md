@@ -3,6 +3,21 @@
 > 已完成需求的增量日志。每完成一条就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-11-01 · Agent v1 封版（发单助手）
+
+> 版本号固定为 `v1`：`/agent/status` 返回 `{"version":"v1"}`，FastAPI version 1.0.0。本版只做「发单」这一条链路。
+
+- **目标**：把已跑通的发单闭环定版，v2 再接查询/删除/RAG，避免版本边界不清。
+- **v1 已实现**：
+  - **发单意图识别**：`_classify` 先问模型、解析失败再用规则兜底，识别 FINISH / PUBLISH / QUERY / CHITCHAT / CANCEL / UNCLEAR / SHOW_DRAFT / CLEAR_DESCRIPTION / APPEND / EDIT
+  - **追问填槽**：`required_slots` 决定缺什么、`next_question` 拼清单；模型输出按 JSON 字段传递（`{"type":"DELIVERY","location_from":"…"}`），配合 prompt 里的"已收集字段"做增量合并
+  - **短期记忆**：每轮把同一 panel 最近 10 组问答（20 条、每条 120 字）拼进 prompt；system prompt 约定**冲突以靠后的说法为准、补充则合并**
+  - **标题总结**：首轮记 `title_base`（去"帮我/麻烦"前缀、截掉金额），之后用 `compose_title` 拼上已知地点，标题永不追问
+  - **发单卡片**：READY 时把 `{draft, type_label}` 存进 `agent_message.meta_json`，前端据此渲染；发布写 `publishedId`、取消写 `cancelled`，刷新可原样恢复
+  - **补充与修改识别**：一句话里同时有"改字段"和"补说明"时，字段进槽位、其余整理进 description；APPEND 锁标题类型、EDIT 可改
+  - **一单一会话**：发布置 `CLOSED`、取消置 `CANCELED`，同一 panel 下自动开新会话，卡片按 `session_id` 判定另起一张
+- **验证**：`168 passed, 1 skipped`；真模型实测跨会话"送到刚才那个地方"→ 解析为上一单的 `3号楼502`；`/agent/status` 返回 `version=v1`
+
 ## 2026-11-01 · 多单卡片按会话判定；prompt 注入短期记忆
 
 - **目标**：同一面板第二单 READY 后不刷新看不到新卡片；用户说"就那个""刚才那栋楼"时模型无法理解指代。

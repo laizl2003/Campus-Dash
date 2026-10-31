@@ -56,7 +56,10 @@ async def lifespan(_: FastAPI):
             await task
 
 
-app = FastAPI(title="CampusDash Agent", version="0.1.0", lifespan=lifespan)
+# v1：只做发单（意图识别 / 追问填槽 / 标题总结 / 草稿卡片 / 补充与修改识别）
+AGENT_VERSION = "v1"
+
+app = FastAPI(title="CampusDash Agent", version="1.0.0", lifespan=lifespan)
 service = ChatService()
 
 
@@ -89,6 +92,7 @@ def status() -> dict[str, object]:
     else:
         extractor_name = type(extractor).__name__
     return {
+        "version": AGENT_VERSION,
         "extractor": extractor_name,
         "llm_enabled": settings.enabled,
         "llm_usable": settings.usable(),

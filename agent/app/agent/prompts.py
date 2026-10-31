@@ -14,8 +14,8 @@ from datetime import datetime
 
 from ..models import STRUCTURED_TYPES, TYPE_LABELS, Slot, TaskDraft
 
-# 短期记忆上限：最近 8 条消息、每条 120 字，防止 prompt 随对话膨胀
-MAX_HISTORY_MESSAGES = 8
+# 短期记忆上限：最近 10 组问答（20 条消息）、每条 120 字，防止 prompt 随对话膨胀
+MAX_HISTORY_MESSAGES = 20
 MAX_HISTORY_CHARS = 120
 
 SYSTEM_PROMPT = """你是 CampusDash 校园跑腿平台的任务信息抽取助手。

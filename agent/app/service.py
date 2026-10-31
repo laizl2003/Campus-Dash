@@ -258,11 +258,14 @@ class ChatService:
         # 短期记忆：把本次会话最近几轮喂给抽取器，便于理解"就那个"这类省略；
         # 从库里取（而不是只靠内存），刷新/重连后也能接上上下文。
         history: list[dict] = []
-        if hasattr(self.store, "messages"):
-            try:
-                history = self.store.messages(session.id)[-8:]
-            except Exception:  # noqa: BLE001
-                history = []
+        try:
+            if session.panel_id and hasattr(self.store, "panel_messages"):
+                # 整个面板的最近 10 组问答：跨会话也能接上（发布/取消后仍记得上一单）
+                history = self.store.panel_messages(session.panel_id, limit=20)
+            elif hasattr(self.store, "messages"):
+                history = self.store.messages(session.id)[-20:]
+        except Exception:  # noqa: BLE001
+            history = []
         state = self.graph.invoke(
             {
                 "message": message,
