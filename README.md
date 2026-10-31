@@ -45,17 +45,41 @@ campus-dash/
 在仓库根目录：
 
 ```powershell
-.\start.ps1              # 重新打包前后端 + 重建镜像 + 重启 + 等健康
-.\start.ps1 -Build web   # 只改了前端，跳过 Maven
-.\start.ps1 -Build api   # 只改了后端
-.\start.ps1 -Build none  # 不构建，只重启
-.\start.ps1 -Status      # 看容器状态与健康检查
-.\start.ps1 -Logs        # 跟随 app / worker / web 日志
-.\start.ps1 -Down        # 停止（保留数据库）
+.\start.ps1                # 全量：主项目前后端 + agent，构建后重启
+.\start.ps1 -Build api     # 只改了主项目后端（Maven 打包）
+.\start.ps1 -Build web     # 只改了主项目前端（tsc + vite build）
+.\start.ps1 -Build agent   # 只改了 agent 后端（提示词 / 抽取器 / 会话逻辑）
+.\start.ps1 -Build agentui # 只改了 agent 聊天界面（agent/agent-frontend/src）
+.\start.ps1 -Build none    # 不构建，只重启
+.\start.ps1 -Status        # 看容器状态与健康检查
+.\start.ps1 -Logs          # 跟随 app / worker / web / agent 日志
+.\start.ps1 -Down          # 停止（保留数据库）
 ```
 
 首次运行前需要 Docker Desktop 已启动（或加 `-StartDocker` 让脚本自己拉起）。
 脚本会把访问地址打印出来：**http://localhost:8088**。
+
+#### `-Build` 参数一览
+
+| 取值 | 构建内容 | 什么时候用 |
+| --- | --- | --- |
+| `all`（默认） | 主项目后端 + 主项目前端 + agent 镜像 | 不确定改了哪里，或一次改了好几处 |
+| `api` | `dash-bootstrap` / `dash-worker` fat jar | 只改 Java 代码 |
+| `web` | `campus-dash-frontend`（tsc + vite build） | 只改主项目页面 |
+| `agent` | `dash-agent:local` 镜像（`agent/app`） | 只改 agent 的提示词、抽取器、会话逻辑 |
+| `agentui` | 重建 web（`agent/agent-frontend` 经 `@agent` 别名编进主前端） | 只改 agent 聊天窗口的界面 |
+| `none` | 不构建 | 只想重启容器，或改了 compose / 环境变量 |
+
+> `agentui` 本质仍是重建 web 镜像：agent 的 React 界面不是独立应用，
+> 它通过 Vite 别名 `@agent` → `../agent/agent-frontend/src` 打进主前端产物。
+> 分成两个参数是为了让你一眼看出"我这次改的是 agent 的哪一半"。
+
+脚本会按顺序做四件事，任何一步失败都会打印日志尾部并以非 0 退出：
+
+1. 按 `-Build` 跑 Maven / npm 构建；
+2. `docker compose build` 重建对应镜像；
+3. `up -d app worker agent web`（agent 在 web 之前，避免 nginx 先启动拿不到 agent 主机名）；
+4. 等 `/api/health` 与 `/agent/health` 都通过，再打印容器状态与访问地址。
 
 下面是手动分步的做法，便于理解每一步在做什么。
 
@@ -94,6 +118,19 @@ docker compose -f docker-compose.yaml -f docker-compose.full.yaml up -d --build
 访问 **http://localhost:8088**：nginx 托管前端静态文件，并把 `/api/**` 与 `/ws` 反代到应用容器，
 前端与 API 同源（不需要 CORS，也不需要 vite 代理）。详见
 [docker/README-full-stack.md](campus-dash-backend/docker/README-full-stack.md)。
+
+这套 compose 也会拉起 **agent 服务**（Python / FastAPI，容器内 8000，对外经 nginx 的 `/agent/` 前缀，
+转发时剥掉前缀）：
+
+| 路径 | 作用 |
+| --- | --- |
+| `/agent/health` | 健康检查，返回 `{"status":"ok"}` |
+| `/agent/sessions` | 创建 / 列出 / 删除会话 |
+| `/agent/chat` | 一轮对话（追问 / 抽取 / 意图识别） |
+| `/agent/publish` | 把确认后的草稿转发给主项目发单接口 |
+
+> nginx 对 `agent` 用的是 `resolver 127.0.0.11` + 变量的写法：agent 容器重建后 IP 会变，
+> 直接用 `proxy_pass http://agent:8000/` 只在启动时解析一次，之后会一直 502。
 
 ### 2. 启动前端
 

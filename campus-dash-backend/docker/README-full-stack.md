@@ -112,17 +112,27 @@ rmqbroker ──healthy──→ mq-init ──completed──→ app ──heal
 仓库根目录的 `start.ps1` 把"构建 + 重建镜像 + 启动 + 健康检查"收成一条命令：
 
 ```powershell
-.\start.ps1              # 前后端都构建（默认）
-.\start.ps1 -Build web   # 只构建前端
-.\start.ps1 -Build api   # 只构建后端
-.\start.ps1 -Build none  # 不构建，只重启
-.\start.ps1 -Status      # 只读：容器状态 + /api/health
-.\start.ps1 -Logs        # 启动后跟随日志
-.\start.ps1 -Down        # 停止（保留数据卷；加 -Purge 连数据一起删）
-.\start.ps1 -StartDocker # Docker 没起时自动拉起 Docker Desktop
+.\start.ps1                # 主项目前后端 + agent 都构建（默认）
+.\start.ps1 -Build api     # 只构建主项目后端
+.\start.ps1 -Build web     # 只构建主项目前端
+.\start.ps1 -Build agent   # 只构建 agent 后端镜像（agent/app）
+.\start.ps1 -Build agentui # 只构建 agent 界面（编进 web 产物）
+.\start.ps1 -Build none    # 不构建，只重启
+.\start.ps1 -Status        # 只读：容器状态 + /api/health
+.\start.ps1 -Logs          # 启动后跟随日志（app / worker / web / agent）
+.\start.ps1 -Down          # 停止（保留数据卷；加 -Purge 连数据一起删）
+.\start.ps1 -StartDocker   # Docker 没起时自动拉起 Docker Desktop
 ```
 
-实测耗时：只重启 **12 秒**，只改前端 **约 15 秒**，前后端全量 **约 45 秒**，冷启动（先 `-Down`）**约 90 秒**。
+`-Build agent` 与 `-Build agentui` 的区别：agent 的后端是独立容器（`agent` 服务），
+前端却不是独立应用——它通过 Vite 别名 `@agent` → `../agent/agent-frontend/src`
+编进主前端产物，所以 `agentui` 实际重建的是 `web` 镜像。
+
+`up` 的顺序是 `app worker agent web`：nginx 需要解析 `agent` 主机名，先起 agent 可以少一次 502。
+健康检查同时等 `/api/health` 与 `/agent/health`，任一不通过都会以非 0 退出。
+
+实测耗时：只重启 **12 秒**，只改前端 **约 15 秒**，只改 agent 后端 **约 40 秒**，
+前后端全量 **约 60 秒**，冷启动（先 `-Down`）**约 90 秒**。
 
 ## 手动命令（不用脚本时）
 
