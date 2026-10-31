@@ -39,7 +39,7 @@ public class JdbcErrandRepository implements ErrandRepository {
             rs.getString("title"),
             rs.getString("location_from"),
             rs.getString("location_to"),
-            rs.getTimestamp("start_time") == null ? null : rs.getTimestamp("start_time").toInstant(),
+            rs.getTimestamp("expired_at") == null ? null : rs.getTimestamp("expired_at").toInstant(),
             rs.getString("description"),
             Money.ofCents(rs.getLong("reward_amount")),
             rs.getInt("slot_total"),
@@ -55,13 +55,13 @@ public class JdbcErrandRepository implements ErrandRepository {
     public void insert(Errand errand) {
         jdbc.update("""
                 INSERT INTO errand (id, campus_id, publisher_id, type, title,
-                                    location_from, location_to, start_time, description,
+                                    location_from, location_to, expired_at, description,
                                     reward_amount, slot_total, slot_taken, status, round, version)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 errand.id(), errand.campusId(), errand.publisherId(), errand.type().name(),
                 errand.title(), errand.locationFrom(), errand.locationTo(),
-                errand.startTime() == null ? null : java.sql.Timestamp.from(errand.startTime()),
+                errand.expiredAt() == null ? null : java.sql.Timestamp.from(errand.expiredAt()),
                 errand.description(),
                 errand.reward().cents(), errand.slotTotal(), errand.slotTaken(),
                 errand.status().name(), errand.round(), errand.version());
@@ -116,6 +116,22 @@ public class JdbcErrandRepository implements ErrandRepository {
                 UPDATE errand
                    SET status = 'PUBLISHED', version = version + 1
                  WHERE id = ? AND status = 'DRAFT' AND version = ?
+                """, errandId, expectedVersion);
+    }
+
+    /**
+     * 过期：PUBLISHED -> EXPIRED。
+     *
+     * where 同时限制 status 和 version：
+     *   - status 防"已被抢走又被过期"，抢单与过期并发时只有一方成功；
+     *   - version 防重复消费把已过期任务再改一次。
+     */
+    @Override
+    public int casExpire(long errandId, long expectedVersion) {
+        return jdbc.update("""
+                UPDATE errand
+                   SET status = 'EXPIRED', version = version + 1
+                 WHERE id = ? AND status = 'PUBLISHED' AND version = ?
                 """, errandId, expectedVersion);
     }
 
@@ -269,7 +285,7 @@ public class JdbcErrandRepository implements ErrandRepository {
     public List<Errand> findPublished() {
         return jdbc.query("""
                 SELECT id, campus_id, publisher_id, type, title,
-                       location_from, location_to, start_time, description,
+                       location_from, location_to, expired_at, description,
                        reward_amount, slot_total,
                        grabber_id, status, slot_taken, round, version, locked_at, delivered_at
                   FROM errand

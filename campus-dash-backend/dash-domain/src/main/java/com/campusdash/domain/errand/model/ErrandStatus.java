@@ -22,19 +22,22 @@ public enum ErrandStatus {
     PICKED_UP,
     DELIVERED,
     SETTLED,
+    /** 过了截止时间仍无人接单 */
+    EXPIRED,
     CLOSED,
     CANCELLED,
     DISPUTED,
     REFUNDED;
 
     private static final Set<ErrandStatus> FROM_DRAFT = EnumSet.of(PUBLISHED, CANCELLED);
-    private static final Set<ErrandStatus> FROM_PUBLISHED = EnumSet.of(LOCKED, CANCELLED);
+    private static final Set<ErrandStatus> FROM_PUBLISHED = EnumSet.of(LOCKED, CANCELLED, EXPIRED);
     private static final Set<ErrandStatus> FROM_LOCKED = EnumSet.of(ACCEPTED, LOCKED, PUBLISHED, CANCELLED);
     private static final Set<ErrandStatus> FROM_ACCEPTED = EnumSet.of(PICKED_UP, DISPUTED, CANCELLED);
     private static final Set<ErrandStatus> FROM_PICKED_UP = EnumSet.of(DELIVERED, DISPUTED);
     private static final Set<ErrandStatus> FROM_DELIVERED = EnumSet.of(SETTLED, DISPUTED);
     private static final Set<ErrandStatus> FROM_DISPUTED = EnumSet.of(SETTLED, REFUNDED);
     private static final Set<ErrandStatus> FROM_SETTLED = EnumSet.of(CLOSED);
+    private static final Set<ErrandStatus> FROM_EXPIRED = EnumSet.of(CLOSED);
     private static final Set<ErrandStatus> FROM_REFUNDED = EnumSet.of(CLOSED);
     private static final Set<ErrandStatus> TERMINAL = EnumSet.noneOf(ErrandStatus.class);
 
@@ -48,6 +51,7 @@ public enum ErrandStatus {
             case DELIVERED -> FROM_DELIVERED;
             case DISPUTED -> FROM_DISPUTED;
             case SETTLED -> FROM_SETTLED;
+            case EXPIRED -> FROM_EXPIRED;
             case REFUNDED -> FROM_REFUNDED;
             case CLOSED, CANCELLED -> TERMINAL;
         };

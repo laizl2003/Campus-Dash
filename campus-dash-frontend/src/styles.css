@@ -141,6 +141,7 @@ input::placeholder, textarea::placeholder { color: #707070; }
 .status-ACCEPTED, .status-PICKED_UP { background: var(--primary-soft); color: #806000; }
 .status-SETTLED { background: #eaf4f0; color: #397d62; }
 .status-DISPUTED { background: #f9ecee; color: #a44756; }
+.status-EXPIRED { background: #f1f1f1; color: #8a8a8a; }
 .card-title { font-size: 14px; line-height: 1.65; font-weight: 600; color: #333333; min-height: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .card-title:hover { color: var(--accent);  text-decoration: underline;  text-underline-offset: 3px; }
 .card-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 11px; color: #707070; margin: 10px 0 12px; }
@@ -291,6 +292,12 @@ input::placeholder, textarea::placeholder { color: #707070; }
 .card-category .category-label { white-space: nowrap; }
 .card-number { border-left: 1px solid var(--line); padding-left: 8px; }
 .card-meta .card-slots { margin-left: auto; }
+/* 截止时间 + 倒计时：截止时间常显，倒计时逐秒跳动 */
+.card-deadline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: -4px 0 10px; font-size: 11px; }
+.card-deadline-at, .card-deadline-countdown { display: inline-flex; align-items: center; gap: 4px; }
+.card-deadline-at { color: #8a8577; }
+.card-deadline-countdown { padding: 2px 7px; border-radius: 5px; background: #fff6da; color: #8a6200; font-variant-numeric: tabular-nums; }
+.card-deadline-countdown.is-expired { background: #f1f1f1; color: #8a8a8a; }
 .card-meta .card-publisher { min-width: 0; }
 .card-controls { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; flex: 1; }
 .card-controls .actions.compact { flex: 0 1 auto; }

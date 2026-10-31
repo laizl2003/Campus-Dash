@@ -33,17 +33,17 @@ public class ChatErrandNoticeUseCase {
 
     public void published(long errandId, String publisherId, ErrandType type,
                           String title, String locationFrom, String locationTo,
-                          Instant startTime, String description,
+                          Instant expiredAt, String description,
                           long rewardCents, long netRewardCents) {
         String publisherName = users.findById(publisherId)
                 .map(user -> user.username())
                 .orElse(publisherId);
         String content = String.format(
                 "{\"type\":\"%s\",\"title\":\"%s\",\"locationFrom\":%s,\"locationTo\":%s,"
-                        + "\"startTime\":%s,\"description\":%s,"
+                        + "\"expiredAt\":%s,\"description\":%s,"
                         + "\"rewardCents\":%d,\"netRewardCents\":%d,\"publisherId\":\"%s\",\"publisherName\":\"%s\"}",
                 type.name(), escape(title), jsonString(locationFrom), jsonString(locationTo),
-                jsonString(startTime == null ? null : startTime.toString()),
+                jsonString(expiredAt == null ? null : expiredAt.toString()),
                 jsonString(description),
                 rewardCents, netRewardCents, escape(publisherId), escape(publisherName));
         ChatMessage message = new ChatMessage(

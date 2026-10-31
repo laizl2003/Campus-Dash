@@ -24,7 +24,7 @@ public class Errand {
     private final String title;
     private final String locationFrom;
     private final String locationTo;
-    private final Instant startTime;
+    private final Instant expiredAt;
     private final String description;
     private final Money reward;
     private final int slotTotal;
@@ -43,7 +43,7 @@ public class Errand {
     private final List<ErrandStatusChanged> changes = new ArrayList<>();
 
     private Errand(long id, long campusId, String publisherId, ErrandType type, String title,
-                   String locationFrom, String locationTo, Instant startTime, String description,
+                   String locationFrom, String locationTo, Instant expiredAt, String description,
                    Money reward, int slotTotal, String grabberId, ErrandStatus status,
                    int slotTaken, int round, long version, Instant lockedAt, Instant deliveredAt) {
         this.id = id;
@@ -53,7 +53,7 @@ public class Errand {
         this.title = title;
         this.locationFrom = locationFrom;
         this.locationTo = locationTo;
-        this.startTime = startTime;
+        this.expiredAt = expiredAt;
         this.description = description;
         this.reward = reward;
         this.slotTotal = slotTotal;
@@ -80,7 +80,7 @@ public class Errand {
      */
     public static Errand draft(long id, long campusId, String publisherId, ErrandType type,
                                String title, String locationFrom, String locationTo,
-                               Instant startTime, String description, Money reward, int slotTotal) {
+                               Instant expiredAt, String description, Money reward, int slotTotal) {
         if (reward.isZero()) {
             throw new IllegalArgumentException("悬赏金额必须大于 0");
         }
@@ -88,7 +88,7 @@ public class Errand {
             throw new IllegalArgumentException("名额数必须 >= 1");
         }
         return new Errand(id, campusId, publisherId, type, title, locationFrom, locationTo,
-                startTime, description, reward, slotTotal,
+                expiredAt, description, reward, slotTotal,
                 null, ErrandStatus.DRAFT, 0, 0, 0L, null, null);
     }
 
@@ -117,12 +117,12 @@ public class Errand {
      */
     public static Errand rehydrate(long id, long campusId, String publisherId, ErrandType type,
                                    String title, String locationFrom, String locationTo,
-                                   Instant startTime, String description,
+                                   Instant expiredAt, String description,
                                    Money reward, int slotTotal, String grabberId,
                                    ErrandStatus status, int slotTaken, int round, long version,
                                    Instant lockedAt, Instant deliveredAt) {
         return new Errand(id, campusId, publisherId, type, title, locationFrom, locationTo,
-                startTime, description, reward, slotTotal, grabberId,
+                expiredAt, description, reward, slotTotal, grabberId,
                 status, slotTaken, round, version, lockedAt, deliveredAt);
     }
 
@@ -329,7 +329,7 @@ public class Errand {
     public String title() { return title; }
     public String locationFrom() { return locationFrom; }
     public String locationTo() { return locationTo; }
-    public Instant startTime() { return startTime; }
+    public Instant expiredAt() { return expiredAt; }
     public String description() { return description; }
     public Money reward() { return reward; }
     public int slotTotal() { return slotTotal; }

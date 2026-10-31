@@ -52,6 +52,9 @@ dash:
     endpoints: 127.0.0.1:8081     # RocketMQ 5.x gRPC proxy
     topic:
       confirm-timeout: errand-confirm-timeout
+      errand-expire: errand-expire   # 到点无人接单则过期（DELAY 类型 topic）
+    group:
+      errand-expire: dash-errand-expire-consumer
   timeout:
     confirm-seconds: 300
     max-transfer-rounds: 5      # 防无限流转：超过则回退让所有人重新抢          # 生产 5 分钟；测试用 @TestPropertySource 压到 2 秒

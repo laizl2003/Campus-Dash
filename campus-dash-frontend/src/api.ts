@@ -470,8 +470,8 @@ export interface ErrandCard {
   locationFrom?: string | null;
   /** 送达地点：仅 DELIVERY/BUY/QUEUE 有值 */
   locationTo?: string | null;
-  /** 任务开始时间：ISO-8601，仅 DELIVERY/BUY/QUEUE 有值 */
-  startTime?: string | null;
+  /** 任务过期时间：ISO-8601。为空表示永久有效（不会过期） */
+  expiredAt?: string | null;
   /** 任务描述：所有类型都可填 */
   description?: string | null;
   status: string;
@@ -510,7 +510,7 @@ export const api = {
     title: string; rewardCents: number; slotTotal: number; type?: string;
     voucherId?: string | null;
     locationFrom?: string | null; locationTo?: string | null;
-    startTime?: string | null; description?: string | null;
+    expiredAt?: string | null; description?: string | null;
   }) =>
     request<{
       errandId: string; status: string; frozenCents: number; discountCents: number; paidCents: number;
@@ -627,7 +627,31 @@ export const STATUS_TEXT: Record<string, string> = {
   DRAFT: '草稿', PUBLISHED: '待抢单', LOCKED: '待确认', ACCEPTED: '待取货',
   PICKED_UP: '配送中', DELIVERED: '待确认完成', SETTLED: '已结算',
   CLOSED: '已关闭', CANCELLED: '已取消', DISPUTED: '争议中', REFUNDED: '已退款',
+  EXPIRED: '已过期',
 };
+
+/** 截止时间的展示格式：年月日时分 */
+export function formatDeadline(iso?: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+}
+
+/** 剩余时间：返回 { expired, text }，text 形如 02:15:30 */
+export function countdown(target: number, now: number): { expired: boolean; text: string } {
+  const diff = Math.max(0, target - now);
+  if (diff <= 0) return { expired: true, text: '00:00:00' };
+  const total = Math.floor(diff / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return { expired: false, text: `${pad(h)}:${pad(m)}:${pad(s)}` };
+}
 
 export const ACTION_TEXT: Record<string, string> = {
   GRAB: '抢单', CONFIRM: '确认接单', PICKUP: '取货', DELIVER: '送达',

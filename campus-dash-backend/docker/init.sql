@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS errand (
   title         VARCHAR(64)  NOT NULL COMMENT '任务标题',
   location_from VARCHAR(128) NULL     COMMENT '取货地点',
   location_to   VARCHAR(128) NULL     COMMENT '送达地点',
-  start_time    DATETIME(3)  NULL     COMMENT '任务开始时间',
+  expired_at    DATETIME(3)  NULL     COMMENT '任务过期时间，为空表示永久有效',
   description   VARCHAR(300) NULL     COMMENT '任务描述',
   reward_amount BIGINT       NOT NULL COMMENT '悬赏金额，单位分',
   slot_total    INT          NOT NULL DEFAULT 1 COMMENT '名额总数',

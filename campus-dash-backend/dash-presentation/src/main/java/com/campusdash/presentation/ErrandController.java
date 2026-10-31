@@ -93,7 +93,7 @@ public class ErrandController {
     public record PublishRequest(Long campusId, ErrandType type, String title,
                                  Long rewardCents, Integer slotTotal, Long voucherId,
                                  String locationFrom, String locationTo,
-                                 String startTime, String description) {}
+                                 String expiredAt, String description) {}
 
     @PostMapping
     public Result<PublishErrandUseCase.Result> publish(@RequestBody PublishRequest req) {
@@ -109,12 +109,12 @@ public class ErrandController {
                 req.voucherId(),
                 trimToNull(req.locationFrom()),
                 trimToNull(req.locationTo()),
-                parseStartTime(req.startTime()),
+                parseExpiredAt(req.expiredAt()),
                 trimToNull(req.description()));
         var result = publishUseCase.publish(cmd);
         try {
             chatErrandNotice.published(result.errandId(), userId, cmd.type(), cmd.title(),
-                    cmd.locationFrom(), cmd.locationTo(), cmd.startTime(), cmd.description(),
+                    cmd.locationFrom(), cmd.locationTo(), cmd.expiredAt(), cmd.description(),
                     cmd.rewardCents(), result.netRewardCents());
         } catch (RuntimeException e) {
             // 发单已成功，聊天卡片失败不影响主流程
@@ -258,7 +258,7 @@ public class ErrandController {
     }
 
     /** 前端传 ISO-8601（datetime-local 补时区后），解析失败直接报业务错误，不静默丢时间 */
-    private static java.time.Instant parseStartTime(String value) {
+    private static java.time.Instant parseExpiredAt(String value) {
         String text = trimToNull(value);
         if (text == null) return null;
         try {
@@ -281,7 +281,7 @@ public class ErrandController {
         card.put("title", e.title());
         card.put("locationFrom", e.locationFrom());
         card.put("locationTo", e.locationTo());
-        card.put("startTime", e.startTime() == null ? null : e.startTime().toString());
+        card.put("expiredAt", e.expiredAt() == null ? null : e.expiredAt().toString());
         card.put("description", e.description());
         card.put("status", e.status().name());
         card.put("type", e.type().name());

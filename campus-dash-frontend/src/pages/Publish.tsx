@@ -44,7 +44,7 @@ export default function Publish() {
   const [description, setDescription] = useState('');
   const [locationFrom, setLocationFrom] = useState('');
   const [locationTo, setLocationTo] = useState('');
-  const [startTime, setStartTime] = useState('');
+  const [expiredAt, setExpiredAt] = useState('');
   const [reward, setReward] = useState('15');
   const [type, setType] = useState(initial.type);
   const [balance, setBalance] = useState<number | null>(null);
@@ -93,7 +93,11 @@ export default function Publish() {
     if (structured) {
       if (!locationFrom.trim()) { setError('请填写取货地点。'); return; }
       if (!locationTo.trim()) { setError('请填写送达地点。'); return; }
-      if (!startTime) { setError('请选择任务开始时间。'); return; }
+      // 截止时间选填：不填表示永久有效
+    if (expiredAt && new Date(expiredAt).getTime() <= Date.now()) {
+      setError('截止时间需要晚于当前时间。');
+      return;
+    }
     }
     if (rewardCents === null) { setError('请输入大于 0 的金额，最多保留两位小数。'); return; }
     submitting.current = true;
@@ -107,7 +111,7 @@ export default function Publish() {
         voucherId,
         locationFrom: structured ? locationFrom.trim() : null,
         locationTo: structured ? locationTo.trim() : null,
-        startTime: structured ? toIsoStartTime(startTime) : null,
+        expiredAt: structured ? toIsoStartTime(expiredAt) : null,
         description: description.trim() || null,
       });
       // 券已被本次发布锁定：立即从本地可选列表移除，并清空选择，
@@ -143,7 +147,7 @@ export default function Publish() {
         <div className="task-success-reward"><span>已托管实付</span><strong>{yuan(published.paidCents)}</strong></div>
         {published.discountCents > 0 && <p className="muted">已使用优惠券减 {yuan(published.discountCents)}，悬赏仍为 {yuan(published.rewardCents)}。</p>}
         <p className="muted">完成后确认结算，悬赏会转入跑腿同学的钱包。</p>
-        <div className="task-success-actions"><a className="btn btn-primary" href={`#/detail/${published.id}`}>查看任务进度 <Icon name="arrow-right" size={16} /></a><button className="btn btn-ghost" onClick={() => { setPublished(null); setTitle(''); setDescription(''); setLocationFrom(''); setLocationTo(''); setStartTime(''); setVoucherId(null); void refreshVouchers(); }}>再发一个任务</button></div>
+        <div className="task-success-actions"><a className="btn btn-primary" href={`#/detail/${published.id}`}>查看任务进度 <Icon name="arrow-right" size={16} /></a><button className="btn btn-ghost" onClick={() => { setPublished(null); setTitle(''); setDescription(''); setLocationFrom(''); setLocationTo(''); setExpiredAt(''); setVoucherId(null); void refreshVouchers(); }}>再发一个任务</button></div>
         <span className="task-order-id">任务编号 {published.id}</span>
       </section>
     </div>
@@ -179,9 +183,9 @@ export default function Publish() {
                   </div>
                 </div>
                 <div>
-                  <label className="task-field-label" htmlFor="task-start-time">开始时间 <span>必填</span></label>
-                  <input id="task-start-time" type="datetime-local" value={startTime} onChange={(event) => { setStartTime(event.target.value); setError(null); }} />
-                  <div className="task-field-foot"><span>同学会按这个时间安排顺路行程。</span></div>
+                  <label className="task-field-label" htmlFor="task-expired-at">截止时间 <span>选填</span></label>
+                  <input id="task-expired-at" type="datetime-local" value={expiredAt} onChange={(event) => { setExpiredAt(event.target.value); setError(null); }} />
+                  <div className="task-field-foot"><span>超过这个时间仍无人接单，任务会自动过期。不填则永久有效。</span></div>
                 </div>
               </div>}
 
@@ -215,11 +219,11 @@ export default function Publish() {
         </form>
         <aside className="task-publish-aside">
           <section className="panel task-preview"><div className="task-aside-heading"><span>任务预览</span><span className="task-live-tag">实时预览</span></div><div className="task-preview-symbol"><Icon name={TYPE_ICON[type]} size={28} /></div><span className="task-category-label">{TYPE_TEXT[type]}</span><h2 className={!title.trim() ? 'task-placeholder' : ''}>{title.trim() || '你的下一件小事，从这里开始'}</h2>
-          {structured && (locationFrom.trim() || locationTo.trim() || startTime) && <div className="task-preview-route">
+          {structured && (locationFrom.trim() || locationTo.trim() || expiredAt) && <div className="task-preview-route">
             {locationFrom.trim() && <span><Icon name="pin" size={13} /> {locationFrom.trim()}</span>}
             {locationFrom.trim() && locationTo.trim() && <Icon name="arrow-right" size={12} />}
             {locationTo.trim() && <span><Icon name="pin" size={13} /> {locationTo.trim()}</span>}
-            {startTime && <span className="task-preview-time"><Icon name="clock" size={13} /> {new Date(startTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}</span>}
+            {expiredAt && <span className="task-preview-time"><Icon name="clock" size={13} /> 截止 {new Date(expiredAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}</span>}
           </div>}
           {description.trim() && <p className="task-preview-desc">{description.trim()}</p>}
           <div className="task-preview-meta"><span><Icon name="user" size={14} /> 1 位同学协助</span><span>发布后等待接单</span></div><div className="task-preview-reward"><span>任务悬赏</span><strong>{rewardCents === null ? '待填写' : yuan(rewardCents)}</strong></div></section>

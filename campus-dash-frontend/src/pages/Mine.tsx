@@ -8,7 +8,8 @@ import { refreshTaskCounts, type TaskCounts } from '../taskCounts';
 import './accountPages.css';
 
 type MineRole = 'PUBLISHED_BY_ME' | 'GRABBED_BY_ME';
-const FINISHED = new Set(['SETTLED', 'CLOSED', 'CANCELLED', 'REFUNDED']);
+// EXPIRED 是终态：过期任务归入"已结束"，不再算进行中
+const FINISHED = new Set(['SETTLED', 'CLOSED', 'CANCELLED', 'REFUNDED', 'EXPIRED']);
 
 export default function Mine() {
   const [tab, setTab] = useState<MineRole>('PUBLISHED_BY_ME');

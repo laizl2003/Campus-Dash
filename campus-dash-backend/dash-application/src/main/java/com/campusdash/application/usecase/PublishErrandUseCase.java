@@ -4,6 +4,8 @@ import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.model.ErrandStatus;
 import com.campusdash.domain.errand.model.ErrandType;
 import com.campusdash.domain.errand.ports.ErrandCachePort;
+import com.campusdash.domain.errand.ports.DelayMessagePort;
+import com.campusdash.domain.errand.ports.LocalMessageRepository;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.domain.grab.ports.GrabSlotPort;
 import com.campusdash.domain.config.ports.PlatformConfigPort;
@@ -20,9 +22,13 @@ import com.campusdash.shared.BizException;
 import com.campusdash.shared.ErrorCode;
 import com.campusdash.shared.Money;
 import com.campusdash.shared.SnowflakeIdGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 
@@ -39,6 +45,8 @@ import java.time.Instant;
 @Service
 public class PublishErrandUseCase {
 
+    private static final Logger log = LoggerFactory.getLogger(PublishErrandUseCase.class);
+
     /** 名额键 TTL 给足，避免任务还没被抢完 Redis 键就过期了 */
     private static final long SLOT_TTL_SECONDS = 7 * 24 * 3600;
     private static final String ESCROW_ACCOUNT_OWNER = "-1";
@@ -50,6 +58,8 @@ public class PublishErrandUseCase {
     private final ErrandCachePort cache;
     private final VoucherRepository voucherRepository;
     private final PlatformConfigPort config;
+    private final LocalMessageRepository localMessages;
+    private final DelayMessagePort delayMessagePort;
 
     public PublishErrandUseCase(ErrandRepository errandRepository,
                                 WalletRepository walletRepository,
@@ -57,7 +67,11 @@ public class PublishErrandUseCase {
                                 SnowflakeIdGenerator idGenerator,
                                 ErrandCachePort cache,
                                 VoucherRepository voucherRepository,
-                                PlatformConfigPort config) {
+                                PlatformConfigPort config,
+                                LocalMessageRepository localMessages,
+                                DelayMessagePort delayMessagePort) {
+        this.localMessages = localMessages;
+        this.delayMessagePort = delayMessagePort;
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.grabSlotPort = grabSlotPort;
@@ -67,9 +81,32 @@ public class PublishErrandUseCase {
         this.config = config;
     }
 
+    private void sendExpireAfterCommit(String msgKey, Instant deliverAt, long errandId) {
+        Runnable send = () -> {
+            try {
+                delayMessagePort.send(DelayTaskPolicy.TOPIC_ERRAND_EXPIRE, msgKey,
+                        DelayTaskPolicy.expirePayload(errandId), deliverAt);
+                localMessages.markSent(msgKey);
+            } catch (RuntimeException e) {
+                // 保持 PENDING，交给重试 Job；不向外抛，避免影响已经成功的发布
+                log.warn("过期延迟消息发送失败，等待重试 msgKey={}", msgKey, e);
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    send.run();
+                }
+            });
+        } else {
+            send.run();
+        }
+    }
+
     public record Command(long campusId, String publisherId, ErrandType type,
                           String title, long rewardCents, int slotTotal, Long voucherId,
-                          String locationFrom, String locationTo, Instant startTime,
+                          String locationFrom, String locationTo, Instant expiredAt,
                           String description) {
 
         /** 兼容不用券的调用方（测试、压测、脚本） */
@@ -167,7 +204,7 @@ public class PublishErrandUseCase {
         // 5. 任务落库并发布（悬赏字段仍是 R）
         Errand errand = Errand.draft(errandId, cmd.campusId(), cmd.publisherId(),
                 cmd.type(), cmd.title(), cmd.locationFrom(), cmd.locationTo(),
-                cmd.startTime(), cmd.description(), reward, cmd.slotTotal());
+                cmd.expiredAt(), cmd.description(), reward, cmd.slotTotal());
         errandRepository.insert(errand);
 
         long versionBeforePublish = errand.version();
@@ -181,6 +218,22 @@ public class PublishErrandUseCase {
 
         grabSlotPort.initSlot(errandId, cmd.slotTotal(), SLOT_TTL_SECONDS);
         cache.registerExisting(errandId);
+
+        // 登记"到点无人接单则过期"的延迟消息。
+        // 没填过期时间表示永久有效，不投递任何消息。
+        // 走本地消息表：事务提交即视为"必发"，发送失败由 LocalMessageRetryJob 补发。
+        if (cmd.expiredAt() != null) {
+            String msgKey = DelayTaskPolicy.expireKey(errandId, cmd.expiredAt());
+            boolean fresh = localMessages.enqueue(
+                    idGenerator.nextId(), msgKey, DelayTaskPolicy.TOPIC_ERRAND_EXPIRE,
+                    DelayTaskPolicy.expirePayload(errandId), cmd.expiredAt());
+            if (fresh) {
+                log.info("已登记过期延迟消息 errandId={} expiredAt={}", errandId, cmd.expiredAt());
+                // 事务提交后再真正投递：提交前发消息会出现"消息到了但任务没存"。
+                // 发送失败不影响发布结果，local_message 仍是 PENDING，由 LocalMessageRetryJob 补发。
+                sendExpireAfterCommit(msgKey, cmd.expiredAt(), errandId);
+            }
+        }
 
         // 广场卡片展示跑腿实收：悬赏 - 平台佣金 - 券面跑腿承担部分
         long commissionCents = (long) Math.floor(cmd.rewardCents() * config.commissionRate());

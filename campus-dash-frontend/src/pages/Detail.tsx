@@ -26,10 +26,10 @@ function formatTime(value: string) {
 
 /** 结构化任务字段只有在真的填了值时才显示 */
 function hasRoute(card: ErrandCard) {
-  return Boolean(card.locationFrom || card.locationTo || card.startTime || card.description);
+  return Boolean(card.locationFrom || card.locationTo || card.expiredAt || card.description);
 }
 
-function formatStartTime(value?: string | null) {
+function formatDeadline(value?: string | null) {
   if (!value) return '';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('zh-CN', {
@@ -141,7 +141,7 @@ export default function Detail({ errandId, backHref = '#/square' }: Props) {
                 <Icon name="arrow-right" size={14} />
                 <span className="task-route-point"><Icon name="pin" size={14} /><b>送达</b>{card.locationTo || '未填写'}</span>
               </div>}
-              {card.startTime && <div className="task-route-time"><Icon name="clock" size={14} /><b>开始时间</b><span>{formatStartTime(card.startTime)}</span></div>}
+              <div className="task-route-time"><Icon name="clock" size={14} /><b>截止时间</b><span>{card.expiredAt ? formatDeadline(card.expiredAt) : '永久有效'}</span></div>
             </div>}
             {card.description && <div className="task-description"><span className="task-description-label">任务内容</span><p>{card.description}</p></div>}
             <div className="task-status-note"><span className="task-status-indicator" /><p>{STATUS_DESCRIPTION[card.status] || '可查看下方进度记录，了解任务的最新变化。'}</p></div>

@@ -29,7 +29,14 @@ export default function Square() {
   const load = useCallback(async () => {
     const id = ++requestId.current;
     setLoading(true); setError('');
-    try { const result = await api.list(1); if (id === requestId.current) { setCards(result); setUpdatedAt(new Date()); } }
+    try {
+      const result = await api.list(1);
+      // 广场不展示已过期任务：后端状态可能因为延迟消息还在路上而暂时还是 PUBLISHED，
+      // 所以这里再按 expiredAt 兜一层，保证用户看不到已经过点的任务
+      const visible = result.filter(card => card.status !== 'EXPIRED'
+        && !(card.expiredAt && new Date(card.expiredAt).getTime() <= Date.now()));
+      if (id === requestId.current) { setCards(visible); setUpdatedAt(new Date()); }
+    }
     catch (e) { if (id === requestId.current) setError(e instanceof Error ? e.message : '任务加载失败'); }
     finally { if (id === requestId.current) setLoading(false); }
   }, []);

@@ -3,6 +3,23 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-31 · 任务过期：start_time 改为 expired_at，新增 PUBLISHED->EXPIRED 延迟消息流转
+
+- **目标**：任务可设置截止时间，到点无人接单自动过期；广场不再展示。
+- **后端**：
+  - `migrate-errand-expired.sql`：`start_time` → `expired_at`（可选，空表示永久有效）。
+  - `ErrandStatus` 新增 `EXPIRED`，允许 `PUBLISHED -> EXPIRED`、`EXPIRED -> CLOSED`。
+  - `ErrandRepository.casExpire`：`where status='PUBLISHED' and version=?`。
+  - `DelayTaskPolicy` 新增 `TOPIC_ERRAND_EXPIRE`、`expireKey`、`expirePayload`。
+  - `PublishErrandUseCase`：有 expiredAt 才 enqueue 本地消息，事务提交后发送，失败留给 retryJob。
+  - `ExpireErrandUseCase`：状态机 transitTo 校验 + CAS + 状态日志 + 缓存失效。
+  - `ErrandExpireConsumer`：消费 errand-expire，SKIPPED 也要 ACK。
+  - `init-mq.sh` / compose：建 DELAY topic 与消费组。
+- **前端**：广场展示「截止时间 + 逐秒倒计时」并过滤过期任务；「我的任务」把 EXPIRED 归入已结束；详情页显示截止时间；发布页「开始时间」改「截止时间（选填）」。
+- **坑**：`transitTo` 内部会自增版本，CAS 必须用自增前的版本号，否则永远更新不到。
+- **验证**：发布 20 秒后过期的任务，到点自动 EXPIRED 并从广场消失；无 expiredAt 的任务不登记消息且永久有效；`ExpireErrandUseCaseTest` 通过。
+
+
 ## 2026-10-31 · 新增"重新展示任务卡片"意图
 
 - **目标**：用户想再看一次任务卡片时，在聊天窗再展示一张相同卡片。

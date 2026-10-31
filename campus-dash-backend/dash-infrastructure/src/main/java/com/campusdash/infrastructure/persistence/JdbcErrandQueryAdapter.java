@@ -19,7 +19,7 @@ public class JdbcErrandQueryAdapter implements ErrandQueryPort {
             rs.getString("title"),
             rs.getString("location_from"),
             rs.getString("location_to"),
-            rs.getTimestamp("start_time") == null ? null : rs.getTimestamp("start_time").toInstant(),
+            rs.getTimestamp("expired_at") == null ? null : rs.getTimestamp("expired_at").toInstant(),
             rs.getString("description"),
             com.campusdash.shared.Money.ofCents(rs.getLong("reward_amount")),
             rs.getInt("slot_total"),

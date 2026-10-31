@@ -1,5 +1,7 @@
 package com.campusdash.application.usecase;
 
+import java.time.Instant;
+
 /**
  * 延迟任务的 topic 与幂等键约定。
  *
@@ -18,6 +20,8 @@ public final class DelayTaskPolicy {
     public static final String TOPIC_CONFIRM_TIMEOUT = "errand-confirm-timeout";
     /** 送达后自动结算（DELAY 类型 topic） */
     public static final String TOPIC_AUTO_SETTLE = "errand-auto-settle";
+    /** 到期无人接单则过期（DELAY 类型 topic） */
+    public static final String TOPIC_ERRAND_EXPIRE = "errand-expire";
 
     private DelayTaskPolicy() {
     }
@@ -30,6 +34,22 @@ public final class DelayTaskPolicy {
     /** 自动结算幂等键：一个任务只会送达一次，不需要轮次 */
     public static String autoSettleKey(long errandId) {
         return "autosettle:" + errandId;
+    }
+
+    /**
+     * 过期幂等键。
+     *
+     * 带 expiredAt 的 epoch 毫秒：用户修改过期时间后重新发布时，
+     * 新旧两条消息的 key 不同，不会被 unique 索引顶掉，
+     * 而消费端最终以数据库里的 expired_at 为准判断是否需要过期。
+     */
+    public static String expireKey(long errandId, Instant expiredAt) {
+        return "expire:" + errandId + ":" + expiredAt.toEpochMilli();
+    }
+
+    /** 过期消息体：只需要 errandId，其余以数据库为准 */
+    public static String expirePayload(long errandId) {
+        return String.format("{\"errandId\":%d}", errandId);
     }
 
     /** 消息体只带定位与幂等判定所需字段，不塞业务快照（会过期） */

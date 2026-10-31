@@ -30,6 +30,16 @@ public interface ErrandRepository {
     /** 发布：DRAFT -> PUBLISHED，同样用 CAS 保证不会重复发布 */
     int casPublish(long errandId, long expectedVersion);
 
+    /**
+     * 过期：PUBLISHED -> EXPIRED。
+     *
+     * where 里同时限制 status 和 version：
+     * status 防并发抢单（抢单成功后再过期是错的），version 防重复消费。
+     *
+     * @return 影响行数，0 表示状态已被别的事务改掉
+     */
+    int casExpire(long errandId, long expectedVersion);
+
     void appendStatusLog(long errandId, ErrandStatus from, ErrandStatus to, int round, String operatorId);
 
     /** 跑腿确认接单：LOCKED -> ACCEPTED，只有当前抢中者本人能确认 */

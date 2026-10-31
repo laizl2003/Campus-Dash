@@ -115,6 +115,12 @@ class GrabErrandUseCaseTest {
         @Override public List<Errand> findConfirmTimeout(long timeoutSeconds, int limit) { return List.of(); }
         @Override public int casPickUp(long errandId, String runnerId, long expectedVersion) { return 0; }
         @Override public int casDeliver(long errandId, String runnerId, long expectedVersion) { return 0; }
+
+        @Override
+        public int casExpire(long errandId, long expectedVersion) {
+            return 0;
+        }
+
         @Override public int casSettle(long errandId, long expectedVersion) { return 0; }
         @Override public int casRefundFromDispute(long errandId, long expectedVersion) { return 0; }
         @Override public int casCancel(long errandId, long expectedVersion) { return 0; }

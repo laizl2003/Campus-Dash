@@ -43,7 +43,7 @@ services:
 
         # 2. 快路径：所有 topic 都在才跳过（不能只看一个——新增 topic 时会被误跳过）
         need_init=0
-        for t in errand-confirm-timeout errand-auto-settle errand-cache-evict errand-fund-event voucher-claim voucher-expire; do
+        for t in errand-confirm-timeout errand-auto-settle errand-cache-evict errand-fund-event voucher-claim voucher-expire errand-expire; do
           sh mqadmin topicList -n rmqnamesrv:9876 2>/dev/null | grep -qx "$$t" || need_init=1
         done
         if [ "$$need_init" = "0" ]; then
@@ -56,7 +56,7 @@ services:
         #    想交给容器内 shell 展开必须写成两个美元符号。
         #    mqadmin 失败时退出码也可能是 0，所以下面还要用 topicList 校验。
         create_all() {
-          for t in errand-confirm-timeout errand-auto-settle errand-cache-evict voucher-expire; do
+          for t in errand-confirm-timeout errand-auto-settle errand-cache-evict voucher-expire errand-expire; do
             sh mqadmin updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t "$$t" -a +message.type=DELAY >/dev/null 2>&1 || true
           done
           sh mqadmin updateTopic -n rmqnamesrv:9876 -c DefaultCluster -t errand-fund-event -a +message.type=TRANSACTION >/dev/null 2>&1 || true
@@ -71,7 +71,7 @@ services:
         # 4. 校验 + 重试一次
         for round in 1 2; do
           missing=''
-          for t in errand-confirm-timeout errand-auto-settle errand-cache-evict errand-fund-event voucher-claim; do
+          for t in errand-confirm-timeout errand-auto-settle errand-cache-evict errand-fund-event voucher-claim errand-expire; do
             sh mqadmin topicList -n rmqnamesrv:9876 2>/dev/null | grep -qx "$$t" || missing="$$missing $$t"
           done
           if [ -z "$$missing" ]; then

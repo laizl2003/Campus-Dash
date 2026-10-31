@@ -101,12 +101,12 @@ public class GetErrandDetailUseCase {
     private String toJson(Errand e) {
         return String.format(
                 "{\"id\":\"%d\",\"title\":\"%s\",\"status\":\"%s\",\"type\":\"%s\","
-                        + "\"locationFrom\":%s,\"locationTo\":%s,\"startTime\":%s,\"description\":%s,"
+                        + "\"locationFrom\":%s,\"locationTo\":%s,\"expiredAt\":%s,\"description\":%s,"
                         + "\"rewardCents\":%d,\"slotTotal\":%d,\"slotTaken\":%d,"
                         + "\"publisherId\":\"%s\",\"grabberId\":\"%s\",\"round\":%d,\"version\":%d}",
                 e.id(), escape(e.title()), e.status().name(), e.type().name(),
                 jsonString(e.locationFrom()), jsonString(e.locationTo()),
-                jsonString(e.startTime() == null ? null : e.startTime().toString()),
+                jsonString(e.expiredAt() == null ? null : e.expiredAt().toString()),
                 jsonString(e.description()),
                 e.reward().cents(), e.slotTotal(), e.slotTaken(),
                 e.publisherId(), e.grabberId() == null ? "" : e.grabberId(),

@@ -19,6 +19,8 @@ TOPIC_CACHE_EVICT="${TOPIC_CACHE_EVICT:-errand-cache-evict}"
 TOPIC_VOUCHER_EXPIRE="${TOPIC_VOUCHER_EXPIRE:-voucher-expire}"
 # 优惠券领取（普通类型；Redis 预扣成功后投递，worker 落库）
 TOPIC_VOUCHER_CLAIM="${TOPIC_VOUCHER_CLAIM:-voucher-claim}"
+# 任务过期（DELAY 类型，发布时若填了 expiredAt 则按该时刻投递）
+TOPIC_ERRAND_EXPIRE="${TOPIC_ERRAND_EXPIRE:-errand-expire}"
 GROUP="${GROUP:-dash-timeout-consumer}"
 
 admin() {
@@ -46,12 +48,16 @@ admin "updateTopic -n $NAMESRV -c $CLUSTER -t $TOPIC_VOUCHER_EXPIRE -a +message.
 echo "创建普通 topic（优惠券领取）: $TOPIC_VOUCHER_CLAIM"
 admin "updateTopic -n $NAMESRV -c $CLUSTER -t $TOPIC_VOUCHER_CLAIM" | tail -1
 
+echo "创建 DELAY topic（任务过期）: $TOPIC_ERRAND_EXPIRE"
+admin "updateTopic -n $NAMESRV -c $CLUSTER -t $TOPIC_ERRAND_EXPIRE -a +message.type=DELAY" | tail -1
+
 echo "创建消费组: $GROUP"
 admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g $GROUP" | tail -1
 admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g dash-autosettle-consumer" | tail -1
 admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g dash-fund-event-consumer" | tail -1
 admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g dash-cache-evict-consumer" | tail -1
 admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g dash-voucher-consumer" | tail -1
+admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g dash-errand-expire-consumer" | tail -1
 admin "updateSubGroup -n $NAMESRV -c $CLUSTER -g dash-voucher-claim" | tail -1
 
 echo "集群状态:"
