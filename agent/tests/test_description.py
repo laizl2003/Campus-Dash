@@ -71,8 +71,11 @@ def test_ready_messages_differ_by_round():
     assert added["message"].startswith("任务内容添加成功")
     assert added["draft"]["description"] == "书比较重，麻烦带个小推车"
 
+    # "麻烦下午五点前"是时间说法，应当更新截止时间而不是塞进任务内容
     added2 = service.chat(session.id, "麻烦下午五点前")
-    assert added2["message"].startswith("任务内容添加成功")
+    assert added2["message"].startswith("截止时间已更新")
+    assert added2["draft"]["expired_at"] is not None
+    assert added2["draft"]["description"] == "书比较重，麻烦带个小推车"
 
     stop = service.chat(session.id, "没有了")
     assert stop["message"].startswith("好的，任务内容保持现状")

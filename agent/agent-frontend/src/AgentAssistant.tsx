@@ -685,6 +685,8 @@ export default function AgentAssistant() {
     if (!raw.reward_cents) { setNotice('请先填写悬赏金额'); return; }
 
     setPublishingId(messageId);
+    // 归档用：优先当前会话，其次本地保存的会话 id
+    const sid = sessionId ?? localStorage.getItem(SESSION_KEY) ?? 'local';
     try {
       const result = await apiPost<{ errandId: string }>('/publish', {
         campusId: 1,
@@ -701,12 +703,33 @@ export default function AgentAssistant() {
       setNotice('任务已发布');
       // 通知主项目刷新广场与钱包，和页面内发单保持一致
       window.dispatchEvent(new Event('dash:changed'));
-      setMessages(prev => [...prev, {
-        id: Math.random().toString(36).slice(2),
-        role: 'assistant',
-        content: `任务已发布，编号 ${result.errandId}。可以在「我的任务」里查看进度。`,
-        time: nowLabel(),
-      }]);
+      setMessages(prev => {
+        const next = [...prev, {
+          id: Math.random().toString(36).slice(2),
+          role: 'assistant' as const,
+          content: `任务已发布，编号 ${result.errandId}。可以在「我的任务」里查看进度。`,
+          time: nowLabel(),
+        }, {
+          id: Math.random().toString(36).slice(2),
+          role: 'assistant' as const,
+          content: '这一单已经结束，接下来想发什么任务？直接告诉我就行。',
+          time: nowLabel(),
+        }];
+        // 归档当前对话，让历史记录保留完整过程
+        writeHistory([{
+          id: sid,
+          title: next.find(item => item.role === 'user')?.content.slice(0, 16) || '已发布的任务',
+          preview: `任务已发布 #${result.errandId}`,
+          time: nowLabel(),
+          messages: next,
+        }, ...readHistory().filter(item => item.id !== sid)]);
+        setHistory(readHistory());
+        return next;
+      });
+      // 关键：换一条新会话。否则下一条消息会被当成这一单的"补充说明"，
+      // 继续往已完成（或已发布）的草稿里追加，第二单根本发不出去。
+      localStorage.removeItem(SESSION_KEY);
+      setSessionId(null);
     } catch (reason) {
       const text = reason instanceof Error ? reason.message : '发布失败';
       setNotice(text);

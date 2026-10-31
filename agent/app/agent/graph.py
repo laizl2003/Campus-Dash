@@ -166,6 +166,13 @@ def build_graph(extractor: Extractor):
             state.get("missing", []),
             patch,
         )
+        # 模型漏掉时间时用规则补一张：用户说"明天下午三点"却抽不出来，
+        # 这句话就会一直留在草稿外面，最后发布的任务没有截止时间。
+        if not draft.expired_at and not patch.get("expired_at"):
+            fallback = _deadline_fallback(message)
+            if fallback:
+                draft = merge_draft(draft, fallback)
+                patch = {**patch, **fallback}
         return {"draft": draft, "extracted": patch}
 
     def check_node(state: AgentState) -> AgentState:
@@ -310,20 +317,32 @@ def _looks_like_title(text: str) -> bool:
     return any(keyword in text for keyword in keywords)
 
 
+def _deadline_fallback(message: str) -> dict[str, object]:
+    """模型没给时间时，用规则再捞一次。
+
+    用户明确说了"明天下午三点"这类说法，如果模型漏抽，
+    这句话就会被当成任务内容整段塞进 description，截止时间永远为空。
+    规则兜底只处理"天 + 时刻"这种最常见写法，命中率足够，也不会误伤。
+    """
+    guessed = guess_expired_at(message)
+    return {"expired_at": guessed} if guessed is not None else {}
+
+
 def _extract_deadline(extractor: Extractor, message: str, draft: TaskDraft) -> dict[str, object]:
     """从"补充内容"阶段的一句话里单独捞出截止时间。
 
     只认 expired_at 一个字段：其它字段在这个阶段被顺口提到（比如"外卖"），
     不应该改变已完成的信息，否则又回到"随口一句就把草稿改乱"的老问题。
+    模型没抽到时用规则兜底，避免"明天下午三点"被整段写进任务内容。
     """
     try:
         patch = extractor.extract(message, draft)
     except Exception:
-        return {}
+        patch = {}
     value = patch.get("expired_at")
-    if value in (None, ""):
-        return {}
-    return {"expired_at": value}
+    if value not in (None, ""):
+        return {"expired_at": value}
+    return _deadline_fallback(message)
 
 
 def _apply_pending_answer(

@@ -89,6 +89,33 @@ def test_deadline_filled_after_info_complete():
     assert "截止时间已更新" in reply["message"]
 
 
+def test_rule_fallback_when_model_misses_time():
+    """模型没抽出时间时，规则兜底要把"明天下午三点"捞成截止时间。"""
+    from app.agent.extractor import EmptyExtractor
+
+    service = ChatService(EmptyExtractor())
+    session = service.create_session()
+    session.draft = TaskDraft(type="DELIVERY", title="取快递")
+    reply = service.chat(session.id, "明天下午三点")
+    assert reply["draft"]["expired_at"] is not None
+    assert reply["draft"]["location_to"] is None
+
+
+def test_rule_fallback_in_append_phase():
+    """信息完整后，模型漏抽的时间也要落进 expired_at，而不是任务内容。"""
+    from app.agent.extractor import EmptyExtractor
+
+    service = ChatService(EmptyExtractor())
+    session = service.create_session()
+    session.draft = TaskDraft(
+        type="DELIVERY", title="取快递",
+        location_from="菜鸟驿站", location_to="3号楼502", reward_cents=800,
+    )
+    reply = service.chat(session.id, "明天下午三点前送到")
+    assert reply["draft"]["expired_at"] is not None
+    assert reply["draft"]["description"] is None
+
+
 def test_normal_append_still_goes_to_description():
     """没有时间的普通补充，仍然进任务内容。"""
     service, sid = _ready_session(Intent.APPEND)
