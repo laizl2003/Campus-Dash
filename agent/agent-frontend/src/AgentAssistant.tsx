@@ -294,8 +294,13 @@ function defaultPosition(): Point {
   const content = document.querySelector('.content');
   const rect = content?.getBoundingClientRect();
   const right = rect && rect.right > FAB_SIZE ? rect.right : window.innerWidth - 24;
-  const top = Math.round(window.innerHeight * 0.28);
-  return { x: Math.round(right - FAB_SIZE), y: Math.max(88, top) };
+  // 竖向贴着"其他事帮个忙"那排入口的下方；找不到（不在广场页）时退回视口 42% 处
+  const shortcuts = document.querySelector('.service-shortcuts');
+  const anchor = shortcuts?.getBoundingClientRect();
+  const top = anchor && anchor.bottom > 0
+    ? anchor.bottom + 16
+    : Math.round(window.innerHeight * 0.42);
+  return { x: Math.round(right - FAB_SIZE), y: Math.max(88, Math.round(top)) };
 }
 function readPosition(): Point | null {
   try {
@@ -449,7 +454,22 @@ export default function AgentAssistant() {
 
   useEffect(() => {
     const saved = readPosition();
-    setPosition(clampPosition(saved ?? defaultPosition()));
+    if (saved) {
+      setPosition(clampPosition(saved));
+      return;
+    }
+    // 目标容器（.service-shortcuts）要等首页渲染完才存在，短轮询几次再定位
+    let attempts = 0;
+    const place = () => {
+      const anchor = document.querySelector('.service-shortcuts');
+      if (!anchor && attempts < 20) {
+        attempts += 1;
+        window.setTimeout(place, 120);
+        return;
+      }
+      setPosition(clampPosition(defaultPosition()));
+    };
+    place();
   }, []);
 
   useEffect(() => {
@@ -851,21 +871,33 @@ export default function AgentAssistant() {
     if (!position) return { visibility: 'hidden' };
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    // 与 CSS 的 min() 相同的算法
     const panelW = Math.min(400, vw - 32);
-    const panelH = Math.min(620, vh - 140);
     const gap = 12;
+    const minH = 260;
 
-    // 水平：优先让面板左边对齐球；放不下就贴右；再不行贴左
+    // 水平：面板右侧对齐球右侧，整体向左展开（水平位置不变）
     let left = position.x + FAB_SIZE - panelW;
     if (left + panelW > vw - gap) left = vw - gap - panelW;
     if (left < gap) left = gap;
 
-    // 垂直：球在屏幕下半部时面板放上面，否则放下面
-    const above = position.y + FAB_SIZE / 2 > vh / 2;
-    let top = above ? position.y - panelH - gap : position.y + FAB_SIZE + gap;
-    if (top + panelH > vh - gap) top = vh - gap - panelH;
-    if (top < gap) top = gap;
+    // 垂直：一律放在球的侧下方，绝不能盖住球；下方放不下才翻到上方
+    const belowTop = position.y + FAB_SIZE + gap;
+    const spaceBelow = vh - gap - belowTop;
+    const spaceAbove = position.y - gap - gap;
+
+    let top: number;
+    let panelH: number;
+    if (spaceBelow >= minH) {
+      top = belowTop;
+      panelH = Math.min(620, spaceBelow);
+    } else if (spaceAbove >= minH) {
+      panelH = Math.min(620, spaceAbove);
+      top = position.y - gap - panelH;
+    } else {
+      // 上下都挤：仍贴着球下方，压缩高度，保证球始终露出来
+      top = belowTop;
+      panelH = Math.max(minH, spaceBelow);
+    }
 
     return { left, top, right: 'auto', bottom: 'auto', width: panelW, height: panelH };
   })();
