@@ -22,6 +22,10 @@ public class Errand {
     private final String publisherId;
     private final ErrandType type;
     private final String title;
+    private final String locationFrom;
+    private final String locationTo;
+    private final Instant startTime;
+    private final String description;
     private final Money reward;
     private final int slotTotal;
 
@@ -39,6 +43,7 @@ public class Errand {
     private final List<ErrandStatusChanged> changes = new ArrayList<>();
 
     private Errand(long id, long campusId, String publisherId, ErrandType type, String title,
+                   String locationFrom, String locationTo, Instant startTime, String description,
                    Money reward, int slotTotal, String grabberId, ErrandStatus status,
                    int slotTaken, int round, long version, Instant lockedAt, Instant deliveredAt) {
         this.id = id;
@@ -46,6 +51,10 @@ public class Errand {
         this.publisherId = publisherId;
         this.type = type;
         this.title = title;
+        this.locationFrom = locationFrom;
+        this.locationTo = locationTo;
+        this.startTime = startTime;
+        this.description = description;
         this.reward = reward;
         this.slotTotal = slotTotal;
         this.grabberId = grabberId;
@@ -60,13 +69,26 @@ public class Errand {
     /** 新建草稿：此时还没托管资金，所以不能是 PUBLISHED */
     public static Errand draft(long id, long campusId, String publisherId, ErrandType type,
                                String title, Money reward, int slotTotal) {
+        return draft(id, campusId, publisherId, type, title, null, null, null, null, reward, slotTotal);
+    }
+
+    /**
+     * 新建草稿（结构化字段版）。
+     *
+     * DELIVERY/BUY/QUEUE 使用取货地、送达地、开始时间；
+     * OTHER 只填 title + description，地点和时间保持为空。
+     */
+    public static Errand draft(long id, long campusId, String publisherId, ErrandType type,
+                               String title, String locationFrom, String locationTo,
+                               Instant startTime, String description, Money reward, int slotTotal) {
         if (reward.isZero()) {
             throw new IllegalArgumentException("悬赏金额必须大于 0");
         }
         if (slotTotal < 1) {
             throw new IllegalArgumentException("名额数必须 >= 1");
         }
-        return new Errand(id, campusId, publisherId, type, title, reward, slotTotal,
+        return new Errand(id, campusId, publisherId, type, title, locationFrom, locationTo,
+                startTime, description, reward, slotTotal,
                 null, ErrandStatus.DRAFT, 0, 0, 0L, null, null);
     }
 
@@ -75,7 +97,7 @@ public class Errand {
                                    String title, Money reward, int slotTotal, String grabberId,
                                    ErrandStatus status, int slotTaken, int round, long version,
                                    Instant lockedAt) {
-        return new Errand(id, campusId, publisherId, type, title, reward, slotTotal, grabberId,
+        return rehydrate(id, campusId, publisherId, type, title, reward, slotTotal, grabberId,
                 status, slotTaken, round, version, lockedAt, null);
     }
 
@@ -84,7 +106,23 @@ public class Errand {
                                    String title, Money reward, int slotTotal, String grabberId,
                                    ErrandStatus status, int slotTaken, int round, long version,
                                    Instant lockedAt, Instant deliveredAt) {
-        return new Errand(id, campusId, publisherId, type, title, reward, slotTotal, grabberId,
+        return rehydrate(id, campusId, publisherId, type, title, null, null, null, null,
+                reward, slotTotal, grabberId, status, slotTaken, round, version, lockedAt, deliveredAt);
+    }
+
+    /**
+     * 从存储重建（结构化字段版）。
+     *
+     * 保留上面的旧签名给测试与历史调用方使用，新仓储统一走这个重载。
+     */
+    public static Errand rehydrate(long id, long campusId, String publisherId, ErrandType type,
+                                   String title, String locationFrom, String locationTo,
+                                   Instant startTime, String description,
+                                   Money reward, int slotTotal, String grabberId,
+                                   ErrandStatus status, int slotTaken, int round, long version,
+                                   Instant lockedAt, Instant deliveredAt) {
+        return new Errand(id, campusId, publisherId, type, title, locationFrom, locationTo,
+                startTime, description, reward, slotTotal, grabberId,
                 status, slotTaken, round, version, lockedAt, deliveredAt);
     }
 
@@ -289,6 +327,10 @@ public class Errand {
     public String publisherId() { return publisherId; }
     public ErrandType type() { return type; }
     public String title() { return title; }
+    public String locationFrom() { return locationFrom; }
+    public String locationTo() { return locationTo; }
+    public Instant startTime() { return startTime; }
+    public String description() { return description; }
     public Money reward() { return reward; }
     public int slotTotal() { return slotTotal; }
     public int slotTaken() { return slotTaken; }

@@ -32,13 +32,20 @@ public class ChatErrandNoticeUseCase {
     }
 
     public void published(long errandId, String publisherId, ErrandType type,
-                          String title, long rewardCents, long netRewardCents) {
+                          String title, String locationFrom, String locationTo,
+                          Instant startTime, String description,
+                          long rewardCents, long netRewardCents) {
         String publisherName = users.findById(publisherId)
                 .map(user -> user.username())
                 .orElse(publisherId);
         String content = String.format(
-                "{\"type\":\"%s\",\"title\":\"%s\",\"rewardCents\":%d,\"netRewardCents\":%d,\"publisherId\":\"%s\",\"publisherName\":\"%s\"}",
-                type.name(), escape(title), rewardCents, netRewardCents, escape(publisherId), escape(publisherName));
+                "{\"type\":\"%s\",\"title\":\"%s\",\"locationFrom\":%s,\"locationTo\":%s,"
+                        + "\"startTime\":%s,\"description\":%s,"
+                        + "\"rewardCents\":%d,\"netRewardCents\":%d,\"publisherId\":\"%s\",\"publisherName\":\"%s\"}",
+                type.name(), escape(title), jsonString(locationFrom), jsonString(locationTo),
+                jsonString(startTime == null ? null : startTime.toString()),
+                jsonString(description),
+                rewardCents, netRewardCents, escape(publisherId), escape(publisherName));
         ChatMessage message = new ChatMessage(
                 idGenerator.nextId(), SendChatMessageUseCase.ROOM, 1,
                 publisherId, "发单人", "user", content, "ERRAND",
@@ -53,5 +60,10 @@ public class ChatErrandNoticeUseCase {
 
     private static String escape(String value) {
         return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /** 卡片里的可空字段输出 null，前端可据此判断"未填写" */
+    private static String jsonString(String value) {
+        return value == null ? "null" : "\"" + escape(value) + "\"";
     }
 }

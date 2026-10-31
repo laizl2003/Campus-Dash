@@ -37,6 +37,10 @@ public class JdbcErrandRepository implements ErrandRepository {
             rs.getString("publisher_id"),
             ErrandType.valueOf(rs.getString("type")),
             rs.getString("title"),
+            rs.getString("location_from"),
+            rs.getString("location_to"),
+            rs.getTimestamp("start_time") == null ? null : rs.getTimestamp("start_time").toInstant(),
+            rs.getString("description"),
             Money.ofCents(rs.getLong("reward_amount")),
             rs.getInt("slot_total"),
             rs.getObject("grabber_id") == null ? null : rs.getString("grabber_id"),
@@ -50,12 +54,16 @@ public class JdbcErrandRepository implements ErrandRepository {
     @Override
     public void insert(Errand errand) {
         jdbc.update("""
-                INSERT INTO errand (id, campus_id, publisher_id, type, title, reward_amount,
-                                    slot_total, slot_taken, status, round, version)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO errand (id, campus_id, publisher_id, type, title,
+                                    location_from, location_to, start_time, description,
+                                    reward_amount, slot_total, slot_taken, status, round, version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 errand.id(), errand.campusId(), errand.publisherId(), errand.type().name(),
-                errand.title(), errand.reward().cents(), errand.slotTotal(), errand.slotTaken(),
+                errand.title(), errand.locationFrom(), errand.locationTo(),
+                errand.startTime() == null ? null : java.sql.Timestamp.from(errand.startTime()),
+                errand.description(),
+                errand.reward().cents(), errand.slotTotal(), errand.slotTaken(),
                 errand.status().name(), errand.round(), errand.version());
     }
 
@@ -260,7 +268,9 @@ public class JdbcErrandRepository implements ErrandRepository {
     @Override
     public List<Errand> findPublished() {
         return jdbc.query("""
-                SELECT id, campus_id, publisher_id, type, title, reward_amount, slot_total,
+                SELECT id, campus_id, publisher_id, type, title,
+                       location_from, location_to, start_time, description,
+                       reward_amount, slot_total,
                        grabber_id, status, slot_taken, round, version, locked_at, delivered_at
                   FROM errand
                  WHERE status = 'PUBLISHED'

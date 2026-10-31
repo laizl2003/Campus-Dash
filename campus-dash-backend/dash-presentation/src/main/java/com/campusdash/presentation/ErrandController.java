@@ -12,6 +12,7 @@ import com.campusdash.domain.voucher.ports.VoucherRepository;
 import com.campusdash.domain.auth.ports.UserRepository;
 import com.campusdash.domain.errand.ports.ErrandRepository;
 import com.campusdash.presentation.auth.CurrentUser;
+import com.campusdash.shared.BizException;
 import com.campusdash.shared.ErrorCode;
 import com.campusdash.shared.Result;
 import org.springframework.web.bind.annotation.*;
@@ -90,22 +91,30 @@ public class ErrandController {
     }
 
     public record PublishRequest(Long campusId, ErrandType type, String title,
-                                 Long rewardCents, Integer slotTotal, Long voucherId) {}
+                                 Long rewardCents, Integer slotTotal, Long voucherId,
+                                 String locationFrom, String locationTo,
+                                 String startTime, String description) {}
 
     @PostMapping
     public Result<PublishErrandUseCase.Result> publish(@RequestBody PublishRequest req) {
         String userId = CurrentUser.get();
+        ErrandType type = req.type() == null ? ErrandType.DELIVERY : req.type();
         var cmd = new PublishErrandUseCase.Command(
                 req.campusId() == null ? 1L : req.campusId(),
                 userId,
-                req.type() == null ? ErrandType.DELIVERY : req.type(),
+                type,
                 req.title(),
                 req.rewardCents(),
                 req.slotTotal() == null ? 1 : req.slotTotal(),
-                req.voucherId());
+                req.voucherId(),
+                trimToNull(req.locationFrom()),
+                trimToNull(req.locationTo()),
+                parseStartTime(req.startTime()),
+                trimToNull(req.description()));
         var result = publishUseCase.publish(cmd);
         try {
             chatErrandNotice.published(result.errandId(), userId, cmd.type(), cmd.title(),
+                    cmd.locationFrom(), cmd.locationTo(), cmd.startTime(), cmd.description(),
                     cmd.rewardCents(), result.netRewardCents());
         } catch (RuntimeException e) {
             // 发单已成功，聊天卡片失败不影响主流程
@@ -241,12 +250,39 @@ public class ErrandController {
         return Result.ok(Map.of("result", r.name()));
     }
 
+    /** 空串统一存 null，避免前端空输入写出无意义的空字符串 */
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /** 前端传 ISO-8601（datetime-local 补时区后），解析失败直接报业务错误，不静默丢时间 */
+    private static java.time.Instant parseStartTime(String value) {
+        String text = trimToNull(value);
+        if (text == null) return null;
+        try {
+            return java.time.OffsetDateTime.parse(text).toInstant();
+        } catch (java.time.format.DateTimeParseException ignored) {
+            try {
+                return java.time.LocalDateTime.parse(text)
+                        .atZone(java.time.ZoneId.systemDefault()).toInstant();
+            } catch (java.time.format.DateTimeParseException e) {
+                throw new BizException(ErrorCode.INVALID_AMOUNT, "开始时间格式不正确");
+            }
+        }
+    }
+
     /** 统一的任务卡片：列表与详情共用，保证 availableActions 处处一致 */
     private Map<String, Object> toCard(Errand e, String viewer) {
         var resolved = actionResolver.resolve(e, viewer);
         Map<String, Object> card = new LinkedHashMap<>();
         card.put("id", e.id());
         card.put("title", e.title());
+        card.put("locationFrom", e.locationFrom());
+        card.put("locationTo", e.locationTo());
+        card.put("startTime", e.startTime() == null ? null : e.startTime().toString());
+        card.put("description", e.description());
         card.put("status", e.status().name());
         card.put("type", e.type().name());
         card.put("rewardCents", e.reward().cents());

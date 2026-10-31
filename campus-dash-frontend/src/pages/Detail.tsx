@@ -24,6 +24,19 @@ function formatTime(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 }
 
+/** 结构化任务字段只有在真的填了值时才显示 */
+function hasRoute(card: ErrandCard) {
+  return Boolean(card.locationFrom || card.locationTo || card.startTime || card.description);
+}
+
+function formatStartTime(value?: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+}
+
 function operatorName(id: string, card: ErrandCard) {
   if (id === '-1') return '平台自动处理';
   if (id === card.publisherId) return `${card.publisherName || displayUserName(id)} · 发单同学`;
@@ -122,6 +135,15 @@ export default function Detail({ errandId, backHref = '#/square' }: Props) {
           <section className="panel task-overview">
             <div className="task-overview-top"><span className="task-detail-category"><Icon name={TYPE_ICON[card.type] || 'package'} size={18} /> {TYPE_TEXT[card.type] || '校园任务'}</span><span className={`status status-${card.status}`}>{STATUS_TEXT[card.status] || card.status}</span></div>
             <h2>{card.title}</h2><span className="task-order-id">任务编号 {card.id}</span>
+            {hasRoute(card) && <div className="task-route">
+              {(card.locationFrom || card.locationTo) && <div className="task-route-line">
+                <span className="task-route-point"><Icon name="pin" size={14} /><b>取货</b>{card.locationFrom || '未填写'}</span>
+                <Icon name="arrow-right" size={14} />
+                <span className="task-route-point"><Icon name="pin" size={14} /><b>送达</b>{card.locationTo || '未填写'}</span>
+              </div>}
+              {card.startTime && <div className="task-route-time"><Icon name="clock" size={14} /><b>开始时间</b><span>{formatStartTime(card.startTime)}</span></div>}
+            </div>}
+            {card.description && <div className="task-description"><span className="task-description-label">任务内容</span><p>{card.description}</p></div>}
             <div className="task-status-note"><span className="task-status-indicator" /><p>{STATUS_DESCRIPTION[card.status] || '可查看下方进度记录，了解任务的最新变化。'}</p></div>
             <dl className="task-facts"><div><dt>发单同学</dt><dd><Icon name="user" size={15} /><span title={`用户 ID：${card.publisherId}`}>{card.publisherName || displayUserName(card.publisherId)}</span></dd></div><div><dt>接单同学</dt><dd><Icon name="user" size={15} /><span title={hasRunner ? `用户 ID：${card.grabberId}` : undefined}>{hasRunner ? (card.grabberName || displayUserName(card.grabberId!)) : '等待接单'}</span></dd></div><div><dt>接单名额</dt><dd>{card.slotTaken} / {card.slotTotal} 人</dd></div><div><dt>当前身份</dt><dd>{ROLE_TEXT[card.role] || '任务参与者'}</dd></div></dl>
           </section>

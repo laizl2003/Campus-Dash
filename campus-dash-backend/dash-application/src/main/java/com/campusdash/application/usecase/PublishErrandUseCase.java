@@ -68,12 +68,22 @@ public class PublishErrandUseCase {
     }
 
     public record Command(long campusId, String publisherId, ErrandType type,
-                          String title, long rewardCents, int slotTotal, Long voucherId) {
+                          String title, long rewardCents, int slotTotal, Long voucherId,
+                          String locationFrom, String locationTo, Instant startTime,
+                          String description) {
 
         /** 兼容不用券的调用方（测试、压测、脚本） */
         public Command(long campusId, String publisherId, ErrandType type,
                        String title, long rewardCents, int slotTotal) {
-            this(campusId, publisherId, type, title, rewardCents, slotTotal, null);
+            this(campusId, publisherId, type, title, rewardCents, slotTotal, null,
+                    null, null, null, null);
+        }
+
+        /** 兼容带券但不带结构化字段的调用方 */
+        public Command(long campusId, String publisherId, ErrandType type,
+                       String title, long rewardCents, int slotTotal, Long voucherId) {
+            this(campusId, publisherId, type, title, rewardCents, slotTotal, voucherId,
+                    null, null, null, null);
         }
     }
 
@@ -156,7 +166,8 @@ public class PublishErrandUseCase {
 
         // 5. 任务落库并发布（悬赏字段仍是 R）
         Errand errand = Errand.draft(errandId, cmd.campusId(), cmd.publisherId(),
-                cmd.type(), cmd.title(), reward, cmd.slotTotal());
+                cmd.type(), cmd.title(), cmd.locationFrom(), cmd.locationTo(),
+                cmd.startTime(), cmd.description(), reward, cmd.slotTotal());
         errandRepository.insert(errand);
 
         long versionBeforePublish = errand.version();

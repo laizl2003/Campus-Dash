@@ -466,6 +466,14 @@ export interface ErrandCard {
    *  按 number 解析会截断精度，全程必须按 string 处理 */
   id: string;
   title: string;
+  /** 取货地点：仅 DELIVERY/BUY/QUEUE 有值 */
+  locationFrom?: string | null;
+  /** 送达地点：仅 DELIVERY/BUY/QUEUE 有值 */
+  locationTo?: string | null;
+  /** 任务开始时间：ISO-8601，仅 DELIVERY/BUY/QUEUE 有值 */
+  startTime?: string | null;
+  /** 任务描述：所有类型都可填 */
+  description?: string | null;
   status: string;
   type: string;
   rewardCents: number;
@@ -498,7 +506,12 @@ export const api = {
     request<ErrandCard[]>(`/api/errands/mine?role=${role}`),
   detail: (id: string) => request<ErrandCard>(`/api/errands/${id}`),
   timeline: (id: string) => request<StatusChange[]>(`/api/errands/${id}/timeline`),
-  publish: (req: { title: string; rewardCents: number; slotTotal: number; type?: string; voucherId?: string | null }) =>
+  publish: (req: {
+    title: string; rewardCents: number; slotTotal: number; type?: string;
+    voucherId?: string | null;
+    locationFrom?: string | null; locationTo?: string | null;
+    startTime?: string | null; description?: string | null;
+  }) =>
     request<{
       errandId: string; status: string; frozenCents: number; discountCents: number; paidCents: number;
     }>('/api/errands', 'POST', req),
