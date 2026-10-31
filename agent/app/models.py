@@ -125,3 +125,32 @@ def next_question(missing: list[Slot]) -> str | None:
     if not missing:
         return None
     return SLOT_QUESTIONS[missing[0]]
+
+
+# 信息齐全后，允许用户继续补充"任务内容"。
+# 这个状态不阻塞发布，只是给用户一个继续完善的入口。
+READY_HINT = "还需要补充任务内容吗？直接回复补充说明，或点「确认发布」提交。"
+
+# 用户表示"没有了/不用了"时，视为不再追加
+NO_MORE_HINTS = (
+    "没有", "没有了", "不用", "没了", "不需要", "就这些", "就这样",
+    "无", "行了", "可以了", "够了", "好了",
+)
+
+
+def is_no_more(message: str) -> bool:
+    """判断用户是否表示"不再补充"。"""
+    text = message.strip().rstrip("。.！!~ ")
+    return text in NO_MORE_HINTS
+
+
+def append_description(current: TaskDraft, extra: str) -> TaskDraft:
+    """把用户补充的内容追加到任务描述。
+
+    已有描述时用分号拼接，并限制在 300 字以内（与后端字段长度一致）。
+    """
+    text = extra.strip()
+    if not text:
+        return current
+    merged = f"{current.description}；{text}" if current.description else text
+    return current.model_copy(update={"description": merged[:300]})

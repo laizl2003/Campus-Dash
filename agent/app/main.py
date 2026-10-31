@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+import httpx
+import os
+
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .agent.extractor import CircuitBreakerExtractor, LLMExtractor, RuleExtractor
@@ -54,6 +57,54 @@ def status() -> dict[str, object]:
 def create_session() -> dict[str, str]:
     session = service.create_session()
     return {"session_id": session.id}
+
+
+class PublishRequest(BaseModel):
+    """与主项目 POST /api/errands 的请求体保持一致。"""
+
+    campusId: int = 1
+    type: str
+    title: str
+    rewardCents: int
+    slotTotal: int = 1
+    locationFrom: str | None = None
+    locationTo: str | None = None
+    startTime: str | None = None
+    description: str | None = None
+
+
+@app.post("/publish")
+def publish(req: PublishRequest, authorization: str | None = Header(default=None)) -> dict[str, object]:
+    """把确认后的草稿转发给主项目发单接口。
+
+    身份直接透传浏览器带来的 Authorization，
+    Agent 服务不保存也不校验 token，鉴权仍由主项目负责。
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="缺少登录态")
+
+    backend = os.getenv("DASH_BACKEND_URL", "http://app:8080")
+    try:
+        resp = httpx.post(
+            f"{backend}/api/errands",
+            headers={"Authorization": authorization, "Content-Type": "application/json"},
+            json=req.model_dump(),
+            timeout=15.0,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"主服务不可用: {exc}") from exc
+
+    try:
+        data = resp.json()
+    except ValueError:
+        raise HTTPException(status_code=502, detail="主服务返回异常") from None
+
+    if resp.status_code >= 400 or data.get("code") != "OK":
+        # 把主项目的业务错误原样带回，前端能直接提示"余额不足"等原因
+        raise HTTPException(status_code=400, detail=data.get("message") or "发布失败")
+
+    body = data.get("data") or {}
+    return {"errandId": str(body.get("errandId", "")), "status": body.get("status")}
 
 
 @app.post("/chat")

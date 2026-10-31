@@ -42,7 +42,12 @@ interface DraftPayload {
   delivery: string;
   deadline: string;
   description?: string;
+  /** 后端原始草稿：发布时要用分值和 ISO 时间，不能用展示用的字符串 */
+  raw: ApiDraft;
 }
+
+/** 可逐项编辑的字段 */
+type EditableField = 'title' | 'reward' | 'pickup' | 'delivery' | 'deadline' | 'description';
 
 interface HistoryItem {
   id: string;
@@ -99,16 +104,75 @@ function toDraftPayload(reply: ApiReply): DraftPayload {
     delivery: d.location_to || '待填写',
     deadline: formatDateTime(d.start_time),
     description: d.description || undefined,
+    raw: d,
   };
 }
 
+/** 用现有草稿重新构造一个 ApiReply，供 toDraftPayload 复用展示逻辑 */
+function apiReplyOf(draft: DraftPayload): ApiReply {
+  return {
+    status: 'READY',
+    message: '',
+    draft: draft.raw,
+    missing: [],
+    question: null,
+    type_label: draft.type,
+  };
+}
+
+/** 把编辑后的字符串写回原始草稿，保证发布时用的是真实值 */
+function applyEdits(raw: ApiDraft, edits: Partial<Record<EditableField, string>>): ApiDraft {
+  const next: ApiDraft = { ...raw };
+  if (edits.title !== undefined) next.title = edits.title || null;
+  if (edits.pickup !== undefined) next.location_from = edits.pickup || null;
+  if (edits.delivery !== undefined) next.location_to = edits.delivery || null;
+  if (edits.description !== undefined) next.description = edits.description || null;
+  if (edits.reward !== undefined) {
+    const cents = parseRewardCents(edits.reward);
+    if (cents !== null) next.reward_cents = cents;
+  }
+  if (edits.deadline !== undefined) {
+    // datetime-local 的值没有时区，转换后是本地时间对应的 ISO
+    const time = new Date(edits.deadline);
+    if (!Number.isNaN(time.getTime())) next.start_time = time.toISOString();
+  }
+  return next;
+}
+
+function parseRewardCents(value: string): number | null {
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value.trim());
+  if (!match) return null;
+  const cents = Number(match[1]) * 100 + Number((match[2] || '').padEnd(2, '0'));
+  return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
+}
+
+/** ISO 时间转成 datetime-local 需要的本地格式 */
+function toLocalInput(iso?: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  // 带上主项目登录态：发布接口要靠它确认发单人身份
+  const token = localStorage.getItem('dash_token');
   const resp = await fetch(AGENT_BASE + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!resp.ok) {
+    let detail = '';
+    try {
+      const data = await resp.json();
+      if (typeof data?.detail === 'string') detail = data.detail;
+    } catch { /* 非 JSON 响应忽略 */ }
+    if (detail) throw new Error(detail);
     throw new Error(resp.status === 404 ? '会话已失效，请新建对话' : '助手暂时不可用 HTTP ' + resp.status);
   }
   return await resp.json() as T;
@@ -161,24 +225,100 @@ function clampPosition(point: Point): Point {
   };
 }
 
-function DraftCard({ draft, onAction }: { draft: DraftPayload; onAction: (text: string) => void }) {
+interface DraftCardProps {
+  draft: DraftPayload;
+  /** 正在编辑：null 表示展示态 */
+  editing: Partial<Record<EditableField, string>> | null;
+  publishing: boolean;
+  publishedId?: string;
+  onEditStart: () => void;
+  onChange: (field: EditableField, value: string) => void;
+  onEditSave: () => void;
+  onEditCancel: () => void;
+  onCancel: () => void;
+  onPublish: () => void;
+}
+
+function DraftCard({
+  draft, editing, publishing, publishedId,
+  onEditStart, onChange, onEditSave, onEditCancel, onCancel, onPublish,
+}: DraftCardProps) {
+  // 其他帮忙类型没有地点和时间，只展示标题与任务内容
+  const structured = draft.raw.type === 'DELIVERY' || draft.raw.type === 'BUY' || draft.raw.type === 'QUEUE';
+
+  const field = (label: string, key: EditableField, value: string, className?: string) => (
+    <div>
+      <dt>{label}</dt>
+      <dd className={className}>
+        {editing ? (
+          <input
+            className="agent-draft-input"
+            value={editing[key] ?? ''}
+            placeholder={key === 'reward' ? '元，如 8' : ''}
+            onChange={event => onChange(key, event.target.value)}
+          />
+        ) : value}
+      </dd>
+    </div>
+  );
+
   return <div className="agent-draft" role="group" aria-label="任务草稿">
     <div className="agent-draft-head">
       <span className="agent-draft-badge"><Icon name="sparkles" size={13}/>任务草稿</span>
       <span className="agent-draft-type">{draft.type}</span>
     </div>
-    <strong className="agent-draft-title">{draft.title}</strong>
+
+    {editing ? (
+      <label className="agent-draft-title-edit">
+        <span>标题</span>
+        <input className="agent-draft-input" value={editing.title ?? ''} maxLength={64}
+               onChange={event => onChange('title', event.target.value)}/>
+      </label>
+    ) : <strong className="agent-draft-title">{draft.title}</strong>}
+
     <dl className="agent-draft-fields">
-      <div><dt>悬赏</dt><dd className="agent-draft-reward">¥ {draft.reward}</dd></div>
-      <div><dt>取货</dt><dd>{draft.pickup}</dd></div>
-      <div><dt>送达</dt><dd>{draft.delivery}</dd></div>
-      <div><dt>截止</dt><dd>{draft.deadline}</dd></div>
+      {field('悬赏', 'reward', draft.reward, 'agent-draft-reward')}
+      {structured && field('取货', 'pickup', draft.pickup)}
+      {structured && field('送达', 'delivery', draft.delivery)}
+      {structured && editing
+        ? <div>
+            <dt>截止</dt>
+            <dd><input className="agent-draft-input" type="datetime-local"
+                       value={editing.deadline ?? ''}
+                       onChange={event => onChange('deadline', event.target.value)}/></dd>
+          </div>
+        : structured && <div><dt>截止</dt><dd>{draft.deadline}</dd></div>}
     </dl>
-    <div className="agent-draft-actions">
-      <button type="button" className="agent-btn agent-btn-ghost" onClick={() => onAction('修改')}>修改</button>
-      <button type="button" className="agent-btn agent-btn-cancel" onClick={() => onAction('取消')}>取消</button>
-      <button type="button" className="agent-btn agent-btn-primary" onClick={() => onAction('确认发布')}>确认发布</button>
-    </div>
+
+    {(editing || draft.description) && (
+      <div className="agent-draft-desc">
+        <span>任务内容</span>
+        {editing
+          ? <textarea className="agent-draft-input" rows={2} maxLength={300}
+                      value={editing.description ?? ''}
+                      onChange={event => onChange('description', event.target.value)}/>
+          : <p>{draft.description}</p>}
+      </div>
+    )}
+
+    {publishedId ? (
+      <div className="agent-draft-published">
+        <Icon name="check" size={14}/>已发布 · 编号 {publishedId}
+      </div>
+    ) : editing ? (
+      <div className="agent-draft-actions">
+        <button type="button" className="agent-btn agent-btn-ghost" onClick={onEditCancel}>放弃修改</button>
+        <button type="button" className="agent-btn agent-btn-primary" onClick={onEditSave}>保存修改</button>
+      </div>
+    ) : (
+      <div className="agent-draft-actions">
+        <button type="button" className="agent-btn agent-btn-ghost" onClick={onEditStart}>修改</button>
+        <button type="button" className="agent-btn agent-btn-cancel" onClick={onCancel}>取消</button>
+        <button type="button" className="agent-btn agent-btn-primary" disabled={publishing} onClick={onPublish}>
+          {publishing ? '发布中…' : '确认发布'}
+        </button>
+      </div>
+    )}
   </div>;
 }
 
@@ -190,6 +330,11 @@ export default function AgentAssistant() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [history, setHistory] = useState<HistoryItem[]>(() => readHistory());
+  // 正在编辑的草稿消息 id 与编辑中的值
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Partial<Record<EditableField, string>> | null>(null);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [published, setPublished] = useState<Record<string, string>>({});
   const [sessionId, setSessionId] = useState<string | null>(() => localStorage.getItem(SESSION_KEY));
   const [position, setPosition] = useState<Point | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -319,6 +464,31 @@ export default function AgentAssistant() {
         // 只有信息齐全才展示草稿卡片；追问阶段只显示问题
         draft: reply.status === 'READY' ? toDraftPayload(reply) : undefined,
       };
+
+      // 已经出过草稿时，后续补充只更新那张卡片，不重复插入新卡片。
+      // 否则用户会看到多张描述不同的草稿，点「修改」「发布」时容易操作错对象。
+      if (reply.status === 'READY') {
+        setMessages(prev => {
+          const lastDraftIndex = prev.map(item => Boolean(item.draft)).lastIndexOf(true);
+          const next = lastDraftIndex === -1
+            ? [...prev, assistant]
+            : prev.map((item, index) => index === lastDraftIndex
+                ? { ...item, draft: assistant.draft }
+                : item);
+          // 补充说明本身作为一条普通消息追加，让用户看到自己说了什么
+          const withUser = lastDraftIndex === -1 ? next : [...next, { ...assistant, draft: undefined }];
+          writeHistory([{
+            id: sid,
+            title: withUser.find(item => item.role === 'user')?.content.slice(0, 16) || '新的任务对话',
+            preview: assistant.content,
+            time: nowLabel(),
+            messages: withUser,
+          }, ...readHistory().filter(item => item.id !== sid)]);
+          setHistory(readHistory());
+          return withUser;
+        });
+        return;
+      }
       setMessages(prev => {
         const next = [...prev, assistant];
         writeHistory([{
@@ -346,16 +516,81 @@ export default function AgentAssistant() {
     }
   };
 
-  const onDraftAction = (action: string) => {
-    if (action === '确认发布') {
-      setNotice('草稿已生成，发布接口将在下一步接入');
-    } else if (action === '取消') {
-      setNotice('已取消本次任务草稿');
-      setMessages([welcomeMessage]);
-      localStorage.removeItem(SESSION_KEY);
-      setSessionId(null);
-    } else {
-      setNotice('继续补充或修改，直接发消息即可');
+  /** 进入逐项修改：把当前草稿值填进编辑框 */
+  const onEditStart = (messageId: string, draft: DraftPayload) => {
+    setEditingId(messageId);
+    setEditing({
+      title: draft.raw.title ?? draft.title ?? '',
+      reward: draft.raw.reward_cents ? String(draft.raw.reward_cents / 100) : '',
+      pickup: draft.raw.location_from ?? draft.pickup ?? '',
+      delivery: draft.raw.location_to ?? draft.delivery ?? '',
+      deadline: toLocalInput(draft.raw.start_time),
+      // description 用 raw 与展示值兜底，避免 raw 未及时更新时被清空
+      description: draft.raw.description ?? draft.description ?? '',
+    });
+  };
+
+  const onEditCancel = () => {
+    setEditingId(null);
+    setEditing(null);
+  };
+
+  /** 保存修改：把编辑值写回消息里的草稿，卡片立即刷新 */
+  const onEditSave = (messageId: string) => {
+    if (!editing) return;
+    setMessages(prev => prev.map(item => {
+      if (item.id !== messageId || !item.draft) return item;
+      const base = item.draft.raw;
+      const raw = applyEdits(base, editing);
+      // 发布必须有完整值：编辑时留空的地方回退到原值，避免空串把已有内容抹掉
+      if (!raw.description) raw.description = base.description ?? item.draft.description ?? null;
+      if (!raw.title) raw.title = base.title ?? null;
+      if (!raw.reward_cents) raw.reward_cents = base.reward_cents ?? null;
+      return { ...item, draft: toDraftPayload({ ...apiReplyOf(item.draft), draft: raw }) };
+    }));
+    setEditingId(null);
+    setEditing(null);
+    setNotice('已更新草稿');
+  };
+
+  /** 确认发布：调用主项目真实发单接口 */
+  const onPublish = async (messageId: string, draft: DraftPayload) => {
+    if (publishingId) return;
+    const raw = draft.raw;
+    if (!raw.type || !raw.title) { setNotice('标题或类型缺失，无法发布'); return; }
+    if (!raw.reward_cents) { setNotice('请先填写悬赏金额'); return; }
+
+    setPublishingId(messageId);
+    try {
+      const result = await apiPost<{ errandId: string }>('/publish', {
+        campusId: 1,
+        type: raw.type,
+        title: raw.title,
+        rewardCents: raw.reward_cents,
+        slotTotal: 1,
+        locationFrom: raw.location_from ?? null,
+        locationTo: raw.location_to ?? null,
+        startTime: raw.start_time ?? null,
+        description: raw.description ?? null,
+      });
+      setPublished({ [messageId]: result.errandId });
+      setNotice('任务已发布');
+      // 通知主项目刷新广场与钱包，和页面内发单保持一致
+      window.dispatchEvent(new Event('dash:changed'));
+      setMessages(prev => [...prev, {
+        id: Math.random().toString(36).slice(2),
+        role: 'assistant',
+        content: `任务已发布，编号 ${result.errandId}。可以在「我的任务」里查看进度。`,
+        time: nowLabel(),
+      }]);
+    } catch (reason) {
+      const text = reason instanceof Error ? reason.message : '发布失败';
+      setNotice(text);
+      setMessages(prev => [...prev, {
+        id: Math.random().toString(36).slice(2), role: 'assistant', content: `发布没有成功：${text}`, time: nowLabel(),
+      }]);
+    } finally {
+      setPublishingId(null);
     }
   };
 
@@ -435,7 +670,23 @@ export default function AgentAssistant() {
           {message.role === 'assistant' && <span className="agent-row-avatar"><Icon name="bot" size={15}/></span>}
           <div className="agent-row-body">
             <div className="agent-bubble">{message.content}</div>
-            {message.draft && <DraftCard draft={message.draft} onAction={onDraftAction}/>}
+            {message.draft && <DraftCard
+          draft={message.draft}
+          editing={editingId === message.id ? editing : null}
+          publishing={publishingId === message.id}
+          publishedId={published[message.id]}
+          onEditStart={() => onEditStart(message.id, message.draft!)}
+          onChange={(field, value) => setEditing(prev => ({ ...(prev ?? {}), [field]: value }))}
+          onEditSave={() => onEditSave(message.id)}
+          onEditCancel={onEditCancel}
+          onCancel={() => {
+            setNotice('已取消本次任务草稿');
+            setMessages([welcomeMessage]);
+            localStorage.removeItem(SESSION_KEY);
+            setSessionId(null);
+          }}
+          onPublish={() => void onPublish(message.id, message.draft!)}
+        />}
             <time className="agent-row-time">{message.time}</time>
           </div>
         </div>)}

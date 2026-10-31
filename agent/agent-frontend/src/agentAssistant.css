@@ -192,6 +192,16 @@
 .agent-draft-fields dd { margin: 0; color: #3d3930; text-align: right; word-break: break-word; }
 .agent-draft-reward { color: #a46100 !important; font-weight: 800; font-size: 14px; }
 .agent-draft-actions { display: flex; gap: 6px; }
+.agent-draft-input { width: 100%; min-width: 0; padding: 5px 7px; border: 1px solid #e6dbb6; border-radius: 6px; background: #fff; color: #2f2c24; font: inherit; font-size: 11px; outline: none; }
+.agent-draft-input:focus { border-color: #d9b334; box-shadow: 0 0 0 2px #ffd1001f; }
+.agent-draft-fields dd .agent-draft-input { text-align: right; }
+.agent-draft-title-edit { display: grid; gap: 4px; margin: 4px 0 8px; }
+.agent-draft-title-edit > span { color: var(--muted, #8a8577); font-size: 9px; letter-spacing: .3px; }
+.agent-draft-desc { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #eee3c2; display: grid; gap: 4px; }
+.agent-draft-desc > span { color: var(--muted, #8a8577); font-size: 9px; letter-spacing: .3px; }
+.agent-draft-desc p { margin: 0; color: #3d3930; font-size: 11px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.agent-draft-desc textarea { resize: vertical; line-height: 1.6; }
+.agent-draft-published { display: flex; align-items: center; gap: 5px; margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: #f0f7ec; color: #3f7a2e; font-size: 10px; }
 .agent-btn {
   flex: 1 1 0;
   min-width: 0;

@@ -30,10 +30,13 @@ from langgraph.graph import END, START, StateGraph
 
 from .extractor import TYPE_KEYWORDS, Extractor, guess_start_time, guess_reward_cents
 from ..models import (
+    READY_HINT,
     SLOT_QUESTIONS,
     Slot,
     TaskDraft,
+    append_description,
     is_complete,
+    is_no_more,
     merge_draft,
     next_question,
     required_slots,
@@ -62,8 +65,17 @@ def build_graph(extractor: Extractor):
 
     def extract_node(state: AgentState) -> AgentState:
         current = state["draft"]
+        message = state.get("message", "")
+
+        # 必填项已经齐了：这一轮当作"补充任务内容"，不再走字段抽取。
+        # 否则用户补充一句细节，可能被模型误判成改标题或改金额。
+        if not required_slots(current):
+            if is_no_more(message):
+                return {"draft": current, "extracted": {}}
+            return {"draft": append_description(current, message), "extracted": {}}
+
         try:
-            patch = extractor.extract(state.get("message", ""), current)
+            patch = extractor.extract(message, current)
         except Exception:
             # 抽取失败不能中断对话：本轮当作"没有新增信息"，仍然继续追问
             patch = {}
@@ -180,7 +192,8 @@ def _apply_pending_answer(
 
 def draft_to_reply(status: str, draft: TaskDraft, missing: list[Slot], question: str | None) -> AgentReply:
     if status == "READY":
-        text = "信息已完整，下面是任务草稿，请确认后发布。"
+        # 信息完整后仍提示可以继续补充任务内容，用户可以一直加细节
+        text = "信息已完整，下面是任务草稿。还需要补充任务内容吗？直接回复补充说明，或点「确认发布」提交。"
     else:
         text = question or "还需要补充一些信息。"
     return {
