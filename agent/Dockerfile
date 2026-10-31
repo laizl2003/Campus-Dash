@@ -14,6 +14,12 @@ RUN pip install --no-cache-dir --upgrade pip -i https://pypi.tuna.tsinghua.edu.c
 
 COPY app ./app
 
+# 构建期清掉宿主带进来的 __pycache__。
+# 旧 .pyc 的 mtime 若比 .py 新，Python 会直接加载字节码，
+# 表现为"文件改了但运行的是旧逻辑"，排查起来非常费时间。
+RUN find /app -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+
 EXPOSE 8000
 
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 双保险：运行期也不写 .pyc
+CMD ["python", "-B", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

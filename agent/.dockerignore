@@ -1,0 +1,9 @@
+# 本地虚拟环境与缓存不进镜像
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+uvicorn.log
+uvicorn.out
+agent-frontend/
+tests/

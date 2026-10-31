@@ -56,9 +56,50 @@ class MySQLSessionStore:
         if not self.dsn:
             raise RuntimeError("缺少 AGENT_MYSQL_DSN")
         self._pymysql = pymysql
-        cfg = self._parse(self.dsn)
-        self._conn = pymysql.connect(**cfg, autocommit=True, charset="utf8mb4")
+        self._cfg = self._parse(self.dsn)
+        self._conn = self._connect()
         self._ensure_schema()
+
+    def _connect(self):
+        """建立连接。
+
+        MySQL 默认 8 小时断开空闲连接，容器网络抖动也会断。
+        连上后先探活，断了就换新连接，避免第一条请求必然 500。
+        """
+        return self._pymysql.connect(**self._cfg, autocommit=True, charset="utf8mb4")
+
+    def _cursor(self):
+        """拿游标前先 ping，连接失效就重连。
+
+        这是长连接场景必须做的事：await 期间连接可能已被服务端回收，
+        不重连的话报错，而且错误发生后才补救会让用户看到一次失败。
+        """
+        try:
+            self._conn.ping(reconnect=True)
+        except Exception:
+            self._conn = self._connect()
+        return self._conn.cursor()
+
+    def _run(self, sql: str, params: tuple = (), *, fetch: str = "none"):
+        """统一的执行入口：自动重连 + 事务管理。"""
+        try:
+            with self._cursor() as cur:
+                cur.execute(sql, params)
+                if fetch == "one":
+                    return cur.fetchone()
+                if fetch == "all":
+                    return cur.fetchall()
+                return cur.rowcount
+        except Exception:
+            # 连接级错误重连重试一次
+            self._conn = self._connect()
+            with self._cursor() as cur:
+                cur.execute(sql, params)
+                if fetch == "one":
+                    return cur.fetchone()
+                if fetch == "all":
+                    return cur.fetchall()
+                return cur.rowcount
 
     @staticmethod
     def _parse(dsn: str) -> dict[str, object]:
@@ -78,9 +119,8 @@ class MySQLSessionStore:
         }
 
     def _ensure_schema(self) -> None:
-        with self._conn.cursor() as cur:
-            cur.execute(SCHEMA)
-            cur.execute(MESSAGE_SCHEMA)
+        self._run(SCHEMA)
+        self._run(MESSAGE_SCHEMA)
 
     # ---------------------------------------------------------- 会话读写
 
@@ -88,22 +128,20 @@ class MySQLSessionStore:
         from .service import Session
 
         session = Session(id=str(uuid.uuid4()))
-        with self._conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO agent_session (session_id, user_id, draft_json) VALUES (%s, %s, %s)",
-                (session.id, user_id, json.dumps(session.draft.model_dump(mode="json"), ensure_ascii=False)),
-            )
+        self._run(
+            "INSERT INTO agent_session (session_id, user_id, draft_json) VALUES (%s, %s, %s)",
+            (session.id, user_id, json.dumps(session.draft.model_dump(mode="json"), ensure_ascii=False)),
+        )
         return session
 
     def get(self, session_id: str) -> "Session | None":
         from .service import Session
 
-        with self._conn.cursor() as cur:
-            cur.execute(
-                "SELECT draft_json, turns FROM agent_session WHERE session_id = %s",
-                (session_id,),
-            )
-            row = cur.fetchone()
+        row = self._run(
+            "SELECT draft_json, turns FROM agent_session WHERE session_id = %s",
+            (session_id,),
+            fetch="one",
+        )
         if not row:
             return None
         draft_data = row[0]
@@ -113,51 +151,47 @@ class MySQLSessionStore:
         return Session(id=session_id, draft=draft, turns=int(row[1] or 0))
 
     def save(self, session: "Session", status: str | None = None, last_message: str | None = None) -> None:
-        with self._conn.cursor() as cur:
-            cur.execute(
-                """UPDATE agent_session
-                      SET draft_json = %s, turns = %s, status = COALESCE(%s, status),
-                          last_message = COALESCE(%s, last_message)
-                    WHERE session_id = %s""",
-                (
-                    json.dumps(session.draft.model_dump(mode="json"), ensure_ascii=False),
-                    session.turns,
-                    status,
-                    (last_message or "")[:500] or None,
-                    session.id,
-                ),
-            )
+        self._run(
+            """UPDATE agent_session
+                  SET draft_json = %s, turns = %s, status = COALESCE(%s, status),
+                      last_message = COALESCE(%s, last_message)
+                WHERE session_id = %s""",
+            (
+                json.dumps(session.draft.model_dump(mode="json"), ensure_ascii=False),
+                session.turns,
+                status,
+                (last_message or "")[:500] or None,
+                session.id,
+            ),
+        )
 
     def append_message(self, session_id: str, role: str, content: str) -> None:
-        with self._conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO agent_message (session_id, role, content) VALUES (%s, %s, %s)",
-                (session_id, role, content),
-            )
+        self._run(
+            "INSERT INTO agent_message (session_id, role, content) VALUES (%s, %s, %s)",
+            (session_id, role, content),
+        )
 
     def messages(self, session_id: str) -> list[dict[str, object]]:
-        with self._conn.cursor() as cur:
-            cur.execute(
-                "SELECT role, content, created_at FROM agent_message WHERE session_id = %s ORDER BY id",
-                (session_id,),
-            )
-            rows = cur.fetchall()
+        rows = self._run(
+            "SELECT role, content, created_at FROM agent_message WHERE session_id = %s ORDER BY id",
+            (session_id,),
+            fetch="all",
+        ) or []
         return [
             {"role": r[0], "content": r[1], "time": r[2].isoformat() if isinstance(r[2], datetime) else str(r[2])}
             for r in rows
         ]
 
     def list_sessions(self, user_id: str, limit: int = 20) -> list[dict[str, object]]:
-        with self._conn.cursor() as cur:
-            cur.execute(
-                """SELECT session_id, last_message, status, updated_at
-                     FROM agent_session
-                    WHERE user_id = %s
-                    ORDER BY updated_at DESC
-                    LIMIT %s""",
-                (user_id, limit),
-            )
-            rows = cur.fetchall()
+        rows = self._run(
+            """SELECT session_id, last_message, status, updated_at
+                 FROM agent_session
+                WHERE user_id = %s
+                ORDER BY updated_at DESC
+                LIMIT %s""",
+            (user_id, limit),
+            fetch="all",
+        ) or []
         return [
             {
                 "session_id": r[0],
@@ -170,20 +204,12 @@ class MySQLSessionStore:
 
     def delete(self, session_id: str) -> bool:
         """删除会话：消息和会话一起删，一次事务完成。"""
-        self._conn.begin()
-        try:
-            with self._conn.cursor() as cur:
-                cur.execute("DELETE FROM agent_message WHERE session_id = %s", (session_id,))
-                cur.execute("DELETE FROM agent_session WHERE session_id = %s", (session_id,))
-                removed = cur.rowcount
-            self._conn.commit()
-        except Exception:
-            self._conn.rollback()
-            raise
-        return removed > 0
+        self._run("DELETE FROM agent_message WHERE session_id = %s", (session_id,))
+        removed = self._run("DELETE FROM agent_session WHERE session_id = %s", (session_id,))
+        return bool(removed and removed > 0)
 
     def purge_empty(self) -> int:
         """清理没说过话的空会话，避免表被建会话的请求撑大。"""
-        with self._conn.cursor() as cur:
-            cur.execute("DELETE FROM agent_session WHERE turns = 0 AND created_at < (NOW() - INTERVAL 1 DAY)")
-            return cur.rowcount
+        return self._run(
+            "DELETE FROM agent_session WHERE turns = 0 AND created_at < (NOW() - INTERVAL 1 DAY)"
+        ) or 0
