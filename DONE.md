@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-31 · 过期退款退券 + 消息中心分页 + 截止时间日历选择器
+
+- **过期退款退券**：`ExpireErrandUseCase` 在状态改 EXPIRED 后，于同一事务内退托管款（`HELD -> REFUNDED` CAS）并把券从 `locked` 退回 `available`（`restoreByErrand`）。实测：扣 1700 → 过期后余额全额回补，券 `available`、`used_errand_id` 清空。
+- **排查结论**：主动取消/仲裁退款原本就已退券（`RefundErrandUseCase` 调 `restoreByErrand`），缺的只是过期路径。
+- **过期通知**：退款退券后写 `notification`（类型 `EXPIRED`，msgKey `expire:{errandId}` 天然幂等）并用 `RealtimeNotifier` 推 WS；文案带上退款金额与是否退券。
+- **消息中心分页**：前端改为服务端分页，每页 5 条，翻页器含上一页/下一页与页码；WS 新消息到达时停在第 1 页原地刷新，其他页跳回第 1 页。
+- **截止时间日历**：新增 `DeadlinePicker` 替换原生 `datetime-local`——整栏可点、过去日期置灰不可选、未选时只显示“选择一个截止日期”而不出现 `年/月/日 --:--`，可切月、选时分、清除。
+- **坑**：`expired_at` 场景下 CAS 必须用 `transitTo` 自增前的版本号；测试桩类需同步新增构造参数。
+
+
 ## 2026-10-31 · 任务过期：start_time 改为 expired_at，新增 PUBLISHED->EXPIRED 延迟消息流转
 
 - **目标**：任务可设置截止时间，到点无人接单自动过期；广场不再展示。

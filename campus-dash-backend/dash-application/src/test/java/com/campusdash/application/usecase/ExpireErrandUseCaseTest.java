@@ -5,6 +5,8 @@ import com.campusdash.domain.errand.model.ErrandStatus;
 import com.campusdash.domain.errand.model.ErrandType;
 import com.campusdash.domain.errand.ports.ErrandCachePort;
 import com.campusdash.domain.errand.ports.ErrandRepository;
+import com.campusdash.domain.notify.ports.NotificationRepository;
+import com.campusdash.domain.notify.ports.RealtimeNotifier;
 import com.campusdash.domain.voucher.model.Voucher;
 import com.campusdash.domain.voucher.model.VoucherStock;
 import com.campusdash.domain.voucher.model.VoucherUse;
@@ -39,7 +41,8 @@ class ExpireErrandUseCaseTest {
     private static ExpireErrandUseCase useCase(StubErrand repo, StubVoucher voucher) {
         return new ExpireErrandUseCase(repo, new StubWallet(), voucher,
                 (a, b, c, d, e, f, g) -> { },
-                new SnowflakeIdGenerator(1L), new NoopCache());
+                new SnowflakeIdGenerator(1L), new NoopCache(),
+                new StubNotification(), new NoopNotifier());
     }
 
     private static ExpireErrandUseCase useCase(StubErrand repo) {
@@ -60,6 +63,28 @@ class ExpireErrandUseCaseTest {
         StubVoucher voucher = new StubVoucher();
         assertEquals(ExpireErrandUseCase.Outcome.EXPIRED, useCase(repo, voucher).expire(1L));
         assertEquals(1, voucher.restored, "过期成功后必须退券");
+    }
+
+    @Test
+    void notifiesPublisherWhenExpired() {
+        StubErrand repo = new StubErrand(errand(ErrandStatus.PUBLISHED, Instant.now().minusSeconds(1)), 1);
+        StubNotification notification = new StubNotification();
+        ExpireErrandUseCase useCase = new ExpireErrandUseCase(repo, new StubWallet(), new StubVoucher(),
+                (a, b, c, d, e, f, g) -> { },
+                new SnowflakeIdGenerator(1L), new NoopCache(), notification, new NoopNotifier());
+        assertEquals(ExpireErrandUseCase.Outcome.EXPIRED, useCase.expire(1L));
+        assertEquals(1, notification.inserted, "过期成功后必须往消息中心写一条通知");
+    }
+
+    @Test
+    void doesNotNotifyWhenSkipped() {
+        StubErrand repo = new StubErrand(errand(ErrandStatus.LOCKED, Instant.now().minusSeconds(1)), 1);
+        StubNotification notification = new StubNotification();
+        ExpireErrandUseCase useCase = new ExpireErrandUseCase(repo, new StubWallet(), new StubVoucher(),
+                (a, b, c, d, e, f, g) -> { },
+                new SnowflakeIdGenerator(1L), new NoopCache(), notification, new NoopNotifier());
+        assertEquals(ExpireErrandUseCase.Outcome.SKIPPED, useCase.expire(1L));
+        assertEquals(0, notification.inserted, "跳过时不应该推送通知");
     }
 
     @Test
@@ -106,6 +131,23 @@ class ExpireErrandUseCaseTest {
         assertTrue(ErrandStatus.PUBLISHED.canTransitTo(ErrandStatus.EXPIRED));
         assertFalse(ErrandStatus.LOCKED.canTransitTo(ErrandStatus.EXPIRED));
         assertFalse(ErrandStatus.EXPIRED.canTransitTo(ErrandStatus.PUBLISHED));
+    }
+
+    /** 站内消息桩：记录写入次数，用于验证"过期后推送了通知" */
+    static class StubNotification implements NotificationRepository {
+        int inserted = 0;
+        @Override public boolean insertIfAbsent(long id, String msgKey, String userId, long errandId,
+                                                String type, String content) {
+            inserted++;
+            return true;
+        }
+    }
+
+    static class NoopNotifier implements RealtimeNotifier {
+        @Override public void errandStatusChanged(long errandId, String publisherId, String grabberId,
+                                                  String status, int round) { }
+        @Override public void notificationArrived(String userId, long errandId, String type, String content) { }
+        @Override public void creditChanged(String userId, int newScore, int delta, String reason) { }
     }
 
     static class NoopCache implements ErrandCachePort {
