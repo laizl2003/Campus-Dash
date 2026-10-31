@@ -138,4 +138,4 @@ class ChatService:
             self.store.append_message(session.id, "assistant", reply_text)
 
         return draft_to_reply(status, draft, missing, question, appended, intent,
-                              bool(state.get("deadline_updated")))
+                              list(state.get("updated_fields") or []))

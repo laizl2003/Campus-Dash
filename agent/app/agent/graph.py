@@ -62,8 +62,8 @@ class AgentState(TypedDict, total=False):
     show_draft: bool
     # 本轮意图是否无法确定
     unclear: bool
-    # 本轮只是更新了截止时间，任务内容未变
-    deadline_updated: bool
+    # 本轮被明确修改的字段名（title / location_to / expired_at ...）
+    updated_fields: list[str]
 
 
 class AgentReply(TypedDict, total=False):
@@ -77,7 +77,7 @@ class AgentReply(TypedDict, total=False):
     cleared: bool
     show_draft: bool
     unclear: bool
-    deadline_updated: bool
+    updated_fields: list[str]
 
 
 def build_graph(extractor: Extractor):
@@ -97,15 +97,6 @@ def build_graph(extractor: Extractor):
             if intent == Intent.PUBLISH:
                 # 只标记"用户想发布"，真正调用发布接口由前端按钮或后续工具执行
                 return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
-            if intent == Intent.EDIT:
-                # 修改意图交给抽取器解析成字段 patch，而不是塞进描述
-                try:
-                    patch = extractor.extract(message, current)
-                except Exception:
-                    patch = {}
-                # EDIT 是用户明确要求改字段，允许覆盖 title/type
-                updated = merge_draft(current, patch, allow_locked=True)
-                return {"draft": updated, "extracted": patch, "appended": False, "intent": intent}
             if intent in (Intent.QUERY, Intent.CHITCHAT, Intent.CANCEL, Intent.UNCLEAR):
                 # 这几类不改草稿，只回话。
                 # UNCLEAR 尤其重要：宁可回固定引导，也不把看不懂的内容写进任务。
@@ -128,20 +119,38 @@ def build_graph(extractor: Extractor):
                     "cleared": True,
                     "intent": intent,
                 }
-            # APPEND：先看这句话里有没有截止时间。
-            # 用户在这个阶段说"截止时间改成明天下午三点"，属于改字段，不该写进任务内容。
-            deadline_patch = _extract_deadline(extractor, message, current)
-            if deadline_patch:
-                updated = merge_draft(current, deadline_patch)
-                return {"draft": updated, "extracted": deadline_patch, "appended": False,
-                        "intent": intent, "deadline_updated": True}
+            # APPEND / EDIT 统一处理：一句话里可能同时出现"改字段"和"补充说明"。
+            # 只做一次抽取，让模型把两者分开：字段进对应槽位，剩下的进 description。
+            # 之前只捞 expired_at，导致"把标题改成XX，另外别放门口"里的内容被整段丢掉，
+            # 或者整句糊进任务描述、字段一个都没改到。
+            patch = _extract(extractor, message, current)
+            field_patch = {key: value for key, value in patch.items() if key in EDITABLE_FIELDS}
+            content = patch.get("description")
+            # 模型只给了字段、没给 description，且这句话里没有字段可改时，
+            # 说明它就是一句纯补充说明，整句并进任务内容（保持旧行为，别丢信息）。
+            # 有字段改动时不再兜底，否则"截止时间改成明天三点"会连时间一起写进描述。
+            if not content and not field_patch:
+                content = message
 
-            # APPEND：把这句话并入任务内容，并做去口语化整理
-            summarized = _summarize(extractor, current.description, message)
-            updated = current.model_copy(update={"description": summarized[:300] if summarized else None}) \
-                if summarized else append_description(current, message)
-            change = updated.description != current.description
-            return {"draft": updated, "extracted": {}, "appended": change, "intent": intent}
+            # EDIT 是"我要改这个字段"的明确指令，连标题/类型都可以覆盖；
+            # APPEND 只是顺带补充，标题和类型仍然锁住——
+            # 否则用户说"外卖有汤"这种话，模型可能顺手给出一个标题把原值冲掉。
+            updated = merge_draft(current, field_patch, allow_locked=(intent == Intent.EDIT))
+            if isinstance(content, str) and content.strip():
+                summarized = _summarize(extractor, current.description, content)
+                if summarized:
+                    updated = updated.model_copy(update={"description": summarized[:300]})
+                else:
+                    updated = append_description(updated, content)
+
+            changed = [key for key in field_patch
+                       if getattr(updated, key, None) != getattr(current, key, None)]
+            appended = updated.description != current.description
+            if changed:
+                return {"draft": updated, "extracted": patch, "appended": appended,
+                        "intent": intent, "updated_fields": changed}
+            # 只有补充说明时，说"任务内容添加成功"更贴切
+            return {"draft": updated, "extracted": patch, "appended": appended, "intent": intent}
         # 本轮是补齐必填字段：首次进入 READY，不带 appended 标记
         # 这样文案是"信息已完整"，而不是"保持现状"
 
@@ -317,6 +326,13 @@ def _looks_like_title(text: str) -> bool:
     return any(keyword in text for keyword in keywords)
 
 
+# READY 阶段用户可以直接改的字段：都是"必填项 + 截止时间"，
+# 描述不在此列——描述由模型放进 patch["description"]，走追加逻辑。
+EDITABLE_FIELDS: frozenset[str] = frozenset({
+    "type", "title", "location_from", "location_to", "reward_cents", "expired_at",
+})
+
+
 def _deadline_fallback(message: str) -> dict[str, object]:
     """模型没给时间时，用规则再捞一次。
 
@@ -326,6 +342,22 @@ def _deadline_fallback(message: str) -> dict[str, object]:
     """
     guessed = guess_expired_at(message)
     return {"expired_at": guessed} if guessed is not None else {}
+
+
+def _extract(extractor: Extractor, message: str, draft: TaskDraft) -> dict[str, object]:
+    """READY 阶段做一次完整抽取：字段修改 + 剩余说明。
+
+    模型返回的 description 是"非字段的那部分信息"，调用方会把它并进任务描述；
+    其余键都是用户要求修改的字段值（标题、地点、悬赏、截止时间等）。
+    """
+    try:
+        patch = extractor.extract(message, draft)
+    except Exception:
+        return {}
+    # 模型漏掉时间时用规则补一次，避免"明天下午三点"被当成任务内容
+    if not patch.get("expired_at"):
+        patch = {**patch, **_deadline_fallback(message)}
+    return patch
 
 
 def _extract_deadline(extractor: Extractor, message: str, draft: TaskDraft) -> dict[str, object]:
@@ -400,7 +432,21 @@ def _apply_pending_answer(
 READY_FIRST_MESSAGE = "信息已完整，下面是任务草稿。还需要补充任务内容吗？直接回复补充说明，或点「确认发布」提交。"
 READY_APPENDED_MESSAGE = "任务内容添加成功，还需要补充任务内容吗？直接回复补充说明，或点「确认发布」提交。"
 READY_STOP_MESSAGE = "好的，任务内容保持现状。点「确认发布」即可提交。"
-READY_DEADLINE_MESSAGE = "截止时间已更新，点「确认发布」即可提交。"
+# 字段中文名，用于"已更新：标题、截止时间"这类回话
+FIELD_LABELS: dict[str, str] = {
+    "title": "标题",
+    "type": "类型",
+    "location_from": "取货地点",
+    "location_to": "送达地点",
+    "reward_cents": "悬赏",
+    "expired_at": "截止时间",
+}
+
+
+def _field_update_message(updated_fields: list[str]) -> str:
+    """一次可能改多个字段，回话要能逐项列出来。"""
+    names = [FIELD_LABELS.get(key, key) for key in updated_fields]
+    return "已更新：" + "、".join(names) + "。确认无误后点「确认发布」即可提交。"
 
 
 # 按意图区分的回复文案
@@ -424,17 +470,17 @@ def draft_to_reply(
     question: str | None,
     appended: bool | None = None,
     intent: Intent | None = None,
-    deadline_updated: bool = False,
+    updated_fields: list[str] | None = None,
 ) -> AgentReply:
     if status == "READY":
-        if intent in (Intent.PUBLISH, Intent.EDIT, Intent.QUERY, Intent.CANCEL,
+        if intent in (Intent.PUBLISH, Intent.QUERY, Intent.CANCEL,
                       Intent.CHITCHAT, Intent.CLEAR_DESCRIPTION, Intent.SHOW_DRAFT,
                       Intent.UNCLEAR):
             text = INTENT_MESSAGES[intent]
         elif intent == Intent.FINISH:
             text = READY_STOP_MESSAGE
-        elif deadline_updated:
-            text = READY_DEADLINE_MESSAGE
+        elif updated_fields:
+            text = _field_update_message(updated_fields)
         elif appended:
             text = READY_APPENDED_MESSAGE
         elif appended is False:
@@ -458,8 +504,8 @@ def draft_to_reply(
         "show_draft": bool(intent is Intent.SHOW_DRAFT),
         # 意图不明确：前端可以据此把固定引导做成可点选项
         "unclear": bool(intent is Intent.UNCLEAR),
-        # 本轮只是更新了截止时间，任务内容没有变化
-        "deadline_updated": bool(deadline_updated),
+        # 本轮被修改的字段名，前端可据此高亮
+        "updated_fields": list(updated_fields or []),
     }
 
 

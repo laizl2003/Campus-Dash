@@ -85,8 +85,8 @@ def test_deadline_filled_after_info_complete():
     assert reply["status"] == "READY"
     assert reply["draft"]["expired_at"] is not None
     assert reply["draft"]["description"] is None, "不能当成任务内容追加"
-    assert reply["deadline_updated"] is True
-    assert "截止时间已更新" in reply["message"]
+    assert "expired_at" in reply["updated_fields"]
+    assert "截止时间" in reply["message"]
 
 
 def test_rule_fallback_when_model_misses_time():
@@ -120,5 +120,5 @@ def test_normal_append_still_goes_to_description():
     """没有时间的普通补充，仍然进任务内容。"""
     service, sid = _ready_session(Intent.APPEND)
     reply = service.chat(sid, "外卖有汤，不要撒了")
-    assert reply["deadline_updated"] is False
+    assert reply["updated_fields"] == []
     assert reply["draft"]["expired_at"] is None

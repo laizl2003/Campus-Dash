@@ -13,6 +13,8 @@ interface ChatMessage {
   content: string;
   time: string;
   draft?: DraftPayload;
+  /** 这张卡片对应的一单已经发布：不能继续被后续消息覆盖，也不能再点发布 */
+  publishedId?: string;
 }
 
 interface ApiDraft {
@@ -574,7 +576,8 @@ export default function AgentAssistant() {
       // 而不是把旧卡片挪过去——用户就是想在当前位置再看一遍。
       if (reply.status === 'READY' && reply.show_draft) {
         setMessages(prev => {
-          const latestDraft = [...prev].reverse().find(item => item.draft)?.draft;
+          const latestDraft = [...prev].reverse()
+            .find(item => item.draft && !item.publishedId)?.draft;
           const next = [...prev, { ...assistant, draft: latestDraft ?? assistant.draft }];
           writeHistory([{
             id: sid,
@@ -593,7 +596,11 @@ export default function AgentAssistant() {
       // 否则用户会看到多张描述不同的草稿，点「修改」「发布」时容易操作错对象。
       if (reply.status === 'READY') {
         setMessages(prev => {
-          const lastDraftIndex = prev.map(item => Boolean(item.draft)).lastIndexOf(true);
+          // 只认"还没发布"的卡片。已发布的那张属于上一单，是历史记录，
+          // 新任务必须另起一张，否则会把上一单的卡片改写成这一单的内容。
+          const lastDraftIndex = prev
+            .map(item => Boolean(item.draft) && !item.publishedId)
+            .lastIndexOf(true);
           const next = lastDraftIndex === -1
             ? [...prev, assistant]
             : prev.map((item, index) => index === lastDraftIndex
@@ -704,7 +711,13 @@ export default function AgentAssistant() {
       // 通知主项目刷新广场与钱包，和页面内发单保持一致
       window.dispatchEvent(new Event('dash:changed'));
       setMessages(prev => {
-        const next = [...prev, {
+        const next = [
+          // 把这张卡片标记成"已发布"：后续新任务不能再覆盖它，
+          // 否则第二单会把第一单的卡片改掉，历史里就查不到上一单了。
+          ...prev.map(item => item.id === messageId
+            ? { ...item, publishedId: result.errandId }
+            : item),
+          {
           id: Math.random().toString(36).slice(2),
           role: 'assistant' as const,
           content: `任务已发布，编号 ${result.errandId}。可以在「我的任务」里查看进度。`,
@@ -885,7 +898,7 @@ export default function AgentAssistant() {
           draft={message.draft}
           editing={editingId === message.id ? editing : null}
           publishing={publishingId === message.id}
-          publishedId={published[message.id]}
+          publishedId={message.publishedId ?? published[message.id]}
           onEditStart={() => onEditStart(message.id, message.draft!)}
           onChange={(field, value) => setEditing(prev => ({ ...(prev ?? {}), [field]: value }))}
           onEditSave={() => onEditSave(message.id)}

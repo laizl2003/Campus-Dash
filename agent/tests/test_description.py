@@ -73,7 +73,7 @@ def test_ready_messages_differ_by_round():
 
     # "麻烦下午五点前"是时间说法，应当更新截止时间而不是塞进任务内容
     added2 = service.chat(session.id, "麻烦下午五点前")
-    assert added2["message"].startswith("截止时间已更新")
+    assert added2["message"].startswith("已更新：截止时间")
     assert added2["draft"]["expired_at"] is not None
     assert added2["draft"]["description"] == "书比较重，麻烦带个小推车"
 
