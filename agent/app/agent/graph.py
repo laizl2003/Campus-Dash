@@ -24,6 +24,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -227,6 +228,48 @@ def _is_type_answer(text: str) -> bool:
     return cleaned in labels or (len(cleaned) <= 6 and any(cleaned == label for label in labels))
 
 
+# 金额片段：8块 / 8 元 / 15.5块钱 / 悬赏8块
+_MONEY_IN_TITLE = re.compile(r"[，,、\s]*(?:悬赏|酬劳|给)?\s*\d+(?:\.\d{1,2})?\s*(?:元|块|块钱|块钱左右)(?:钱)?")
+# 时间片段：明天下午三点 / 后天上午10点 / 11月1日
+_TIME_IN_TITLE = re.compile(
+    r"[，,、\s]*(?:今天|明天|后天|大后天)?\s*(?:上午|下午|中午|晚上)?\s*"
+    r"(?:\d{1,2}\s*[:：]\s*\d{2}|\d{1,2}\s*点(?:\s*\d{1,2}\s*分)?)"
+)
+# 句首时间："明天下午三点帮我去…" -> "帮我去…"
+# 天、时段、时刻三段都是可选的，但至少要有一段，否则会把标题开头吃掉
+_DAY_WORD = r"(?:今天|明天|后天|大后天)"
+_PERIOD_WORD = r"(?:上午|下午|中午|晚上)"
+_CLOCK = r"(?:\d{1,2}\s*[:：]\s*\d{2}|[0-9一二两三四五六七八九十]{1,3}\s*点(?:\s*[0-9一二三四五六七八九十]{1,3}\s*分)?|\d{1,2}\s*月\s*\d{1,2}\s*[日号])"
+
+_LEADING_TIME = re.compile(
+    rf"^(?:{_DAY_WORD})?\s*(?:{_PERIOD_WORD})?\s*(?:{_CLOCK})?[，,、\s]*"
+)
+
+# 尾部寒暄/语气
+_TAIL_NOISE = re.compile(r"[，,、\s]*(?:谢谢|麻烦了|拜托了|可以吗|行吗|好吗)\s*[。.!！]?$")
+
+
+def clean_title(text: str) -> str:
+    """从用户整句里提炼标题。
+
+    用户常说"帮我取快递，8块"，整句当标题会把金额也写进去，
+    列表里显示成"帮我取快递，8块"，信息重复且难看。
+    这里剥掉金额、时间和尾部寒暄，只留事件本身。
+    """
+    title = text.strip()
+    title = _MONEY_IN_TITLE.sub("", title)
+    title = _TIME_IN_TITLE.sub("", title)
+    # 时间常在句首（"明天下午三点帮我去取快递，8块"），单独处理开头。
+    # 只有真的匹配到时间片段才剥离，避免把普通标题开头吃掉。
+    stripped = _LEADING_TIME.sub("", title)
+    if stripped != title and len(stripped) >= 2:
+        title = stripped
+    title = _TAIL_NOISE.sub("", title)
+    title = re.sub(r"[，,、\s]{2,}", "，", title).strip("，,、 。.!！")
+    # 剥完太短说明原句主要是时间和金额，退回原文
+    return title if len(title) >= 2 else text.strip()[:64]
+
+
 def _looks_like_title(text: str) -> bool:
     """判断一句话更像"任务标题"还是"单纯的地点/描述回答"。
 
@@ -267,14 +310,14 @@ def _apply_pending_answer(
     # 所以这里必须按文本本身判断，而不是看 patch 是否为空。
     if _is_type_answer(text):
         return draft
-    # 问标题时，整句话就是标题。
+    # 问标题时，提炼标题而不是整句照抄
     if target == Slot.TITLE and not draft.title:
-        return draft.model_copy(update={"title": text})
+        return draft.model_copy(update={"title": clean_title(text)[:64]})
     # 已经在问地点，但这句话带任务动词（如"取快递到3号楼"），
     # 说明用户还在补充任务本身，不能当地址用；地址通常是纯名词短语。
     if _looks_like_title(text):
         if not draft.title:
-            return draft.model_copy(update={"title": text})
+            return draft.model_copy(update={"title": clean_title(text)[:64]})
         return draft
     if target == Slot.LOCATION_FROM and not draft.location_from:
         return draft.model_copy(update={"location_from": text})

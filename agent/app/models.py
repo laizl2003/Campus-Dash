@@ -121,10 +121,28 @@ def merge_draft(current: TaskDraft, patch: dict[str, object]) -> TaskDraft:
     return TaskDraft.model_validate(data)
 
 
+# 一次追问最多列几项，太多会让用户不知从何答起
+MAX_QUESTIONS_PER_TURN = 3
+
+
 def next_question(missing: list[Slot]) -> str | None:
+    """根据缺失槽位生成追问。
+
+    缺一个就问一句；缺多个时合并成一条清单一次问全，
+    用户往往能一口气答完（"菜鸟驿站送到3号楼502，明天下午三点"），
+    比来回问三轮体验好很多。
+    """
     if not missing:
         return None
-    return SLOT_QUESTIONS[missing[0]]
+    if len(missing) == 1:
+        return SLOT_QUESTIONS[missing[0]]
+
+    chosen = missing[:MAX_QUESTIONS_PER_TURN]
+    lines = [SLOT_QUESTIONS[slot].rstrip("。") for slot in chosen]
+    body = "\n".join(f"· {line}" for line in lines)
+    extra = len(missing) - len(chosen)
+    tail = f"\n（还有 {extra} 项，先回答这些即可。）" if extra > 0 else ""
+    return f"还需要这些信息，可以一起告诉我：\n{body}{tail}"
 
 
 # 信息齐全后，允许用户继续补充"任务内容"。
