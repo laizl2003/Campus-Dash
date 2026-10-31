@@ -41,6 +41,8 @@ from ..models import (
     is_no_more,
     merge_draft,
     next_question,
+    purpose_of,
+    refresh_title,
     required_slots,
 )
 
@@ -143,8 +145,17 @@ def build_graph(extractor: Extractor):
                 else:
                     updated = append_description(updated, content)
 
+            # 用户明确改标题时，把新标题当作新的"任务目的"基座；
+            # 其它情况只按已知地点刷新，避免模型顺手给的标题把原意带偏。
+            new_base = patch.get("title") if intent == Intent.EDIT else None
+            if isinstance(new_base, str) and new_base.strip():
+                updated = updated.model_copy(update={"title_base": new_base.strip()[:32]})
+            updated = refresh_title(updated)
+
             changed = [key for key in field_patch
                        if getattr(updated, key, None) != getattr(current, key, None)]
+            if updated.title != current.title and "title" not in changed:
+                changed.append("title")
             appended = updated.description != current.description
             if changed:
                 return {"draft": updated, "extracted": patch, "appended": appended,
@@ -182,6 +193,20 @@ def build_graph(extractor: Extractor):
             if fallback:
                 draft = merge_draft(draft, fallback)
                 patch = {**patch, **fallback}
+        # 标题不用用户回答：第一句就是任务目的，每轮拿已知地点重新拼一次。
+        # 之前把 title 当必填，用户开头说"送外卖"也会被追问"任务标题是什么"，体验很差。
+        # 只在"这一轮还什么都没有"时记录任务目的（即会话的第一句）。
+        # 已经有任何信息时，说明这是中途回答，拿补充说明当目的会把标题带偏。
+        first_turn = (
+            not current.title_base and not current.title
+            and current.location_from is None and current.location_to is None
+            and current.reward_cents is None
+        )
+        if first_turn and not _is_type_answer(message):
+            base = purpose_of(message) or (draft.title or None)
+            if base:
+                draft = draft.model_copy(update={"title_base": base})
+        draft = refresh_title(draft)
         return {"draft": draft, "extracted": patch}
 
     def check_node(state: AgentState) -> AgentState:
@@ -328,8 +353,10 @@ def _looks_like_title(text: str) -> bool:
 
 # READY 阶段用户可以直接改的字段：都是"必填项 + 截止时间"，
 # 描述不在此列——描述由模型放进 patch["description"]，走追加逻辑。
+# 注意不含 title：标题由 title_base + 地点自动推导，
+# 模型给的 title 只在 EDIT 意图下被当作新的 title_base 使用。
 EDITABLE_FIELDS: frozenset[str] = frozenset({
-    "type", "title", "location_from", "location_to", "reward_cents", "expired_at",
+    "type", "location_from", "location_to", "reward_cents", "expired_at",
 })
 
 

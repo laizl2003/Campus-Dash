@@ -82,7 +82,7 @@ def test_unclear_keeps_draft_and_replies_with_guide():
     reply = service.chat(sid, "外卖")
     # 草稿完全不动，尤其 description 不能被写入
     assert reply["draft"]["description"] is None
-    assert reply["draft"]["title"] == "帮忙还书"
+    assert reply["draft"]["title"] == "把书还到图书馆"
     assert reply["unclear"] is True
     assert "不太确定" in reply["message"]
     assert "确认发布" not in reply["message"] or "发布" in reply["message"]
@@ -111,7 +111,7 @@ def test_show_draft_keeps_draft_and_flags_frontend():
     voice = _ready_service(Intent.SHOW_DRAFT)
     service, sid = voice
     reply = service.chat(sid, "再给我看下任务")
-    assert reply["draft"]["title"] == "帮忙还书"
+    assert reply["draft"]["title"] == "把书还到图书馆"
     assert reply["draft"]["description"] is None
     assert reply["show_draft"] is True
     assert reply["cleared"] is False

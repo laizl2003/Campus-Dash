@@ -136,11 +136,16 @@ export default function Detail({ errandId, backHref = '#/square' }: Props) {
             <div className="task-overview-top"><span className="task-detail-category"><Icon name={TYPE_ICON[card.type] || 'package'} size={18} /> {TYPE_TEXT[card.type] || '校园任务'}</span><span className={`status status-${card.status}`}>{STATUS_TEXT[card.status] || card.status}</span></div>
             <h2>{card.title}</h2><span className="task-order-id">任务编号 {card.id}</span>
             {hasRoute(card) && <div className="task-route">
-              {(card.locationFrom || card.locationTo) && <div className="task-route-line">
-                <span className="task-route-point"><Icon name="pin" size={14} /><b>取货</b>{card.locationFrom || '未填写'}</span>
-                <Icon name="arrow-right" size={14} />
-                <span className="task-route-point"><Icon name="pin" size={14} /><b>送达</b>{card.locationTo || '未填写'}</span>
-              </div>}
+              {/* 代排队没有取货/送达，只有一个排队地点 */}
+              {card.type === 'QUEUE'
+                ? card.locationFrom && <div className="task-route-line">
+                    <span className="task-route-point"><Icon name="pin" size={14} /><b>排队地点</b>{card.locationFrom}</span>
+                  </div>
+                : (card.locationFrom || card.locationTo) && <div className="task-route-line">
+                    <span className="task-route-point"><Icon name="pin" size={14} /><b>取货</b>{card.locationFrom || '未填写'}</span>
+                    <Icon name="arrow-right" size={14} />
+                    <span className="task-route-point"><Icon name="pin" size={14} /><b>送达</b>{card.locationTo || '未填写'}</span>
+                  </div>}
               <div className="task-route-time"><Icon name="clock" size={14} /><b>截止时间</b><span>{card.expiredAt ? formatDeadline(card.expiredAt) : '永久有效'}</span></div>
             </div>}
             {card.description && <div className="task-description"><span className="task-description-label">任务内容</span><p>{card.description}</p></div>}

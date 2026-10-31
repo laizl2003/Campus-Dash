@@ -13,10 +13,11 @@ from app.models import TaskDraft, merge_draft
 from app.service import ChatService
 
 
-def test_title_lock_blocks_overwrite():
+def test_type_lock_blocks_overwrite():
+    """type 仍然锁定：用户随口提到别的类型不会把任务改类。"""
     draft = TaskDraft(type="DELIVERY", title="取快递", reward_cents=800)
-    merged = merge_draft(draft, {"title": "取外卖送到3号楼502", "description": "外卖有汤"})
-    assert merged.title == "取快递"
+    merged = merge_draft(draft, {"type": "BUY", "description": "外卖有汤"})
+    assert merged.type == "DELIVERY"
     assert merged.description == "外卖有汤"
 
 
@@ -72,7 +73,8 @@ def test_edit_intent_can_rewrite_title():
     reply = service.chat(session.id, "改成外卖那个说法")
     assert reply["status"] == "READY"
     assert reply["intent"] == "EDIT"
-    assert reply["draft"]["title"] == "取外卖送到3号楼502"
+    # 标题自动带上已知地点
+    assert reply["draft"]["title"] == "菜鸟驿站取外卖送到3号楼502"
 
 
 @pytest.mark.skipif(not os.getenv("AGENT_MYSQL_DSN"), reason="needs MySQL")

@@ -79,7 +79,8 @@ def test_title_change_needs_edit_intent():
 
     service2, sid2 = _ready(Intent.EDIT)
     reply2 = service2.chat(sid2, "标题改成代取快递")
-    assert reply2["draft"]["title"] == "代取快递"
+    # 标题会自动带上已知地点："菜鸟驿站" + "代取快递"
+    assert reply2["draft"]["title"] == "菜鸟驿站代取快递"
 
 
 def test_field_value_not_leaked_into_description():

@@ -359,8 +359,11 @@ function DraftCard({
 
     <dl className="agent-draft-fields">
       {field('悬赏', 'reward', draft.reward, 'agent-draft-reward')}
-      {structured && field('取货', 'pickup', draft.pickup)}
-      {structured && field('送达', 'delivery', draft.delivery)}
+      {/* 代排队只有一个排队地点（存在 location_from），没有送达地 */}
+      {structured && (draft.raw.type === 'QUEUE'
+        ? field('排队地点', 'pickup', draft.pickup)
+        : field('取货', 'pickup', draft.pickup))}
+      {structured && draft.raw.type !== 'QUEUE' && field('送达', 'delivery', draft.delivery)}
       {structured && editing
         ? <div>
             <dt>截止</dt>

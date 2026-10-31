@@ -23,6 +23,9 @@ function initialValues() {
 /** 需要地点与时间的类型；OTHER 只填标题和任务内容 */
 const STRUCTURED_TYPES = new Set(['DELIVERY', 'BUY', 'QUEUE']);
 
+/** 代排队没有取货/送达的概念，只需要一个"排队地点"（存进 locationFrom） */
+const QUEUE_TYPE = 'QUEUE';
+
 /** datetime-local 的值没有时区，按本地时区转成 ISO，后端按 Instant 存 */
 function toIsoStartTime(value: string): string | null {
   const text = value.trim();
@@ -92,8 +95,9 @@ export default function Publish() {
     if (!title.trim()) { setError('请填写任务标题。'); return; }
     if (title.trim().length > 64) { setError('请将任务标题控制在 64 字以内，方便同学快速了解需求。'); return; }
     if (structured) {
-      if (!locationFrom.trim()) { setError('请填写取货地点。'); return; }
-      if (!locationTo.trim()) { setError('请填写送达地点。'); return; }
+      const isQueue = type === QUEUE_TYPE;
+      if (!locationFrom.trim()) { setError(isQueue ? '请填写排队地点。' : '请填写取货地点。'); return; }
+      if (!isQueue && !locationTo.trim()) { setError('请填写送达地点。'); return; }
       // 截止时间选填：不填表示永久有效
     if (expiredAt && new Date(expiredAt).getTime() <= Date.now()) {
       setError('截止时间需要晚于当前时间。');
@@ -111,7 +115,8 @@ export default function Publish() {
         type,
         voucherId,
         locationFrom: structured ? locationFrom.trim() : null,
-        locationTo: structured ? locationTo.trim() : null,
+        // 代排队没有送达地，避免把空串或多填的内容写进 DB
+        locationTo: structured && type !== QUEUE_TYPE ? locationTo.trim() : null,
         expiredAt: structured ? toIsoStartTime(expiredAt) : null,
         description: description.trim() || null,
       });
@@ -173,6 +178,13 @@ export default function Publish() {
               <div className="task-field-foot"><span id="task-title-hint">一句话说清这件事，方便同学快速判断。</span><span>{title.length} / 64 字</span></div>
 
               {structured && <div className="task-structured-fields">
+                {type === QUEUE_TYPE ? (
+                  <div>
+                    <label className="task-field-label" htmlFor="task-location-from">排队地点 <span>必填</span></label>
+                    <input id="task-location-from" type="text" value={locationFrom} maxLength={128} placeholder="例如：一食堂二楼窗口" onChange={(event) => { setLocationFrom(event.target.value); setError(null); }} />
+                    <div className="task-field-foot"><span>写清楚在哪儿排队，同学到了才好找。</span></div>
+                  </div>
+                ) : (
                 <div className="task-field-row">
                   <div>
                     <label className="task-field-label" htmlFor="task-location-from">取货地点 <span>必填</span></label>
@@ -183,6 +195,7 @@ export default function Publish() {
                     <input id="task-location-to" type="text" value={locationTo} maxLength={128} placeholder="例如：3 号楼 502" onChange={(event) => { setLocationTo(event.target.value); setError(null); }} />
                   </div>
                 </div>
+                )}
                 <div>
                   <label className="task-field-label">截止时间 <span>选填</span></label>
                   <DeadlinePicker value={expiredAt} onChange={setExpiredAt} onError={setError} disabled={busy} />
@@ -221,9 +234,9 @@ export default function Publish() {
         <aside className="task-publish-aside">
           <section className="panel task-preview"><div className="task-aside-heading"><span>任务预览</span><span className="task-live-tag">实时预览</span></div><div className="task-preview-symbol"><Icon name={TYPE_ICON[type]} size={28} /></div><span className="task-category-label">{TYPE_TEXT[type]}</span><h2 className={!title.trim() ? 'task-placeholder' : ''}>{title.trim() || '你的下一件小事，从这里开始'}</h2>
           {structured && (locationFrom.trim() || locationTo.trim() || expiredAt) && <div className="task-preview-route">
-            {locationFrom.trim() && <span><Icon name="pin" size={13} /> {locationFrom.trim()}</span>}
-            {locationFrom.trim() && locationTo.trim() && <Icon name="arrow-right" size={12} />}
-            {locationTo.trim() && <span><Icon name="pin" size={13} /> {locationTo.trim()}</span>}
+            {locationFrom.trim() && <span><Icon name="pin" size={13} /> {type === QUEUE_TYPE ? '排队 ' : ''}{locationFrom.trim()}</span>}
+            {type !== QUEUE_TYPE && locationFrom.trim() && locationTo.trim() && <Icon name="arrow-right" size={12} />}
+            {type !== QUEUE_TYPE && locationTo.trim() && <span><Icon name="pin" size={13} /> {locationTo.trim()}</span>}
             {expiredAt && <span className="task-preview-time"><Icon name="clock" size={13} /> 截止 {new Date(expiredAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}</span>}
           </div>}
           {description.trim() && <p className="task-preview-desc">{description.trim()}</p>}
