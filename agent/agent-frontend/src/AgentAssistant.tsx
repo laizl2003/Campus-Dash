@@ -189,6 +189,23 @@ async function ensureSession(): Promise<string> {
   return saved || await createSession();
 }
 
+/**
+ * 发送前校正会话：后端会话存在内存里，服务重启后旧 id 会变成 404。
+ * 这里先试探一次，失效就重建，避免用户看到"会话已失效"的报错后再手动重发。
+ */
+async function resolveSession(): Promise<string> {
+  const saved = localStorage.getItem(SESSION_KEY);
+  if (!saved) return await createSession();
+  try {
+    await apiPost('/chat/ping', { session_id: saved });
+    return saved;
+  } catch {
+    // 旧会话在后端已不存在（重启/超时），直接新建
+    localStorage.removeItem(SESSION_KEY);
+    return await createSession();
+  }
+}
+
 function readHistory(): HistoryItem[] {
   try {
     const raw = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
@@ -330,6 +347,8 @@ export default function AgentAssistant() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [history, setHistory] = useState<HistoryItem[]>(() => readHistory());
+  // 删除是两步确认：先点 × 进入待删状态，再点"删除"
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   // 正在编辑的草稿消息 id 与编辑中的值
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Partial<Record<EditableField, string>> | null>(null);
@@ -390,13 +409,15 @@ export default function AgentAssistant() {
 
   // 打开面板时确保后端会话存在，失败不阻塞输入，只提示用户
   useEffect(() => {
-    if (!open || sessionId) return;
+    if (!open) return;
     let active = true;
-    ensureSession()
+    // 用 resolveSession：本地 id 失效时（后端重启）当场换成新会话，
+    // 而不是等到用户发消息才报 404
+    resolveSession()
       .then(id => { if (active) setSessionId(id); })
       .catch(() => { if (active) setNotice('暂时连不上助手服务，请稍后再试'); });
     return () => { active = false; };
-  }, [open, sessionId]);
+  }, [open]);
 
   const dismissNotice = useCallback(() => setNotice(''), []);
   useEffect(() => {
@@ -453,7 +474,7 @@ export default function AgentAssistant() {
     setMessages(prev => [...prev, userMessage]);
     setBusy(true);
     try {
-      const sid = sessionId ?? await ensureSession();
+      const sid = await resolveSession();
       if (!sessionId) setSessionId(sid);
       const reply = await apiPost<ApiReply>('/chat', { session_id: sid, message: text });
       const assistant: ChatMessage = {
@@ -605,17 +626,38 @@ export default function AgentAssistant() {
 
   const loadHistory = (item: HistoryItem) => {
     setMessages(item.messages);
+    // 切换到历史会话时必须同步会话 id，否则继续发消息会打到旧会话上
+    setSessionId(item.id);
+    localStorage.setItem(SESSION_KEY, item.id);
     setHistoryOpen(false);
+    setDeletingId(null);
+  };
+
+  const deleteHistory = (id: string) => {
+    const next = readHistory().filter(item => item.id !== id);
+    writeHistory(next);
+    setHistory(next);
+    setDeletingId(null);
+    // 删掉的正是当前会话：清空界面并让下次发送自动新建
+    if (id === sessionId) {
+      setMessages([welcomeMessage]);
+      localStorage.removeItem(SESSION_KEY);
+      setSessionId(null);
+      setNotice('已删除该对话');
+    } else {
+      setNotice('已删除该对话');
+    }
   };
 
   const fabStyle: CSSProperties = position
     ? { left: position.x, top: position.y }
     : { visibility: 'hidden' };
 
+  // 只发任务类型，具体信息交给后面追问，避免用户被预填内容带偏
   const suggestions = useMemo(() => [
-    { icon: 'package', text: '取快递', prompt: '明天下午三点帮我去菜鸟驿站取快递，送到 3 号楼 502，悬赏 8 块' },
-    { icon: 'bag', text: '帮买奶茶', prompt: '帮我买一杯少冰的珍珠奶茶，送到 2 号楼 301，悬赏 5 块' },
-    { icon: 'clock', text: '代排队', prompt: '明天中午帮我在食堂二楼排队打饭，送到图书馆，悬赏 6 块' },
+    { icon: 'package', text: '取快递', prompt: '取快递' },
+    { icon: 'bag', text: '帮买奶茶', prompt: '帮买奶茶' },
+    { icon: 'clock', text: '代排队', prompt: '代排队' },
   ], []);
 
   return <>
@@ -657,11 +699,24 @@ export default function AgentAssistant() {
           <button type="button" className="agent-icon-btn" aria-label="关闭历史" onClick={() => setHistoryOpen(false)}><Icon name="close" size={15}/></button>
         </div>
         {history.length === 0 && <p className="agent-history-hint">还没有历史对话，发一条消息就会记录在这里。</p>}
-        {history.map(item => <button type="button" key={item.id} className="agent-history-item" onClick={() => loadHistory(item)}>
-          <span className="agent-history-icon"><Icon name="history" size={15}/></span>
-          <span className="agent-history-copy"><strong>{item.title}</strong><small>{item.preview}</small></span>
-          <time>{item.time}</time>
-        </button>)}
+        {history.map(item => <div key={item.id} className={`agent-history-item${deletingId === item.id ? ' is-deleting' : ''}`}>
+          <button type="button" className="agent-history-open" onClick={() => loadHistory(item)}>
+            <span className="agent-history-icon"><Icon name="history" size={15}/></span>
+            <span className="agent-history-copy"><strong>{item.title}</strong><small>{item.preview}</small></span>
+          </button>
+          <time className="agent-history-time">{item.time}</time>
+          {deletingId === item.id ? (
+            <span className="agent-history-confirm">
+              <button type="button" className="agent-history-danger" onClick={() => deleteHistory(item.id)}>删除</button>
+              <button type="button" className="agent-history-undo" onClick={() => setDeletingId(null)}>取消</button>
+            </span>
+          ) : (
+            <button type="button" className="agent-history-delete" aria-label="删除这条对话"
+                    title="删除这条对话" onClick={() => setDeletingId(item.id)}>
+              <Icon name="close" size={13}/>
+            </button>
+          )}
+        </div>)}
 
       </div>}
 

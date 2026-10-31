@@ -296,13 +296,57 @@
 .agent-history-item {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 6px;
   width: 100%;
   padding: 9px 8px;
   border-radius: 10px;
   text-align: left;
 }
 .agent-history-item:hover { background: #fff4c7; }
+.agent-history-open {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.agent-history-delete {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #c0b8a4;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s, background .15s, color .15s;
+}
+.agent-history-item:hover .agent-history-delete { opacity: 1; }
+.agent-history-delete:hover { background: #ffe6e6; color: #d64545; }
+.agent-history-item.is-deleting { background: #fff1f1; }
+.agent-history-confirm { display: flex; gap: 4px; flex: 0 0 auto; }
+.agent-history-danger, .agent-history-undo {
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-size: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.agent-history-danger { background: #d64545; border-color: #d64545; color: #fff; }
+.agent-history-danger:hover { background: #c03a3a; }
+.agent-history-undo { background: #fff; border-color: #e3ddcb; color: #6b6552; }
+.agent-history-undo:hover { border-color: #c9c1ac; }
 .agent-history-icon {
   width: 28px;
   height: 28px;

@@ -107,6 +107,20 @@ def publish(req: PublishRequest, authorization: str | None = Header(default=None
     return {"errandId": str(body.get("errandId", "")), "status": body.get("status")}
 
 
+class PingRequest(BaseModel):
+    session_id: str
+
+
+@app.post("/chat/ping")
+def ping(req: PingRequest) -> dict[str, bool]:
+    """检查会话是否还在。
+
+    会话存在进程内存里，服务重启后旧 id 就失效了。
+    前端发送前先探一下，失效就自动新建，用户不会看到 404 报错。
+    """
+    return {"alive": service.store.get(req.session_id) is not None}
+
+
 @app.post("/chat")
 def chat(req: ChatRequest) -> dict[str, object]:
     try:
