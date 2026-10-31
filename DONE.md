@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一条就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-11-01 · 修历史消息存错 + 卡片可恢复；删除连带消息
+
+- **目标**：刷新页面后历史里看不到助手回复，草稿卡片也丢了；删除面板后消息仍有残留。
+- **改动**：
+  - 修 `_chat` 落库：助手消息原来取的是 `state["message"]`（用户输入），改成先算 `draft_to_reply` 再存 `reply["message"]`
+  - `agent_message` 增 `meta_json`：READY 时存 `{draft, type_label}`，发布时用 `mark_card_published` 写入 `publishedId`
+  - 发布收尾统一到 `record_published`：结束会话 + 标记卡片 + 补两条"已发布/这一单结束"消息，全部入库
+  - `delete_panel` 改为显式 `DELETE ... WHERE session_id IN (子查询)`，不再用 JOIN 多表删除（会话行先没时会漏删消息）；新增 `purge_orphan_messages`
+  - 前端 `fetchPanelMessages` 从 `meta` 还原卡片与"已发布"状态；打开面板时自动回填当前对话
+- **验证**：面板消息里 assistant 内容为真实回复（非用户复读）；发布后卡片带 `[卡片][已发布]`，另有两条提示消息；浏览器刷新后 4 条气泡 + 1 张卡片自动恢复；删除面板后会话 0 / 消息 0 / 孤儿消息 0；`133 passed, 1 skipped`
+
 ## 2026-11-01 · Agent 对话提升为"面板"；消息主键改雪花 ID
 
 - **目标**：一次聊天可能连发多单，但历史按 session 归档，导致同段对话重复入库、换设备后残缺；消息自增 ID 只能插入后回读。

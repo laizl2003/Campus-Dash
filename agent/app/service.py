@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 from .agent.extractor import Extractor, default_extractor
 from .agent.graph import AgentReply, build_graph, draft_to_reply
-from .models import TaskDraft, next_question, required_slots
+from .models import TYPE_LABELS, TaskDraft, next_question, required_slots
 
 
 @dataclass
@@ -54,7 +54,9 @@ class SessionStore:
     def ensure_session(self, panel_id: str, user_id: str | None = None) -> Session:
         return self.get_active_session(panel_id) or self.create(user_id, panel_id)
 
-    def append_message(self, session_id: str, role: str, content: str) -> None:
+    def append_message(
+        self, session_id: str, role: str, content: str, meta: dict | None = None
+    ) -> None:
         # 内存版不存消息表，历史只在进程内有意义
         return None
 
@@ -129,6 +131,34 @@ class ChatService:
         except TypeError:
             # 内存版 save 只收 session，没有状态列可写
             self.store.save(session)
+
+    def record_published(self, errand_id: str, panel_id: str | None = None,
+                         session_id: str | None = None) -> None:
+        """发布成功后的收尾：结束会话、把卡片标记成已发布、补两条提示消息。
+
+        这三件事都要落库，否则刷新页面后：会话还开着（下一单写进旧草稿）、
+        卡片变回可编辑、也看不到"已发布"的提示。
+        """
+        target = session_id
+        if target is None and panel_id:
+            session = self.store.get_active_session(panel_id)
+            target = session.id if session is not None else None
+        if target is None:
+            return
+
+        self.mark_published(target)
+        mark_card = getattr(self.store, "mark_card_published", None)
+        if mark_card is not None:
+            mark_card(target, errand_id)
+        if hasattr(self.store, "append_message"):
+            self.store.append_message(
+                target, "assistant",
+                f"任务已发布，编号 {errand_id}。可以在「我的任务」里查看进度。",
+            )
+            self.store.append_message(
+                target, "assistant",
+                "这一单已经结束，接下来想发什么任务？直接告诉我就行。",
+            )
 
     def mark_published_panel(self, panel_id: str | None) -> None:
         # 前端只记 panel：把该面板下进行中的会话标记为已结束。
@@ -207,21 +237,34 @@ class ChatService:
 
         session.draft = draft
         session.turns += 1
+
+        # 先把回复算出来，再落库。
+        # 之前这里用的是 state["message"]——那是**用户输入**，
+        # 结果 assistant 消息存成了用户原话的复读，刷新后整段历史都是废的。
+        reply = draft_to_reply(status, draft, missing, question, appended, intent,
+                               list(state.get("updated_fields") or []))
+        reply_text = reply.get("message") or question or ""
+
         session.history.append({"role": "user", "content": message})
-        reply_text = state.get("message") or question or ""
         session.history.append({"role": "assistant", "content": reply_text})
 
         try:
             self.store.save(session, status=status, last_message=message)
         except TypeError:
             self.store.save(session)
+
+        # 卡片状态跟着消息一起存：刷新页面才能把草稿卡片画回来
+        card_meta = None
+        if status == "READY":
+            card_meta = {
+                "draft": draft.model_dump(mode="json"),
+                "type_label": TYPE_LABELS.get(str(draft.type), None) if draft.type else None,
+            }
         if hasattr(self.store, "append_message"):
             self.store.append_message(session.id, "user", message)
-            self.store.append_message(session.id, "assistant", reply_text)
+            self.store.append_message(session.id, "assistant", reply_text, card_meta)
 
-        reply = draft_to_reply(status, draft, missing, question, appended, intent,
-                                 list(state.get('updated_fields') or []))
         # 让前端知道这轮落在哪个会话上（同一个面板下，发布后会换成新会话）
-        reply['session_id'] = session.id
-        reply['panel_id'] = session.panel_id
+        reply["session_id"] = session.id
+        reply["panel_id"] = session.panel_id
         return reply

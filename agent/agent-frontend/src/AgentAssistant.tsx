@@ -233,7 +233,13 @@ async function fetchPanelMessages(panelId: string): Promise<ChatMessage[]> {
     const resp = await fetch(AGENT_BASE + '/panels/' + panelId + '/messages');
     if (!resp.ok) return [];
     const data = await resp.json() as {
-      messages?: { message_id: string; role: Role; content: string; time?: string }[];
+      messages?: {
+        message_id: string;
+        role: Role;
+        content: string;
+        time?: string;
+        meta?: { draft?: ApiDraft; type_label?: string | null; publishedId?: string } | null;
+      }[];
     };
     return (data.messages ?? []).map(item => ({
       // 直接用服务端的雪花 id：跨会话也全局有序
@@ -243,10 +249,28 @@ async function fetchPanelMessages(panelId: string): Promise<ChatMessage[]> {
       time: item.time
         ? new Date(item.time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
         : '',
+      // 卡片状态存在消息 meta 里，刷新后原样画回来
+      draft: metaToDraft(item.meta),
+      publishedId: item.meta?.publishedId,
     }));
   } catch {
     return [];
   }
+}
+
+/** 把消息 meta 还原成卡片展示结构，复用 toDraftPayload 的展示规则 */
+function metaToDraft(
+  meta?: { draft?: ApiDraft; type_label?: string | null } | null,
+): DraftPayload | undefined {
+  if (!meta?.draft) return undefined;
+  return toDraftPayload({
+    status: 'READY',
+    message: '',
+    draft: meta.draft,
+    missing: [],
+    question: null,
+    type_label: meta.type_label ?? null,
+  });
 }
 
 async function deleteRemotePanel(panelId: string): Promise<void> {
@@ -450,7 +474,14 @@ export default function AgentAssistant() {
     if (!open) return;
     let active = true;
     resolvePanel()
-      .then(id => { if (active) setPanelId(id); })
+      .then(async id => {
+        if (!active) return;
+        setPanelId(id);
+        // 刷新后自动把这段对话的消息和卡片补回来（还没开始聊才回填）
+        const loaded = await fetchPanelMessages(id);
+        if (!active || loaded.length === 0) return;
+        setMessages(prev => (prev.length <= 1 ? loaded : prev));
+      })
       .catch(() => { if (active) setNotice('暂时连不上助手服务，请稍后再试'); });
     // 历史以后端为准：换设备、清缓存都能看到完整记录
     fetchPanels()

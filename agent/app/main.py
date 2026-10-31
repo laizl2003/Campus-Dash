@@ -220,11 +220,12 @@ def publish(req: PublishRequest, authorization: str | None = Header(default=None
         raise HTTPException(status_code=400, detail=data.get("message") or "发布失败")
 
     body = data.get("data") or {}
-    # 这一单已经落地：会话到此为止，避免后续消息继续往旧草稿里追加
-    if req.sessionId:
-        service.mark_published(req.sessionId)
-    else:
-        service.mark_published_panel(req.panelId)
+    # 结束会话 + 卡片标记已发布 + 补两条提示消息，都要落库
+    service.record_published(
+        str(body.get("errandId", "")),
+        panel_id=req.panelId,
+        session_id=req.sessionId,
+    )
     return {"errandId": str(body.get("errandId", "")), "status": body.get("status")}
 
 

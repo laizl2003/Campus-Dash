@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 from app.agent.extractor import EmptyExtractor, Extractor
 from app.models import TaskDraft
 from app.service import ChatService
@@ -105,4 +107,4 @@ def test_rule_extractor_collects_fields_across_turns():
     reply = service.chat(session.id, "明天下午三点，8块")
     assert reply["status"] == "READY"
     assert reply["draft"]["reward_cents"] == 800
-    assert reply["draft"]["expired_at"].startswith("2026-11-01T15:00")
+    # 不写死日期："明天下午三点"要随运行时间走    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")    assert reply["draft"]["expired_at"].startswith(tomorrow + "T15:00")

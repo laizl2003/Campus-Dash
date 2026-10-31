@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS agent_message (
   session_id VARCHAR(64) NOT NULL,
   role       VARCHAR(16) NOT NULL,
   content    TEXT        NOT NULL,
+  meta_json  JSON        NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (message_id),
   KEY idx_session (session_id, message_id)
@@ -52,6 +53,20 @@ CREATE TABLE IF NOT EXISTS agent_message (
 
 def _iso(value: object) -> str:
     return value.isoformat() if isinstance(value, datetime) else str(value)
+
+
+def _load_meta(value: object) -> dict | None:
+    """MySQL 的 JSON 列取出来是字符串，统一转成 dict。"""
+    if value is None:
+        return None
+    if isinstance(value, (bytes, bytearray)):
+        value = value.decode("utf-8")
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except ValueError:
+            return None
+    return value if isinstance(value, dict) else None
 
 
 class MySQLSessionStore:
@@ -157,6 +172,8 @@ class MySQLSessionStore:
         self._run("UPDATE agent_session SET panel_id = UUID() WHERE panel_id IS NULL")
 
         message_cols = self._columns("agent_message")
+        if "meta_json" not in message_cols:
+            self._run("ALTER TABLE agent_message ADD COLUMN meta_json JSON NULL AFTER content")
         if "id" in message_cols and "message_id" not in message_cols:
             # 只改名 + 去掉自增，老数据原样保留（老 id 都比雪花小，顺序不会乱）
             self._run("ALTER TABLE agent_message CHANGE COLUMN id message_id BIGINT NOT NULL")
@@ -244,18 +261,30 @@ class MySQLSessionStore:
 
     # ------------------------------------------------------------ 消息读写
 
-    def append_message(self, session_id: str, role: str, content: str) -> int:
-        """插入一条消息，id 用雪花（插入前就确定，重试也幂等）。"""
+    def append_message(
+        self, session_id: str, role: str, content: str, meta: dict | None = None
+    ) -> int:
+        """插入一条消息，id 用雪花（插入前就确定，重试也幂等）。
+
+        meta 存草稿卡片等展示状态：刷新页面时靠它把卡片画回来。
+        """
         message_id = next_id()
         self._run(
-            "INSERT INTO agent_message (message_id, session_id, role, content) VALUES (%s, %s, %s, %s)",
-            (message_id, session_id, role, content),
+            "INSERT INTO agent_message (message_id, session_id, role, content, meta_json) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (
+                message_id,
+                session_id,
+                role,
+                content,
+                json.dumps(meta, ensure_ascii=False) if meta else None,
+            ),
         )
         return message_id
 
     def messages(self, session_id: str) -> list[dict[str, object]]:
         rows = self._run(
-            "SELECT message_id, role, content, created_at FROM agent_message "
+            "SELECT message_id, role, content, created_at, meta_json FROM agent_message "
             "WHERE session_id = %s ORDER BY message_id",
             (session_id,),
             fetch="all",
@@ -267,6 +296,7 @@ class MySQLSessionStore:
                 "role": row[1],
                 "content": row[2],
                 "time": _iso(row[3]),
+                "meta": _load_meta(row[4]),
             }
             for row in rows
         ]
@@ -279,7 +309,7 @@ class MySQLSessionStore:
         返回里带 session_id：前端要靠它画出"这一单已发布"的分隔。
         """
         sql = (
-            "SELECT m.message_id, m.session_id, m.role, m.content, m.created_at "
+            "SELECT m.message_id, m.session_id, m.role, m.content, m.created_at, m.meta_json "
             "  FROM agent_message m "
             "  JOIN agent_session s ON s.session_id = m.session_id "
             " WHERE s.panel_id = %s"
@@ -298,11 +328,29 @@ class MySQLSessionStore:
                 "role": row[2],
                 "content": row[3],
                 "time": _iso(row[4]),
+                "meta": _load_meta(row[5]),
             }
             for row in reversed(rows)
         ]
 
+    def mark_card_published(self, session_id: str, errand_id: str) -> int:
+        """把这一单最后一张草稿卡片标记成"已发布"。
+
+        卡片状态存在 message 的 meta_json 里，刷新页面后才能恢复成"已发布"，
+        而不是又变回可编辑的草稿。
+        """
+        return self._run(
+            "UPDATE agent_message"
+            "   SET meta_json = JSON_SET(COALESCE(meta_json, JSON_OBJECT()), '$.publishedId', %s)"
+            " WHERE session_id = %s"
+            "   AND JSON_EXTRACT(meta_json, '$.draft') IS NOT NULL"
+            " ORDER BY message_id DESC"
+            " LIMIT 1",
+            (errand_id, session_id),
+        ) or 0
+
     # ------------------------------------------------------------ 面板
+
 
     def list_panels(self, user_id: str, limit: int = 20) -> list[dict[str, object]]:
         """一次聊天 = 一个 panel；标题和预览取该面板最后一条消息。"""
@@ -384,7 +432,11 @@ class MySQLSessionStore:
         return bool(removed and removed > 0)
 
     def delete_panel(self, panel_id: str) -> bool:
-        """删除整段对话：面板下所有会话和消息一起删。"""
+        """删除整段对话：面板下所有会话和消息一起删。
+
+        分三步显式删，不用 JOIN 多表删除：
+        JOIN 写法在"会话行已被删过"时会静默漏删消息，留下孤儿数据。
+        """
         try:
             self._conn.ping(reconnect=True)
         except Exception:
@@ -394,9 +446,8 @@ class MySQLSessionStore:
         try:
             with self._conn.cursor() as cur:
                 cur.execute(
-                    "DELETE m FROM agent_message m "
-                    "  JOIN agent_session s ON s.session_id = m.session_id "
-                    " WHERE s.panel_id = %s",
+                    "DELETE FROM agent_message WHERE session_id IN ("
+                    "  SELECT session_id FROM agent_session WHERE panel_id = %s)",
                     (panel_id,),
                 )
                 cur.execute("DELETE FROM agent_session WHERE panel_id = %s", (panel_id,))
@@ -406,6 +457,14 @@ class MySQLSessionStore:
             self._conn.rollback()
             raise
         return bool(removed and removed > 0)
+
+    def purge_orphan_messages(self) -> int:
+        """清掉"会话已经不在了"的消息，防止历史数据残留。"""
+        return self._run(
+            "DELETE m FROM agent_message m "
+            "  LEFT JOIN agent_session s ON s.session_id = m.session_id "
+            " WHERE s.session_id IS NULL"
+        ) or 0
 
     def message_count(self, session_id: str) -> int:
         """统计某会话的消息条数，测试和排查用。"""
