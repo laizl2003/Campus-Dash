@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-31 · Agent 发单 Demo：LangGraph + 缺字段追问
+
+- **目标**：先把对话式发单的流程与追问跑通，模型抽取留空，后续直接替换实现。
+- **改动**：
+  - 新建 `agent/app`：`models.py`（TaskDraft/槽位/必填规则/合并/追问文案）、`agent/extractor.py`（抽取接口 + 规则兜底 + LLMExtractor 空实现）、`agent/graph.py`（LangGraph 状态机 extract→check→ask/ready）、`service.py`（会话与编排）、`main.py`（FastAPI）。
+  - `tests/test_flow.py` 覆盖：空抽取追问类型、逐项追问、OTHER 跳过地点时间、裸回答不破坏流程、规则抽取多轮合并。
+  - 新增 `agent/README.md`，说明接口、源码位置、追问原理与接入真实模型的位置。
+- **验证**：`pytest -q` 5 passed；HTTP 多轮对话从"帮我取个快递"追问到补全取货地/送达地/时间/金额，最终返回 READY 草稿。
+
+
 ## 2026-10-31 · 任务结构化字段：取货地/送达地/开始时间/任务内容
 
 - **目标**：补齐跑腿任务的路线与时间信息，让 Agent 和用户都能表达"取哪、送哪、几点做、注意什么"。
