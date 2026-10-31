@@ -17,3 +17,13 @@ report-*/
 agent-*.png
 res*.txt
 *.log
+
+# headless browser temp profile
+.edge-*/
+# local debug artifacts
+chk*.js
+shot*.js
+dl*.png
+n-p1.png
+notif-ui.png
+eid*.txt

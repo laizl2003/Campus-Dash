@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { api, TYPE_ICON, TYPE_TEXT, yuan } from '../api';
 import Icon from '../components/Icon';
 import SelectMenu from '../components/SelectMenu';
+import DeadlinePicker from '../components/DeadlinePicker';
 import './taskPages.css';
 
 const CATEGORIES = [
@@ -183,9 +184,9 @@ export default function Publish() {
                   </div>
                 </div>
                 <div>
-                  <label className="task-field-label" htmlFor="task-expired-at">截止时间 <span>选填</span></label>
-                  <input id="task-expired-at" type="datetime-local" value={expiredAt} onChange={(event) => { setExpiredAt(event.target.value); setError(null); }} />
-                  <div className="task-field-foot"><span>超过这个时间仍无人接单，任务会自动过期。不填则永久有效。</span></div>
+                  <label className="task-field-label">截止时间 <span>选填</span></label>
+                  <DeadlinePicker value={expiredAt} onChange={setExpiredAt} onError={setError} disabled={busy} />
+                  <div className="task-field-foot"><span>超过这个时间仍无人接单，任务会自动过期。不选则永久有效。</span></div>
                 </div>
               </div>}
 

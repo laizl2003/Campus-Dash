@@ -4,7 +4,10 @@ import Icon from '../components/Icon';
 import { subscribeWs } from '../ws';
 import './accountPages.css';
 
-const TYPE_LABELS: Record<string, string> = { SETTLED: '结算通知', REFUNDED: '退款通知' };
+const TYPE_LABELS: Record<string, string> = { SETTLED: '结算通知', REFUNDED: '退款通知', EXPIRED: '过期退款' };
+
+/** 每页条数：需求固定一次展示五条 */
+const PAGE_SIZE = 5;
 
 /** 历史消息里存的是"1310 分"，统一显示为"13.10 元"；新消息本身已是元 */
 function formatContent(content: string) {
@@ -18,14 +21,22 @@ export default function Notifications() {
   const [filter, setFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // 服务端分页：page 从 0 开始，每页 PAGE_SIZE 条
+  const [page, setPage] = useState(0);
+  // 拿到的条数等于页大小，就认为可能还有下一页（省一次 COUNT 查询）
+  const [hasMore, setHasMore] = useState(false);
   const requestId = useRef(0);
-  const load = useCallback(async () => {
+  const load = useCallback(async (targetPage: number) => {
     const id = ++requestId.current;
     setLoading(true);
     setError('');
     try {
-      const [next, unread] = await Promise.all([api.notifications(), api.unread()]);
-      if (id === requestId.current) { setItems(next); setUnreadTotal(unread.count); }
+      const [next, unread] = await Promise.all([api.notifications(targetPage, PAGE_SIZE), api.unread()]);
+      if (id === requestId.current) {
+        setItems(next);
+        setUnreadTotal(unread.count);
+        setHasMore(next.length === PAGE_SIZE);
+      }
     } catch (reason) {
       if (id === requestId.current) setError(reason instanceof Error ? reason.message : '消息加载失败，请稍后重试');
     } finally {
@@ -33,11 +44,18 @@ export default function Notifications() {
     }
   }, []);
 
+  // 切页时重新拉取
+  useEffect(() => { void load(page); }, [load, page]);
+
   useEffect(() => {
-    void load();
-    const unsubscribe = subscribeWs((event) => { if (event.type === 'notification.new') void load(); });
+    // 新消息到达：停在第 1 页就原地刷新；在别的页则跳回第 1 页，避免看不到新消息
+    const unsubscribe = subscribeWs((event) => {
+      if (event.type !== 'notification.new') return;
+      if (page === 0) void load(0);
+      else setPage(0);
+    });
     return () => { requestId.current++; unsubscribe(); };
-  }, [load]);
+  }, [load, page]);
 
   const unreadCount = unreadTotal;
   const filtered = (items ?? []).filter((item) => {
@@ -65,15 +83,20 @@ export default function Notifications() {
 
   return (
     <div className="account-page">
-      <div className="page-head"><div><span className="eyebrow">NOTIFICATION CENTER</span><h1>不错过每一个进展</h1><p>任务结算、退款到账，重要动态集中在这里。</p></div><button className="btn btn-ghost" disabled={loading} onClick={() => void load()}><Icon name="refresh" size={15} />{loading ? '更新中' : '刷新消息'}</button></div>
-      {error && <div className="banner warn account-error" role="alert"><span>{error}</span><button className="btn btn-ghost" onClick={() => void load()} disabled={loading}>重试</button></div>}
+      <div className="page-head"><div><span className="eyebrow">NOTIFICATION CENTER</span><h1>不错过每一个进展</h1><p>任务结算、退款到账，重要动态集中在这里。</p></div><button className="btn btn-ghost" disabled={loading} onClick={() => void load(page)}><Icon name="refresh" size={15} />{loading ? '更新中' : '刷新消息'}</button></div>
+      {error && <div className="banner warn account-error" role="alert"><span>{error}</span><button className="btn btn-ghost" onClick={() => void load(page)} disabled={loading}>重试</button></div>}
       <div className="account-message-layout">
         <section className="account-surface">
           <div className="account-section-head"><div><h2>消息中心 {unreadCount > 0 && <span className="account-heading-count">{unreadCount}</span>}</h2><p>点击通知，查看对应任务的最新状态</p></div><div className="account-heading-icon"><Icon name="bell" size={20} /></div></div>
           <div className="account-filter-bar account-message-filter"><div className="tabs" aria-label="按消息类型筛选">{[['UNREAD', '未读'], ['ALL', '全部消息'], ['SETTLED', '结算'], ['REFUNDED', '退款'], ...(hasOther ? [['OTHER', '其他']] : [])].map(([value, label]) => <button key={value} className={`tab${filter === value ? ' active' : ''}`} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</div><span className="account-count">{items === null ? '等待加载' : `${filtered.length} 条`}</span></div>
           {loading && items === null ? <div className="account-state" role="status"><span className="account-loader" /><strong>正在获取最新消息</strong></div> : items === null ? <div className="account-state"><Icon name="bell" size={27} /><strong>暂时无法加载消息</strong><p>请重试以获取最新动态。</p></div> : filtered.length === 0 ? <div className="account-state account-message-empty"><div className="account-empty-icon"><Icon name="bell" size={30} /></div><strong>{items.length ? '暂时没有这类消息' : '一切安静，等待好消息'}</strong><p>{items.length ? '你可以切换分类，查看其他任务动态。' : '任务结算或退款后，我们会在这里告诉你。'}</p>{items.length === 0 && <a href="#/" className="btn btn-ghost">去任务大厅看看 <Icon name="arrow-right" size={14} /></a>}</div> : <div className="account-message-groups">{[...groups.entries()].map(([date, messages]) => <div key={date}><h3 className="account-date-divider">{date}</h3>{messages.map((item) => <a className={`account-message${item.read ? '' : ' is-unread'}`} key={item.id} href={`#/detail/${item.errandId}?from=notifications`}
                onMouseEnter={() => markItemRead(item)}
-               onFocus={() => markItemRead(item)}><span className={`account-message-icon ${item.type === 'REFUNDED' ? 'account-message-refund' : ''}`}><Icon name={item.type === 'SETTLED' ? 'check' : item.type === 'REFUNDED' ? 'wallet' : 'bell'} size={18} /></span><span className="account-message-copy"><span className="account-message-title">{TYPE_LABELS[item.type] ?? '任务通知'}<time dateTime={item.time}>{new Date(item.time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</time></span><span className="account-message-body">{formatContent(item.content)}</span><span className="account-message-ref">关联任务 #{String(item.errandId).slice(-8)}</span></span><Icon name="arrow-right" size={16} /></a>)}</div>)}</div>}
+               onFocus={() => markItemRead(item)}><span className={`account-message-icon ${item.type === 'REFUNDED' || item.type === 'EXPIRED' ? 'account-message-refund' : ''}`}><Icon name={item.type === 'SETTLED' ? 'check' : item.type === 'REFUNDED' || item.type === 'EXPIRED' ? 'wallet' : 'bell'} size={18} /></span><span className="account-message-copy"><span className="account-message-title">{TYPE_LABELS[item.type] ?? '任务通知'}<time dateTime={item.time}>{new Date(item.time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</time></span><span className="account-message-body">{formatContent(item.content)}</span><span className="account-message-ref">关联任务 #{String(item.errandId).slice(-8)}</span></span><Icon name="arrow-right" size={16} /></a>)}</div>)}</div>}
+          {(page > 0 || hasMore) && <nav className="account-pager" aria-label="消息分页">
+            <button className="btn btn-ghost" disabled={page === 0 || loading} onClick={() => setPage((v) => Math.max(0, v - 1))}><Icon name="arrow-left" size={14} />上一页</button>
+            <span className="account-pager-index">第 {page + 1} 页</span>
+            <button className="btn btn-ghost" disabled={!hasMore || loading} onClick={() => setPage((v) => v + 1)}>下一页<Icon name="arrow-right" size={14} /></button>
+          </nav>}
         </section>
         <aside className="account-message-aside"><div className="account-aside-icon"><Icon name="bell" size={26} /></div><span className="eyebrow">STAY IN THE LOOP</span><h2>一份托付<br />始终有回应</h2><p>每一次结算，每一笔退款，<br />都在这里留下清晰的记录。</p><div className="account-aside-divider" /><a href="#/mine">查看我的任务 <Icon name="arrow-right" size={15} /></a><a href="#/wallet">查看记账流水 <Icon name="arrow-right" size={15} /></a></aside>
       </div>

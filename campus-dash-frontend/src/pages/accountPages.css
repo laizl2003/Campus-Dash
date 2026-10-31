@@ -113,6 +113,11 @@
 .account-message-aside > a { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--accent); padding: 10px 0; text-decoration: none; }
 .account-message-aside > a:hover { color: var(--primary-ink); }
 .account-message-groups { padding: 7px 25px 14px; }
+/* 分页器：一条消息一页五条，两端对齐让"第 N 页"居中稳定 */
+.account-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 25px 18px; border-top: 1px solid #f0eee6; }
+.account-pager .btn { min-height: 34px; padding: 0 12px; font-size: 12px; }
+.account-pager .btn:disabled { opacity: .45; cursor: not-allowed; }
+.account-pager-index { font-size: 12px; color: var(--muted); }
 .account-date-divider { font-size: 10px; font-weight: 400; color: var(--muted); margin: 17px 0 8px; }
 .account-message { display: flex; align-items: start; gap: 13px; padding: 16px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--muted); }
 .account-message:hover .account-message-title { color: var(--accent); }

@@ -26,6 +26,71 @@
 .task-description p { color: #4f4a3c; font-size: 12px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-field-label { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--ink); font-size: 12px; font-weight: 600; }
 .task-field-label span { color: var(--muted); font-size: 10px; font-weight: 400; }
+
+/* ── 截止时间选择器 ──
+   整栏可点，弹出日历；未选中时不显示"年/月/日 --:--"，只显示引导文案 */
+.deadline-picker { position: relative; }
+.deadline-trigger {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 14px; border: 1px solid var(--line, #e8e4d8); border-radius: 12px;
+  background: #fff; cursor: pointer; text-align: left;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.deadline-trigger:hover:not(:disabled) { border-color: var(--primary, #ffd84d); background: #fffdf5; }
+.deadline-picker.is-open .deadline-trigger { border-color: var(--primary, #ffd84d); box-shadow: 0 0 0 3px #ffd84d33; }
+.deadline-trigger:disabled { opacity: .55; cursor: not-allowed; }
+.deadline-trigger-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--primary-soft, #fff7d6); color: #8a6a00; flex-shrink: 0; }
+.deadline-trigger-text { flex: 1; min-width: 0; font-size: 13px; color: var(--ink, #232323); }
+.deadline-trigger-text strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.deadline-placeholder { color: var(--muted, #8a8577); }
+.deadline-trigger-time { font-size: 13px; font-weight: 600; color: #8a6a00; font-variant-numeric: tabular-nums; }
+.deadline-trigger-hint { font-size: 11px; color: var(--muted, #8a8577); }
+.deadline-trigger-caret { display: grid; place-items: center; color: var(--muted, #8a8577); transition: transform .18s ease; }
+.deadline-trigger-caret.is-open { transform: rotate(180deg); }
+
+.deadline-pop {
+  position: absolute; z-index: 40; left: 0; top: calc(100% + 8px); width: 300px;
+  padding: 14px; background: #fff; border: 1px solid #eee6cc; border-radius: 16px;
+  box-shadow: 0 18px 44px #1f24212e, 0 3px 10px #1f24210f;
+  animation: deadline-pop-in .16s ease-out;
+}
+@keyframes deadline-pop-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+.deadline-pop-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.deadline-pop-head strong { font-size: 13px; letter-spacing: -.2px; }
+.deadline-nav { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: #f7f5ee; color: var(--ink, #232323); cursor: pointer; transition: background .15s ease; }
+.deadline-nav:hover:not(:disabled) { background: var(--primary-soft, #fff7d6); }
+.deadline-nav:disabled { opacity: .35; cursor: not-allowed; }
+
+.deadline-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 4px; }
+.deadline-weekdays span { text-align: center; font-size: 10px; color: var(--muted, #8a8577); padding: 4px 0; }
+
+.deadline-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.deadline-day {
+  height: 34px; border-radius: 9px; font-size: 12px; color: var(--ink, #232323);
+  cursor: pointer; font-variant-numeric: tabular-nums; background: transparent;
+  transition: background .14s ease, color .14s ease;
+}
+.deadline-day.is-gap { cursor: default; }
+.deadline-day:hover:not(.is-past):not(.is-selected):not(.is-gap) { background: var(--primary-soft, #fff7d6); }
+/* 过去的日子直接置灰不可点，用户不会选到无效时间 */
+.deadline-day.is-past { color: #c9c5b8; cursor: not-allowed; }
+.deadline-day.is-today { box-shadow: inset 0 0 0 1px var(--primary, #ffd84d); }
+.deadline-day.is-selected { background: var(--primary, #ffd84d); color: #232323; font-weight: 600; }
+
+.deadline-time-row { display: flex; align-items: center; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f2efe4; }
+.deadline-time-label { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted, #8a8577); margin-right: auto; }
+.deadline-time-row select {
+  padding: 6px 8px; border: 1px solid var(--line, #e8e4d8); border-radius: 9px;
+  background: #fff; font-size: 12px; color: var(--ink, #232323); cursor: pointer;
+}
+.deadline-time-row select:focus { outline: none; border-color: var(--primary, #ffd84d); }
+.deadline-time-sep { color: var(--muted, #8a8577); font-size: 12px; }
+
+.deadline-pop-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.deadline-pop-foot .btn { min-height: 30px; padding: 0 10px; font-size: 11px; }
+
+@media (max-width: 560px) { .deadline-pop { width: min(300px, calc(100vw - 60px)); } }
 .panel.task-compose input[type="text"], .panel.task-compose input[type="datetime-local"] { width: 100%; border-radius: 9px; border: 1px solid var(--line); background: #fcfcfc; padding: 12px 14px; color: var(--ink); font: inherit; outline: none; transition: border-color .18s, box-shadow .18s; }
 .panel.task-compose input[type="text"]::placeholder { color: #8a8a8a; font-size: 12px; }
 .panel.task-compose input[type="text"]:focus, .panel.task-compose input[type="datetime-local"]:focus { border-color: #b38c00; box-shadow: 0 0 0 3px #ffd10026; }

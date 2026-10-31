@@ -528,9 +528,9 @@ export const api = {
     time: string; direction: string; amountCents: number;
     refType: string; refId: string; bizNo: string;
   }[]>('/api/wallet/ledger'),
-  notifications: () => request<{
+  notifications: (page = 0, size = 5) => request<{
     id: string; errandId: string; type: string; content: string; time: string; read: boolean;
-  }[]>('/api/notifications'),
+  }[]>(`/api/notifications?page=${page}&size=${size}`),
   markNotificationRead: (id: string) =>
     request<{ changed: number }>(`/api/notifications/${id}/read`, 'POST'),
   vouchers: () => request<{
