@@ -140,6 +140,23 @@ services:
       mq-init:
         condition: service_completed_successfully
 
+  # Agent 服务：独立的 Python/FastAPI 进程，只通过 /agent/* 暴露
+  agent:
+    build:
+      context: ../../agent
+    image: dash-agent:local
+    container_name: dash-agent
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    healthcheck:
+      # slim 镜像没有 curl，用 python 自带的 urllib 探活
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
   web:
     build:
       context: ../../campus-dash-frontend
@@ -150,3 +167,5 @@ services:
     depends_on:
       app:
         condition: service_healthy
+      agent:
+        condition: service_started

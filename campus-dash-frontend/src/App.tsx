@@ -3,6 +3,8 @@ import { useHashRoute } from './router';
 import { api, getRole, getUserId, getUsername, listAccounts, logout, switchAccount } from './api';
 import TopBar from './components/TopBar';
 import Icon from './components/Icon';
+// Agent 前端源码位于 agent/agent-frontend，通过 vite alias @agent 引入
+import AgentAssistant from '@agent/AgentAssistant';
 import Square from './pages/Square';
 import Detail from './pages/Detail';
 import Publish from './pages/Publish';
@@ -131,5 +133,6 @@ export default function App() {
       <footer className="workspace-footer"><span>CampusDash</span><span>每一份托付，都认真送达。</span><span>校园互助工作台</span></footer>
     </div></main>
     {toast && <div className={`toast ${toast.error ? 'is-error' : 'is-success'}`} role="status"><Icon name={toast.error ? 'info' : 'check'} size={17}/>{toast.text}<button aria-label="关闭操作提示" onClick={() => setToast(null)}><Icon name="close" size={15}/></button></div>}
+    <AgentAssistant/>
   </div>;
 }

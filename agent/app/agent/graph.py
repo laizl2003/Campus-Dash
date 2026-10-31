@@ -160,12 +160,15 @@ def _apply_pending_answer(
     # 所以这里必须按文本本身判断，而不是看 patch 是否为空。
     if _is_type_answer(text):
         return draft
-    # 问标题时，整句话就是标题；问其他槽位时，如果回答带任务动词，
-    # 说明用户仍在描述任务本身，先补标题，不盲填成地点。
-    if not draft.title and _looks_like_title(text) and target != Slot.LOCATION_FROM:
-        return draft.model_copy(update={"title": text})
+    # 问标题时，整句话就是标题。
     if target == Slot.TITLE and not draft.title:
         return draft.model_copy(update={"title": text})
+    # 已经在问地点，但这句话带任务动词（如"取快递到3号楼"），
+    # 说明用户还在补充任务本身，不能当地址用；地址通常是纯名词短语。
+    if _looks_like_title(text):
+        if not draft.title:
+            return draft.model_copy(update={"title": text})
+        return draft
     if target == Slot.LOCATION_FROM and not draft.location_from:
         return draft.model_copy(update={"location_from": text})
     if target == Slot.LOCATION_TO and not draft.location_to:
