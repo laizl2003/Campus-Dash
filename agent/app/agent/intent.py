@@ -42,6 +42,8 @@ class Intent(str, Enum):
     CLEAR_DESCRIPTION = "CLEAR_DESCRIPTION"
     # 要求重新展示任务卡片
     SHOW_DRAFT = "SHOW_DRAFT"
+    # 无法确定用户想做什么：不猜，回固定引导
+    UNCLEAR = "UNCLEAR"
 
 
 INTENT_LABELS: dict[Intent, str] = {
@@ -54,7 +56,17 @@ INTENT_LABELS: dict[Intent, str] = {
     Intent.CHITCHAT: "无关闲聊",
     Intent.CLEAR_DESCRIPTION: "清空任务内容",
     Intent.SHOW_DRAFT: "重新展示任务卡片",
+    Intent.UNCLEAR: "意图不明确",
 }
+
+# 意图不明确时回复的固定文案：不猜、不改草稿，把可选项摆出来
+UNCLEAR_REPLY = (
+    "我不太确定你想做什么。可以直接告诉我：\n"
+    "· 补充任务内容（例如：快递比较大，需要小推车）\n"
+    "· 修改信息（例如：把金额改成 12 块）\n"
+    "· 清空或查看任务内容\n"
+    "· 或者回复「发布」提交任务"
+)
 
 # 模型输出常带的包裹字符，解析前统一剥掉
 QUOTE_CHARS = "\"'`*。.!！\n\t "
@@ -74,6 +86,7 @@ INTENT_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿助手的意图分类器
 - CHITCHAT 与任务无关的话（如"你是谁""今天天气怎么样"）
 - CLEAR_DESCRIPTION 要求清空任务内容（如"把任务内容删掉""清空备注""不要任务内容了""去掉刚才那些说明"）
 - SHOW_DRAFT 要求再看一次任务卡片（如"再给我看下任务""卡片呢""刚才那个单子再发一遍""重新展示一下""看看现在长什么样"）
+- UNCLEAR   你无法确定用户想做什么（如只有一个名词"外卖"、指代不明的"第三个"、含糊的"行随便吧"）
 
 判断原则：
 1. 只要是在描述任务相关的细节，就是 APPEND；
@@ -81,7 +94,8 @@ INTENT_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿助手的意图分类器
 3. 指出某个字段要改是 EDIT；
 4. 明确要求删除/清空任务内容（不是删除整个任务）是 CLEAR_DESCRIPTION；
 5. 明确要求"再看一次/重新展示"任务卡片是 SHOW_DRAFT；
-6. 拿不准时选 APPEND（补充内容不会造成数据损坏）。
+6. **只要你不确定，就选 UNCLEAR**，不要猜。
+   猜错会把无关内容写进任务，比多问一句更糟。
 
 重要：只输出标签本身（例如 APPEND），不要解释、不要标点、不要 JSON。"""
 
@@ -179,6 +193,10 @@ def guess_intent_by_rules(message: str) -> Intent:
     # 问具体字段优先当 QUERY；只有"再看一次"这类才展示卡片
     if _QUERY_SPECIFIC.search(text) or (("取件码" in text or "金额" in text) and _QUESTION_TAIL.search(text)):
         return Intent.QUERY
+    # 纯指代（"那个呢""这个"）没有具体指向，不能猜成展示卡片
+    if _PRONOMINAL.search(text) and not re.search(r"(任务|单子|卡片|草稿)", text):
+        if len(text) <= 6:
+            return Intent.UNCLEAR
     if _SHOW_PATTERN.search(text):
         return Intent.SHOW_DRAFT
     if _QUERY_PATTERN.search(text):
@@ -188,7 +206,32 @@ def guess_intent_by_rules(message: str) -> Intent:
     # 整句就是客套话才算闲聊；去掉客套词后没有实质内容才判
     if _is_only_polite(text):
         return Intent.CHITCHAT
+    # 剩下的都不像明确指令：太短、纯名词、含指代词，交给 UNCLEAR 回固定引导。
+    # 宁可多问一句，也不要把不明内容写进任务。
+    if _is_ambiguous(text):
+        return Intent.UNCLEAR
     return Intent.APPEND
+
+
+# 指代词：离开上下文就没意义
+_PRONOMINAL = re.compile(r"(这个|那个|它|上面|前面|刚才|第三|第二|第一|上一个|下一个)")
+
+
+def _is_ambiguous(text: str) -> bool:
+    """判断这句话是不是"看不出想干什么"。
+
+    判据：
+    1. 太短（<=3 字）且不是已知指令，如"外卖""第三个"；
+    2. 含指代词却没有具体动词，如"那个呢"。
+    长句一般不判模糊，因为大概率是在描述任务细节。
+    """
+    if len(text) <= 3:
+        return True
+    if re.search(r"(随便|都行|无所谓|看你|听你的|你定|不清楚|不知道)", text):
+        return True
+    if _PRONOMINAL.search(text) and not re.search(r"(改|发|看|删|要|加|少|多|快|慢)", text):
+        return True
+    return False
 
 
 def _is_only_polite(text: str) -> bool:

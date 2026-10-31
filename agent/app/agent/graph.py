@@ -29,7 +29,7 @@ from typing import TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from .extractor import TYPE_KEYWORDS, Extractor, guess_start_time, guess_reward_cents
-from .intent import Intent, guess_intent_by_rules
+from .intent import UNCLEAR_REPLY, Intent, guess_intent_by_rules
 from ..models import (
     READY_HINT,
     SLOT_QUESTIONS,
@@ -59,6 +59,8 @@ class AgentState(TypedDict, total=False):
     cleared: bool
     # 本轮是否要求重新展示卡片
     show_draft: bool
+    # 本轮意图是否无法确定
+    unclear: bool
 
 
 class AgentReply(TypedDict, total=False):
@@ -71,6 +73,7 @@ class AgentReply(TypedDict, total=False):
     can_publish: bool
     cleared: bool
     show_draft: bool
+    unclear: bool
 
 
 def build_graph(extractor: Extractor):
@@ -98,8 +101,9 @@ def build_graph(extractor: Extractor):
                     patch = {}
                 updated = merge_draft(current, patch)
                 return {"draft": updated, "extracted": patch, "appended": False, "intent": intent}
-            if intent in (Intent.QUERY, Intent.CHITCHAT, Intent.CANCEL):
-                # 这三类不改草稿，只回话
+            if intent in (Intent.QUERY, Intent.CHITCHAT, Intent.CANCEL, Intent.UNCLEAR):
+                # 这几类不改草稿，只回话。
+                # UNCLEAR 尤其重要：宁可回固定引导，也不把看不懂的内容写进任务。
                 return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
             if intent == Intent.SHOW_DRAFT:
                 # 要求再看一次卡片：不改草稿，只让前端重新插一张卡片
@@ -297,6 +301,7 @@ INTENT_MESSAGES: dict[Intent, str] = {
     Intent.FINISH: READY_STOP_MESSAGE,
     Intent.CLEAR_DESCRIPTION: "已清空任务内容，其他信息保持不变。需要补充可以继续告诉我。",
     Intent.SHOW_DRAFT: "这是当前的任务卡片，需要调整哪里可以直接说。",
+    Intent.UNCLEAR: UNCLEAR_REPLY,
 }
 
 
@@ -310,7 +315,8 @@ def draft_to_reply(
 ) -> AgentReply:
     if status == "READY":
         if intent in (Intent.PUBLISH, Intent.EDIT, Intent.QUERY, Intent.CANCEL,
-                      Intent.CHITCHAT, Intent.CLEAR_DESCRIPTION, Intent.SHOW_DRAFT):
+                      Intent.CHITCHAT, Intent.CLEAR_DESCRIPTION, Intent.SHOW_DRAFT,
+                      Intent.UNCLEAR):
             text = INTENT_MESSAGES[intent]
         elif intent == Intent.FINISH:
             text = READY_STOP_MESSAGE
@@ -335,6 +341,8 @@ def draft_to_reply(
         "cleared": bool(intent is Intent.CLEAR_DESCRIPTION),
         # 前端据此在聊天窗里再插一张相同的任务卡片
         "show_draft": bool(intent is Intent.SHOW_DRAFT),
+        # 意图不明确：前端可以据此把固定引导做成可点选项
+        "unclear": bool(intent is Intent.UNCLEAR),
     }
 
 

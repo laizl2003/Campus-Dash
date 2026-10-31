@@ -65,6 +65,35 @@ def test_finish_sentences_with_prefix_suffix():
         assert guess_intent_by_rules(text) is Intent.FINISH, text
 
 
+def test_ambiguous_input_is_unclear():
+    """看不出想干什么的输入不猜，返回 UNCLEAR。"""
+    for text in ("外卖", "第三个", "行随便吧", "都行", "你定", "那个呢"):
+        assert guess_intent_by_rules(text) is Intent.UNCLEAR, text
+
+
+def test_clear_appends_still_classified():
+    """正常的补充描述不能被误判成 UNCLEAR。"""
+    for text in ("东西挺重的", "快递比较大需要小推车", "麻烦下午五点前送到", "取件码9933"):
+        assert guess_intent_by_rules(text) is Intent.APPEND, text
+
+
+def test_unclear_keeps_draft_and_replies_with_guide():
+    service, sid = _ready_service(Intent.UNCLEAR)
+    reply = service.chat(sid, "外卖")
+    # 草稿完全不动，尤其 description 不能被写入
+    assert reply["draft"]["description"] is None
+    assert reply["draft"]["title"] == "帮忙还书"
+    assert reply["unclear"] is True
+    assert "不太确定" in reply["message"]
+    assert "确认发布" not in reply["message"] or "发布" in reply["message"]
+
+
+def test_unclear_reply_lists_options():
+    from app.agent.intent import UNCLEAR_REPLY
+    assert "补充任务内容" in UNCLEAR_REPLY
+    assert "修改信息" in UNCLEAR_REPLY
+
+
 def test_show_draft_intent_rules():
     """要求再看一次卡片。"""
     for text in ("再给我看下任务", "卡片呢", "刚才那个单子再发一遍", "重新展示一下",
