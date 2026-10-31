@@ -41,9 +41,11 @@ from ..models import (
     is_no_more,
     merge_draft,
     next_question,
+    looks_like_place,
     purpose_of,
     refresh_title,
     required_slots,
+    sanitize_places,
 )
 
 
@@ -66,6 +68,8 @@ class AgentState(TypedDict, total=False):
     unclear: bool
     # 本轮被明确修改的字段名（title / location_to / expired_at ...）
     updated_fields: list[str]
+    # 追问地点时用户答得不像地点（用于提示语）
+    rejected_location: bool
 
 
 class AgentReply(TypedDict, total=False):
@@ -125,7 +129,13 @@ def build_graph(extractor: Extractor):
             # 只做一次抽取，让模型把两者分开：字段进对应槽位，剩下的进 description。
             # 之前只捞 expired_at，导致"把标题改成XX，另外别放门口"里的内容被整段丢掉，
             # 或者整句糊进任务描述、字段一个都没改到。
-            patch = _extract(extractor, message, current)
+            raw_patch = _extract(extractor, message, current)
+            # 地点先过校验：不像地点就不落进草稿，并给一句说明
+            patch = sanitize_places(raw_patch)
+            bad_location = any(
+                key in raw_patch and key not in patch
+                for key in ("location_from", "location_to")
+            )
             field_patch = {key: value for key, value in patch.items() if key in EDITABLE_FIELDS}
             content = patch.get("description")
             # 模型只给了字段、没给 description，且这句话里没有字段可改时，
@@ -159,9 +169,11 @@ def build_graph(extractor: Extractor):
             appended = updated.description != current.description
             if changed:
                 return {"draft": updated, "extracted": patch, "appended": appended,
-                        "intent": intent, "updated_fields": changed}
+                        "intent": intent, "updated_fields": changed,
+                        "rejected_location": bad_location}
             # 只有补充说明时，说"任务内容添加成功"更贴切
-            return {"draft": updated, "extracted": patch, "appended": appended, "intent": intent}
+            return {"draft": updated, "extracted": patch, "appended": appended,
+                    "intent": intent, "rejected_location": bad_location}
         # 本轮是补齐必填字段：首次进入 READY，不带 appended 标记
         # 这样文案是"信息已完整"，而不是"保持现状"
 
@@ -173,6 +185,9 @@ def build_graph(extractor: Extractor):
         # 追问阶段也允许模型顺带抽出任务细节（description）。
         # 用户常说"明天下午三点，快递有点大需要小推车"，
         # 时间进 expired_at、细节进 description，不该整句塞进某一个字段。
+        # 模型返回的地点先过一道校验：不像地点就不写进草稿（和金额一样
+        # 的处理方式——解析不了就继续问，而不是把随口一句当地址存下来）。
+        patch = sanitize_places(patch)
         draft = merge_draft(current, patch)
         # 用户回答追问时，可能只给一个值；只回填"当前正在追问"的那个槽位。
         # 顺序必须是：先合并抽取结果 -> 用"上一轮"的缺失追问回填。
@@ -185,6 +200,14 @@ def build_graph(extractor: Extractor):
             draft,
             state.get("missing", []),
             patch,
+        )
+        # 本轮问的是地点，但回答不像地点：槽位仍空着，下一轮继续问，
+        # 并在追问里说明原因，避免用户以为系统没听见。
+        target = (state.get("missing") or [None])[0]
+        rejected_location = bool(
+            target in (Slot.LOCATION_FROM, Slot.LOCATION_TO)
+            and getattr(draft, target.value, None) is None
+            and not looks_like_place(message)
         )
         # 模型漏掉时间时用规则补一张：用户说"明天下午三点"却抽不出来，
         # 这句话就会一直留在草稿外面，最后发布的任务没有截止时间。
@@ -207,7 +230,7 @@ def build_graph(extractor: Extractor):
             if base:
                 draft = draft.model_copy(update={"title_base": base})
         draft = refresh_title(draft)
-        return {"draft": draft, "extracted": patch}
+        return {"draft": draft, "extracted": patch, "rejected_location": rejected_location}
 
     def check_node(state: AgentState) -> AgentState:
         draft = state["draft"]
@@ -215,12 +238,15 @@ def build_graph(extractor: Extractor):
         return {"draft": draft, "missing": missing}
 
     def ask_node(state: AgentState) -> AgentState:
-        missing = state["missing"]
+        missing = state['missing']
+        question = next_question(missing, draft=state['draft'])
+        if state.get('rejected_location') and question:
+            # 说明为什么又问一遍，避免用户以为系统没听见
+            question = '这句不太像地点，能说得更具体些吗？（如：3 号楼 502）\n' + question
         return {
-            "status": "ASKING",
-            # 传 draft：用户已经说过截止时间就不再重复问那一行
-            "question": next_question(missing, draft=state["draft"]),
-            "missing": missing,
+            'status': 'ASKING',
+            'question': question,
+            'missing': missing,
         }
 
     def ready_node(state: AgentState) -> AgentState:
@@ -427,10 +453,12 @@ def _apply_pending_answer(
         if not draft.title:
             return draft.model_copy(update={"title": clean_title(text)[:64]})
         return draft
+    # 地点必须听起来像个地方才回填：哈哈哈 / 8块 / 就那个 一律不收，
+    # 槽位保持缺失，下一轮继续追问。规则和金额一致——宁可多问一次。
     if target == Slot.LOCATION_FROM and not draft.location_from:
-        return draft.model_copy(update={"location_from": text})
+        return draft.model_copy(update={'location_from': text}) if looks_like_place(text) else draft
     if target == Slot.LOCATION_TO and not draft.location_to:
-        return draft.model_copy(update={"location_to": text})
+        return draft.model_copy(update={'location_to': text}) if looks_like_place(text) else draft
     if target == Slot.DESCRIPTION and not draft.description:
         return draft.model_copy(update={"description": text})
     return draft
@@ -479,6 +507,7 @@ def draft_to_reply(
     appended: bool | None = None,
     intent: Intent | None = None,
     updated_fields: list[str] | None = None,
+    rejected_location: bool = False,
 ) -> AgentReply:
     if status == "READY":
         if intent in (Intent.PUBLISH, Intent.QUERY, Intent.CANCEL,
@@ -487,6 +516,9 @@ def draft_to_reply(
             text = INTENT_MESSAGES[intent]
         elif intent == Intent.FINISH:
             text = READY_STOP_MESSAGE
+        elif rejected_location:
+            # 用户想改地点，但那句话不像地点：不改草稿，只说明原因
+            text = "这个地点没太看明白，能说得更具体些吗？（如：3 号楼 502）"
         elif updated_fields:
             text = _field_update_message(updated_fields)
         elif appended:

@@ -230,7 +230,8 @@ class ChatService:
         draft: TaskDraft = state["draft"]
         missing = state["missing"]
         status = state.get("status", "ASKING")
-        question = next_question(missing, draft=draft) if status != "READY" else None
+        # 图里可能给追问加过说明（例如"这句不太像地点"），优先用它
+        question = (state.get("question") or next_question(missing, draft=draft)) if status != "READY" else None
         # 只有本轮真的追加了内容才传 True；首次完整和"没有了"都要区分开
         appended = state.get("appended") if status == "READY" else None
         intent = state.get("intent") if status == "READY" else None
@@ -242,7 +243,8 @@ class ChatService:
         # 之前这里用的是 state["message"]——那是**用户输入**，
         # 结果 assistant 消息存成了用户原话的复读，刷新后整段历史都是废的。
         reply = draft_to_reply(status, draft, missing, question, appended, intent,
-                               list(state.get("updated_fields") or []))
+                               list(state.get("updated_fields") or []),
+                               bool(state.get("rejected_location")))
         reply_text = reply.get("message") or question or ""
 
         session.history.append({"role": "user", "content": message})

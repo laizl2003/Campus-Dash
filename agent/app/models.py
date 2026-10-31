@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Literal
@@ -174,6 +175,72 @@ def refresh_title(draft: TaskDraft) -> TaskDraft:
     if title == draft.title:
         return draft
     return draft.model_copy(update={"title": title})
+
+
+# 地点校验：只有"听起来像个地方"的文本才允许写进地点字段。
+# 金额走的是同一套思路——解析不出来就不填、继续追问，
+# 而不是把用户随手一句话当成地址存进草稿。
+_PLACE_KEYWORDS = (
+    "楼", "栋", "室", "舍", "门", "窗", "口", "层", "号", "区", "路", "街", "道",
+    "巷", "院", "场", "馆", "堂", "站", "园", "苑", "湖", "桥", "厅", "房", "屋",
+    "座", "期", "单元", "中心", "超市", "商店", "店", "铺", "驿站", "快递柜", "快递点",
+    "食堂", "宿舍", "公寓", "图书馆", "操场", "球场", "教学楼", "办公楼", "实验",
+    "校门", "大门", "东门", "西门", "南门", "北门", "楼下", "楼上", "门口",
+    "对面", "旁边", "附近", "里面", "外面",
+)
+_PLACE_KEYWORDS_EN = (
+    "building", "room", "hall", "center", "centre", "gate", "canteen", "dorm",
+    "library", "floor", "block", "shop", "store", "park", "court", "field",
+)
+# 明显不是地点的整句：纯数字、金额、时间、客套话、反问
+_NOT_PLACE_PATTERNS = (
+    re.compile(r"^[\d\s.,，。:：/\\-]+$"),
+    re.compile(r"^\d+(?:\.\d+)?\s*(?:元|块|块钱|毛|rmb|人民币)?$", re.IGNORECASE),
+    re.compile(r"^(?:今天|明天|后天|大后天|下周|上午|中午|下午|晚上|早上)"),
+    re.compile(r"^\d{1,2}\s*[点時时]"),
+    re.compile(r"^(?:随便|都行|不知道|不清楚|没有了|没了|算了|不用了|不要了|没有)"),
+)
+_NOT_PLACE_WORDS = ("多少钱", "什么", "怎么", "为什么", "哪个", "哪里", "吗", "呢")
+# 带任务动词的是"一句话"，不是地址
+_SENTENCE_VERBS = ("取", "送", "买", "帮", "拿", "借", "还", "排队", "代")
+
+
+def looks_like_place(text: str) -> bool:
+    """判断一段文字像不像地点。
+
+    宽松到能接受"菜鸟驿站""一食堂二楼窗口""西区东门"，严到拒绝
+    "8块""明天下午三点""哈哈哈""就那个"这类明显不是地点的回答。
+    """
+    value = (text or "").strip()
+    if not (2 <= len(value) <= 64):
+        return False
+    if any(pattern.search(value) for pattern in _NOT_PLACE_PATTERNS):
+        return False
+    if any(word in value for word in _NOT_PLACE_WORDS):
+        return False
+    lowered = value.lower()
+    if any(word in lowered for word in _PLACE_KEYWORDS_EN):
+        return True
+    # 带任务动词多半是"帮我取快递到 3 号楼"这种整句，交给标题/描述，不当地址
+    if any(verb in value for verb in _SENTENCE_VERBS) and not any(
+        keyword in value for keyword in _PLACE_KEYWORDS
+    ):
+        return False
+    return any(keyword in value for keyword in _PLACE_KEYWORDS)
+
+
+def sanitize_places(patch: dict[str, object]) -> dict[str, object]:
+    """把不像地点的 location_* 从抽取结果里剔掉。
+
+    模型偶尔会把"就那个""哈哈哈"当地点返回，这里和金额校验保持一致：
+    不合格就不写进草稿，让对应槽位继续缺着、下一轮再问。
+    """
+    clean = dict(patch)
+    for field in ("location_from", "location_to"):
+        value = clean.get(field)
+        if isinstance(value, str) and not looks_like_place(value):
+            clean.pop(field, None)
+    return clean
 
 
 def is_complete(draft: TaskDraft) -> bool:
