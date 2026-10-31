@@ -58,6 +58,27 @@ def test_ready_state_still_accepts_description():
     assert reply["draft"]["description"] == "书比较重，麻烦带个小推车；尽快还，谢谢"
 
 
+def test_ready_messages_differ_by_round():
+    """首次完整、补充成功、表示结束，三种文案要能区分。"""
+    service = ChatService(OneShotExtractor())
+    session = service.create_session()
+
+    first = service.chat(session.id, "帮我把书还到图书馆，5块")
+    assert first["status"] == "READY"
+    assert first["message"].startswith("信息已完整")
+
+    added = service.chat(session.id, "书比较重，麻烦带个小推车")
+    assert added["message"].startswith("任务内容添加成功")
+    assert added["draft"]["description"] == "书比较重，麻烦带个小推车"
+
+    added2 = service.chat(session.id, "麻烦下午五点前")
+    assert added2["message"].startswith("任务内容添加成功")
+
+    stop = service.chat(session.id, "没有了")
+    assert stop["message"].startswith("好的，任务内容保持现状")
+    assert stop["draft"]["description"] == added2["draft"]["description"]
+
+
 def test_no_more_keeps_draft_unchanged():
     service = ChatService(OneShotExtractor())
     session = service.create_session()

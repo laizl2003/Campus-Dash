@@ -50,6 +50,8 @@ class AgentState(TypedDict, total=False):
     question: str | None
     status: str
     extracted: dict[str, object]
+    # 本轮是否真的把用户输入并入了任务内容
+    appended: bool
 
 
 class AgentReply(TypedDict):
@@ -71,8 +73,14 @@ def build_graph(extractor: Extractor):
         # 否则用户补充一句细节，可能被模型误判成改标题或改金额。
         if not required_slots(current):
             if is_no_more(message):
-                return {"draft": current, "extracted": {}}
-            return {"draft": append_description(current, message), "extracted": {}}
+                # 明确表示不再补充
+                return {"draft": current, "extracted": {}, "appended": False}
+            updated = append_description(current, message)
+            change = updated.description != current.description
+            # 说了话但没形成新内容不算"添加成功"，按结束处理避免误导
+            return {"draft": updated, "extracted": {}, "appended": change}
+        # 本轮是补齐必填字段：首次进入 READY，不带 appended 标记
+        # 这样文案是"信息已完整"，而不是"保持现状"
 
         try:
             patch = extractor.extract(message, current)
@@ -106,7 +114,14 @@ def build_graph(extractor: Extractor):
         }
 
     def ready_node(state: AgentState) -> AgentState:
-        return {"status": "READY", "question": None, "missing": []}
+        # 保留 None：字段抽取分支没设置 appended，说明是首次完整，
+        # 不能默认成 False（那会显示成"保持现状"）
+        return {
+            "status": "READY",
+            "question": None,
+            "missing": [],
+            "appended": state.get("appended"),
+        }
 
     def route_after_check(state: AgentState) -> str:
         return "ready" if not state["missing"] else "ask"
@@ -190,10 +205,27 @@ def _apply_pending_answer(
     return draft
 
 
-def draft_to_reply(status: str, draft: TaskDraft, missing: list[Slot], question: str | None) -> AgentReply:
+# 信息完整后的三种回复文案
+READY_FIRST_MESSAGE = "信息已完整，下面是任务草稿。还需要补充任务内容吗？直接回复补充说明，或点「确认发布」提交。"
+READY_APPENDED_MESSAGE = "任务内容添加成功，还需要补充任务内容吗？直接回复补充说明，或点「确认发布」提交。"
+READY_STOP_MESSAGE = "好的，任务内容保持现状。点「确认发布」即可提交。"
+
+
+def draft_to_reply(
+    status: str,
+    draft: TaskDraft,
+    missing: list[Slot],
+    question: str | None,
+    appended: bool | None = None,
+) -> AgentReply:
     if status == "READY":
-        # 信息完整后仍提示可以继续补充任务内容，用户可以一直加细节
-        text = "信息已完整，下面是任务草稿。还需要补充任务内容吗？直接回复补充说明，或点「确认发布」提交。"
+        # 首次完整、补充成功、表示不再补充，三种文案让用户明确知道发生了什么
+        if appended:
+            text = READY_APPENDED_MESSAGE
+        elif appended is False:
+            text = READY_STOP_MESSAGE
+        else:
+            text = READY_FIRST_MESSAGE
     else:
         text = question or "还需要补充一些信息。"
     return {

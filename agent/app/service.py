@@ -72,6 +72,8 @@ class ChatService:
         missing = state["missing"]
         status = state.get("status", "ASKING")
         question = next_question(missing) if status != "READY" else None
+        # 只有本轮真的追加了内容才传 True；首次完整和"没有了"都要区分开
+        appended = state.get("appended") if status == "READY" else None
 
         session.draft = draft
         session.turns += 1
@@ -79,4 +81,4 @@ class ChatService:
         session.history.append({"role": "assistant", "content": state.get("message") or question or ""})
         self.store.save(session)
 
-        return draft_to_reply(status, draft, missing, question)
+        return draft_to_reply(status, draft, missing, question, appended)
