@@ -1,7 +1,0 @@
-[帮我取快递，8块] status=ASKING intent=None desc=None
-[菜鸟驿站] status=ASKING intent=None desc=None
-[3号楼502] status=ASKING intent=None desc=None
-[明天下午三点] status=READY intent=None desc=None
-[快递比较大需要小推车] status=READY intent=APPEND desc=快递比较大需要小推车
-[别的没什么要补充的了] status=READY intent=FINISH desc=快递比较大需要小推车
-[发布吧] status=READY intent=PUBLISH desc=快递比较大需要小推车

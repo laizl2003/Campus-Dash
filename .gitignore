@@ -15,3 +15,5 @@ report-*/
 
 # ±¾µØ½ØÍ¼
 agent-*.png
+res*.txt
+*.log
