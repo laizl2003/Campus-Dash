@@ -3,11 +3,12 @@
 接入真实模型时只需要设置环境变量，不用改代码：
 
     LLM_ENABLED=true
-    LLM_BASE_URL=https://api.deepseek.com/v1
-    LLM_API_KEY=sk-xxxx
-    LLM_MODEL=deepseek-chat
-    LLM_TIMEOUT=20
+    LLM_BASE_URL=https://api.llm.ustc.edu.cn/v1
+    LLM_API_KEY=你的密钥
+    LLM_MODEL=qwen3.8-reasoner
+    LLM_TIMEOUT=60
     LLM_TEMPERATURE=0
+    LLM_JSON_MODE=true
 
 docker-compose 里对应写到 agent 服务的 environment 段。
 """
@@ -28,12 +29,14 @@ def _env_bool(name: str, default: bool = False) -> bool:
 @dataclass(frozen=True)
 class LLMSettings:
     enabled: bool = False
-    base_url: str = ""
-    api_key: str = ""
-    model: str = ""
+    base_url: str = "https://api.llm.ustc.edu.cn/v1"
+    api_key: str = "sk-Fl99aQS69YV3mfyIeV9Ic8eim84kewpYirRjH-AMwJ4"
+    model: str = "qwen3.8-reasoner"
     timeout: float = 20.0
     temperature: float = 0.0
     max_tokens: int = 512
+    # 是否请求 JSON 输出模式；不支持的厂商会自动去掉这个字段重试
+    json_mode: bool = True
 
     @classmethod
     def from_env(cls) -> "LLMSettings":
@@ -45,6 +48,7 @@ class LLMSettings:
             timeout=float(os.getenv("LLM_TIMEOUT", "20")),
             temperature=float(os.getenv("LLM_TEMPERATURE", "0")),
             max_tokens=int(os.getenv("LLM_MAX_TOKENS", "512")),
+            json_mode=_env_bool("LLM_JSON_MODE", True),
         )
 
     def usable(self) -> bool:

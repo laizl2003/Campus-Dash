@@ -91,12 +91,17 @@ def test_exception_falls_back_to_rules():
     assert patch["reward_cents"] == 500
 
 
-def test_unimplemented_call_degrades_without_retry():
-    settings = LLMSettings(enabled=True, base_url="http://x", api_key="k", model="m")
-    llm = LLMExtractor(settings, fallback=RuleExtractor(), max_retries=3)
+def test_unreachable_endpoint_degrades_to_rules():
+    """真实调用打不通时，仍然降级给规则兜底，对话不中断。"""
+    settings = LLMSettings(
+        enabled=True, base_url="http://127.0.0.1:1/v1", api_key="k",
+        model="m", timeout=1.0,
+    )
+    llm = LLMExtractor(settings, fallback=RuleExtractor(), max_retries=1)
     patch = llm.extract("跑腿配送，8块", TaskDraft())
     assert patch["type"] == "DELIVERY"
-    assert llm.last_error == "LLMExtractor._call_llm 未实现"
+    assert patch["reward_cents"] == 800
+    assert llm.last_error is not None
 
 
 def test_settings_usable_requires_all_fields():

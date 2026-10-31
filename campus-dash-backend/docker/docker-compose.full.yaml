@@ -152,11 +152,12 @@ services:
       # ---- LLM 配置：填好这三个并设 LLM_ENABLED=true 即可切换到真实模型 ----
       # 未配置时自动走规则兜底，不影响对话流程
       LLM_ENABLED: ${LLM_ENABLED:-false}
-      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.llm.ustc.edu.cn/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_TIMEOUT: ${LLM_TIMEOUT:-20}
+      LLM_MODEL: ${LLM_MODEL:-qwen3.8-reasoner}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-60}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0}
+      LLM_JSON_MODE: ${LLM_JSON_MODE:-true}
     healthcheck:
       # slim 镜像没有 curl，用 python 自带的 urllib 探活
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status==200 else 1)"]

@@ -1,77 +1,81 @@
-# 接入 LLM 说明
+# 接入 LLM：中科大接口（qwen3.8-reasoner）
 
-整条抽取链路已经写好，**只有一处需要你填**：
+`_call_llm` 已经按 OpenAI 兼容协议写好，**你只需要填 API Key**。
 
-```
-app/agent/extractor.py  ->  LLMExtractor._call_llm()
-```
+## 一、只需配置环境变量
 
-## 一、你需要填的代码
-
-打开 `app/agent/extractor.py`，找到：
-
-```python
-def _call_llm(self, system_prompt: str, user_prompt: str) -> LLMCallResult:
-    raise NotImplementedError("请在 LLMExtractor._call_llm 中填入模型调用")
-```
-
-替换成你的调用。**OpenAI 兼容协议**的参考实现（DeepSeek、Moonshot、通义、vLLM 等都适用）：
-
-```python
-import httpx
-
-resp = httpx.post(
-    f"{self.settings.base_url}/chat/completions",
-    headers={"Authorization": f"Bearer {self.settings.api_key}"},
-    json={
-        "model": self.settings.model,
-        "temperature": self.settings.temperature,
-        "max_tokens": self.settings.max_tokens,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    },
-    timeout=self.settings.timeout,
-)
-resp.raise_for_status()
-data = resp.json()
-return LLMCallResult(
-    content=data["choices"][0]["message"]["content"],
-    model=data.get("model"),
-    usage=data.get("usage"),
-)
-```
-
-约定：**返回 `LLMCallResult(content=模型输出的文本)` 即可**，后面的解析、换算、校验、重试都不用你管。
-
-## 二、配置环境变量
-
-在 `campus-dash-backend/docker/` 下建 `.env`，或在系统环境变量里设：
+在 `campus-dash-backend/docker/` 下新建 `.env`：
 
 ```
 LLM_ENABLED=true
-LLM_BASE_URL=https://api.deepseek.com/v1
-LLM_API_KEY=sk-xxxxxxxx
-LLM_MODEL=deepseek-chat
+LLM_BASE_URL=https://api.llm.ustc.edu.cn/v1
+LLM_API_KEY=sk-你的密钥
+LLM_MODEL=qwen3.8-reasoner
 ```
 
-可选：
-
-```
-LLM_TIMEOUT=20
-LLM_TEMPERATURE=0
-LLM_MAX_TOKENS=512
-```
-
-然后重启 agent 服务：
+然后重启：
 
 ```powershell
+cd campus-dash-backend/docker
 docker compose -f docker-compose.yaml -f docker-compose.full.yaml up -d --build agent
 ```
 
-## 三、确认是否生效
+## 二、对应关系
+
+你给的 curl 和代码里的字段是一一对应的：
+
+| curl | 代码 |
+| --- | --- |
+| `https://api.llm.ustc.edu.cn/v1` | `LLM_BASE_URL` |
+| `/chat/completions` | 代码里自动拼接 |
+| `Authorization: Bearer xxx` | `LLM_API_KEY` |
+| `"model":"qwen3.8-reasoner"` | `LLM_MODEL` |
+| `messages` | 系统提示词 + 用户提示词 |
+
+`extractor.py` 里的实际请求：
+
+```python
+url = f"{self.settings.base_url}/chat/completions"
+payload = {
+    "model": self.settings.model,
+    "temperature": self.settings.temperature,
+    "max_tokens": self.settings.max_tokens,
+    "messages": [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ],
+    "response_format": {"type": "json_object"},
+}
+```
+
+## 三、注意事项
+
+### 1. 密钥必须 `sk-` 开头
+
+网关会校验前缀，否则直接返回：
+
+```
+401 LiteLLM Virtual Key expected. Received=xxx, expected to start with 'sk-'
+```
+
+### 2. `response_format` 可能不支持
+
+代码已做自动降级：返回 400 时去掉该字段重试一次。
+
+### 3. reasoner 模型响应慢
+
+已把默认超时设为 60 秒。如果还是超时，调大：
+
+```
+LLM_TIMEOUT=120
+```
+
+### 4. 推理模型的特殊情况
+
+`qwen3.8-reasoner` 可能把思考过程放在 `reasoning_content`。
+代码在 `content` 为空时会自动兜底读取，不会解析出空结果。
+
+## 四、验证
 
 ```powershell
 Invoke-RestMethod http://localhost:8088/agent/status
@@ -82,53 +86,40 @@ Invoke-RestMethod http://localhost:8088/agent/status
 ```json
 {
   "extractor": "LLMExtractor",
-  "llm_enabled": true,
   "llm_usable": true,
-  "model": "deepseek-chat",
+  "model": "qwen3.8-reasoner",
   "missing_config": []
 }
 ```
 
-没配置时：
+跑不通时 `missing_config` 会告诉你还缺哪个变量。
 
-```json
-{ "extractor": "RuleExtractor", "llm_usable": false, "missing_config": ["LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL"] }
+## 五、实测结果
+
+用假 key 试过，请求已经正确到达网关：
+
+```
+last_error = 模型接口 HTTP 401: LiteLLM Virtual Key expected.
+patch      = {"type": "DELIVERY", "reward_cents": 800}   <- 规则兜底生效
+```
+
+说明地址、路径、鉴权头、JSON 结构都正确，只差真实密钥。
+而且**即使模型不可用，对话也不会中断**，会自动降级。
+
+## 六、填好之后会看到什么
+
+```text
+> 明天下午三点帮我去菜鸟驿站取快递，送到3号楼502，悬赏8块
+
+模型一次抽全：
+{
+  "type": "DELIVERY",
+  "title": "取快递",
+  "location_from": "菜鸟驿站",
+  "location_to": "3号楼502",
+  "start_time": "2026-11-01T15:00:00",
+  "reward_cents": 800
 }
 ```
 
-## 四、已经帮你处理好的部分
-
-| 环节 | 文件 | 说明 |
-| --- | --- | --- |
-| 提示词 | `app/agent/prompts.py` | 字段说明、当前草稿、正在追问的槽位、当前时间都传进去 |
-| JSON 容错解析 | `extractor.py: _parse_json` | 处理 ```json 代码块、前后废话、多余文本 |
-| 金额换算 | `extractor.py: _to_cents` | "8元"、"8.0"、"800" 统一成分 |
-| 时间解析 | `extractor.py: _to_datetime` | ISO 优先，自然语言回退规则解析 |
-| 类型别名 | `extractor.py: _normalize` | "跑腿配送" -> DELIVERY |
-| 字段校验 | `extractor.py: _validate` | 丢弃非法字段和未知字段，不整轮失败 |
-| 失败重试 | `extractor.py: extract` | 默认重试 2 次，指数退避 |
-| 降级兜底 | `extractor.py: fallback` | 模型挂了自动走 RuleExtractor |
-| 熔断 | `extractor.py: CircuitBreakerExtractor` | 连续失败 5 次后冷却 30 秒，避免每条消息都等超时 |
-
-## 五、注意事项
-
-1. **不要让模型决定追问**。追问顺序由 `models.required_slots` 和 `graph.py` 决定，
-   模型只负责"这一步说了什么"，这样"缺字段必问"才可靠。
-
-2. **提示词里已强调"没提到就不要输出"**。如果模型爱乱补默认值，
-   可以在 `prompts.py` 的 SYSTEM_PROMPT 里再加一句强约束。
-
-3. **金额返回分**。如果模型返回的 `reward_cents` 明显不对（比如 8 元给了 8），
-   检查提示词里"8 元写作 800"这句是否被覆盖。
-
-4. **调整超时**。模型响应慢时把 `LLM_TIMEOUT` 调大，否则会频繁触发降级。
-
-## 六、跑测试
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
-`tests/test_llm.py` 里用假 `_call_llm` 覆盖了：代码块解析、单位换算、类型别名、
-非法字段丢弃、垃圾输出降级、异常降级、未实现时的行为。
-这三类改动都不会影响追问逻辑。
+一句话就把草稿填满，不再需要多轮追问。

@@ -230,38 +230,62 @@ class LLMExtractor(Extractor):
     # ------------------------------------------------------------ 待填实现
 
     def _call_llm(self, system_prompt: str, user_prompt: str) -> LLMCallResult:
-        """===== 在这里填入你的模型调用 =====
+        """调用 OpenAI 兼容的 Chat Completions 接口。
 
-        绝大多数厂商都兼容 OpenAI Chat Completions 协议，参考实现：
+        默认按 https://api.llm.ustc.edu.cn/v1 这类地址实现，
+        换厂商时只要改环境变量 LLM_BASE_URL / LLM_MODEL / LLM_API_KEY。
 
-            import httpx
-            resp = httpx.post(
-                f"{self.settings.base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self.settings.api_key}"},
-                json={
-                    "model": self.settings.model,
-                    "temperature": self.settings.temperature,
-                    "max_tokens": self.settings.max_tokens,
-                    "response_format": {"type": "json_object"},
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                },
-                timeout=self.settings.timeout,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return LLMCallResult(
-                content=data["choices"][0]["message"]["content"],
-                model=data.get("model"),
-                usage=data.get("usage"),
-            )
-
-        非 OpenAI 协议的厂商，只要最终返回 LLMCallResult(content=模型输出文本) 即可，
-        后面的解析、校验、重试逻辑都不用改。
+        注意：不是所有厂商都支持 response_format，失败会自动去掉重试一次。
         """
-        raise NotImplementedError("请在 LLMExtractor._call_llm 中填入模型调用")
+        import httpx
+
+        url = f"{self.settings.base_url}/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.settings.api_key}",
+        }
+        payload: dict[str, object] = {
+            "model": self.settings.model,
+            "temperature": self.settings.temperature,
+            "max_tokens": self.settings.max_tokens,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        # 支持 JSON 模式的厂商能显著提高结构稳定性；不支持的会在下面自动降级
+        if self.settings.json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        with httpx.Client(timeout=self.settings.timeout) as client:
+            resp = client.post(url, headers=headers, json=payload)
+
+            # 部分部署不认 response_format，去掉再试一次
+            if resp.status_code == 400 and "response_format" in payload:
+                payload.pop("response_format", None)
+                resp = client.post(url, headers=headers, json=payload)
+
+            if resp.status_code >= 400:
+                raise ExtractionError(
+                    f"模型接口 HTTP {resp.status_code}: {resp.text[:200]}"
+                )
+
+        data = resp.json()
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ExtractionError(f"模型响应结构异常: {str(data)[:200]}") from exc
+
+        # 推理模型可能把思考过程放在 reasoning_content，正文为空时兜底拼上
+        if not content:
+            reasoning = data["choices"][0]["message"].get("reasoning_content") or ""
+            content = reasoning
+
+        return LLMCallResult(
+            content=content or "",
+            model=data.get("model"),
+            usage=data.get("usage"),
+        )
 
     # ------------------------------------------------------------ 解析与清洗
 
