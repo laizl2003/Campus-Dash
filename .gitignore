@@ -12,3 +12,6 @@
 jmeter-stu-tokens-*.csv
 result-*.jtl
 report-*/
+
+# ±¾µØ½ØÍ¼
+agent-*.png
