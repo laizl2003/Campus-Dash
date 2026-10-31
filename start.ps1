@@ -68,9 +68,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 $script:root = $PSScriptRoot
 $script:backendDir = Join-Path $script:root 'campus-dash-backend'
 $script:frontendDir = Join-Path $script:root 'campus-dash-frontend'
-# Agent 前端源码独立放在 agent/agent-frontend，由主前端 vite alias @agent 引用；
-# 构建仍在 campus-dash-frontend 里执行，产物统一进 dist。
-$script:agentFrontendDir = Join-Path $script:root 'agent\agent-frontend'
+
 $script:dockerDir = Join-Path $script:backendDir 'docker'
 $script:baseUrl = 'http://localhost:8088'
 $script:composeFiles = @('-f', 'docker-compose.yaml', '-f', 'docker-compose.full.yaml')
@@ -254,11 +252,7 @@ if ($buildTargets -contains 'web') {
     if (-not (Test-Path (Join-Path $script:frontendDir 'node_modules'))) {
         Invoke-Tool -Title '安装前端依赖（首次）' -Exe 'npm' -Arguments @('ci') -WorkDir $script:frontendDir
     }
-    if (-not (Test-Path (Join-Path $script:agentFrontendDir 'src'))) {
-        throw "找不到 Agent 前端源码目录：$script:agentFrontendDir"
-    }
-    # Agent 组件在 agent/agent-frontend/src，通过 @agent 别名参与同一次构建
-    Invoke-Tool -Title '构建前端（含 Agent 悬浮球，tsc + vite build）' -Exe 'npm' -Arguments @('run', 'build') -WorkDir $script:frontendDir
+    Invoke-Tool -Title '构建前端（tsc + vite build）' -Exe 'npm' -Arguments @('run', 'build') -WorkDir $script:frontendDir
 }
 
 if ($buildTargets.Count -gt 0) {
