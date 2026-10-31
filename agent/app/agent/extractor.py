@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 
 from ..config import LLMSettings
 from ..models import STRUCTURED_TYPES, TaskDraft, required_slots
+from .intent import INTENT_SYSTEM_PROMPT, Intent, build_intent_prompt, normalize_intent
 from .prompts import SYSTEM_PROMPT, build_user_prompt
 
 
@@ -40,6 +41,13 @@ class Extractor(ABC):
     @abstractmethod
     def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
         raise NotImplementedError
+
+    def classify_intent(self, message: str, draft: TaskDraft) -> "Intent | None":
+        """判断用户意图。默认返回 None，表示"没有模型判断，走规则兜底"。
+
+        只有真正接了模型的实现才覆盖它；规则版继续用 guess_intent_by_rules。
+        """
+        return None
 
 
 TYPE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
@@ -226,6 +234,24 @@ class LLMExtractor(Extractor):
 
         # 全部失败：降级，保证对话不中断
         return self.fallback.extract(text, draft)
+
+    # ------------------------------------------------------------ 意图识别
+
+    def classify_intent(self, message: str, draft: TaskDraft) -> Intent | None:
+        """让模型判断这句话的意图。
+
+        只做分类，不改数据：模型返回标签，具体动作由 graph 决定。
+        失败时返回 None，由上层用关键词兜底。
+        """
+        summary = json.dumps(
+            {k: v for k, v in draft.model_dump(mode="json").items() if v not in (None, "")},
+            ensure_ascii=False,
+        )
+        try:
+            result = self._call_llm(INTENT_SYSTEM_PROMPT, build_intent_prompt(message, summary))
+            return normalize_intent(result.content)
+        except Exception:
+            return None
 
     # ------------------------------------------------------------ 待填实现
 

@@ -29,6 +29,7 @@ from typing import TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from .extractor import TYPE_KEYWORDS, Extractor, guess_start_time, guess_reward_cents
+from .intent import Intent, guess_intent_by_rules
 from ..models import (
     READY_HINT,
     SLOT_QUESTIONS,
@@ -52,14 +53,18 @@ class AgentState(TypedDict, total=False):
     extracted: dict[str, object]
     # 本轮是否真的把用户输入并入了任务内容
     appended: bool
+    # READY 状态下识别出的意图
+    intent: Intent | None
 
 
-class AgentReply(TypedDict):
+class AgentReply(TypedDict, total=False):
     status: str
     message: str
     draft: dict[str, object]
     missing: list[str]
     question: str | None
+    intent: str | None
+    can_publish: bool
 
 
 def build_graph(extractor: Extractor):
@@ -69,16 +74,31 @@ def build_graph(extractor: Extractor):
         current = state["draft"]
         message = state.get("message", "")
 
-        # 必填项已经齐了：这一轮当作"补充任务内容"，不再走字段抽取。
-        # 否则用户补充一句细节，可能被模型误判成改标题或改金额。
+        # 必填项已经齐了：先判断用户这句话想做什么，再决定怎么处理。
+        # 之前这里是"不管说什么都追加到任务内容"，导致"发布吧""改金额"也变成任务内容。
         if not required_slots(current):
-            if is_no_more(message):
-                # 明确表示不再补充
-                return {"draft": current, "extracted": {}, "appended": False}
+            intent = _classify(extractor, message, current)
+
+            if intent == Intent.FINISH:
+                return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
+            if intent == Intent.PUBLISH:
+                # 只标记"用户想发布"，真正调用发布接口由前端按钮或后续工具执行
+                return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
+            if intent == Intent.EDIT:
+                # 修改意图交给抽取器解析成字段 patch，而不是塞进描述
+                try:
+                    patch = extractor.extract(message, current)
+                except Exception:
+                    patch = {}
+                updated = merge_draft(current, patch)
+                return {"draft": updated, "extracted": patch, "appended": False, "intent": intent}
+            if intent in (Intent.QUERY, Intent.CHITCHAT, Intent.CANCEL):
+                # 这三类不改草稿，只回话
+                return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
+            # APPEND：把这句话并入任务内容
             updated = append_description(current, message)
             change = updated.description != current.description
-            # 说了话但没形成新内容不算"添加成功"，按结束处理避免误导
-            return {"draft": updated, "extracted": {}, "appended": change}
+            return {"draft": updated, "extracted": {}, "appended": change, "intent": intent}
         # 本轮是补齐必填字段：首次进入 READY，不带 appended 标记
         # 这样文案是"信息已完整"，而不是"保持现状"
 
@@ -121,6 +141,7 @@ def build_graph(extractor: Extractor):
             "question": None,
             "missing": [],
             "appended": state.get("appended"),
+            "intent": state.get("intent"),
         }
 
     def route_after_check(state: AgentState) -> str:
@@ -138,6 +159,21 @@ def build_graph(extractor: Extractor):
     graph.add_edge("ask_user", END)
     graph.add_edge("ready", END)
     return graph.compile()
+
+
+def _classify(extractor: Extractor, message: str, draft: TaskDraft) -> Intent:
+    """识别意图：优先用模型，拿不到就用关键词兜底。
+
+    模型只负责"这是哪类意图"，不负责执行，所以即使模型判错，
+    最坏结果也只是把一句话归错类，不会破坏草稿数据。
+    """
+    try:
+        intent = extractor.classify_intent(message, draft)
+        if intent is not None:
+            return intent
+    except Exception:
+        pass
+    return guess_intent_by_rules(message)
 
 
 def _is_type_answer(text: str) -> bool:
@@ -211,16 +247,31 @@ READY_APPENDED_MESSAGE = "任务内容添加成功，还需要补充任务内容
 READY_STOP_MESSAGE = "好的，任务内容保持现状。点「确认发布」即可提交。"
 
 
+# 按意图区分的回复文案
+INTENT_MESSAGES: dict[Intent, str] = {
+    Intent.PUBLISH: "好的，点「确认发布」即可提交。",
+    Intent.EDIT: "已按你说的更新草稿，确认无误后点「确认发布」。",
+    Intent.QUERY: "下面是当前草稿，需要调整哪里可以直接说。",
+    Intent.CANCEL: "好的，这次任务先不发了。需要的话可以重新描述。",
+    Intent.CHITCHAT: "我是校园跑腿助手，帮你把需求整理成任务。要继续补充任务内容，还是点「确认发布」？",
+    Intent.FINISH: READY_STOP_MESSAGE,
+}
+
+
 def draft_to_reply(
     status: str,
     draft: TaskDraft,
     missing: list[Slot],
     question: str | None,
     appended: bool | None = None,
+    intent: Intent | None = None,
 ) -> AgentReply:
     if status == "READY":
-        # 首次完整、补充成功、表示不再补充，三种文案让用户明确知道发生了什么
-        if appended:
+        if intent in (Intent.PUBLISH, Intent.EDIT, Intent.QUERY, Intent.CANCEL, Intent.CHITCHAT):
+            text = INTENT_MESSAGES[intent]
+        elif intent == Intent.FINISH:
+            text = READY_STOP_MESSAGE
+        elif appended:
             text = READY_APPENDED_MESSAGE
         elif appended is False:
             text = READY_STOP_MESSAGE
@@ -234,6 +285,10 @@ def draft_to_reply(
         "draft": draft.model_dump(mode="json"),
         "missing": [slot.value for slot in missing],
         "question": question,
+        # 前端据此决定显示草稿卡片还是纯文本回话
+        "intent": intent.value if intent else None,
+        # READY + PUBLISH 时前端可以直接调发布，不用再让用户点一次
+        "can_publish": bool(status == "READY" and intent in (None, Intent.PUBLISH, Intent.APPEND, Intent.FINISH, Intent.EDIT, Intent.QUERY)),
     }
 
 

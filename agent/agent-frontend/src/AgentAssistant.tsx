@@ -32,6 +32,9 @@ interface ApiReply {
   missing: string[];
   question: string | null;
   type_label?: string | null;
+  /** READY 后识别出的意图：APPEND/FINISH/PUBLISH/EDIT/QUERY/CANCEL/CHITCHAT */
+  intent?: string | null;
+  can_publish?: boolean;
 }
 
 interface DraftPayload {
@@ -543,6 +546,25 @@ export default function AgentAssistant() {
         // 只有信息齐全才展示草稿卡片；追问阶段只显示问题
         draft: reply.status === 'READY' ? toDraftPayload(reply) : undefined,
       };
+
+      // 用户说"取消"：清掉草稿卡片，回到全新对话
+      if (reply.intent === 'CANCEL') {
+        setMessages(prev => {
+          const next = [...prev, { ...assistant, draft: undefined }];
+          writeHistory([{
+            id: sid,
+            title: next.find(item => item.role === 'user')?.content.slice(0, 16) || '新的任务对话',
+            preview: assistant.content,
+            time: nowLabel(),
+            messages: next,
+          }, ...readHistory().filter(item => item.id !== sid)]);
+          setHistory(readHistory());
+          return next;
+        });
+        localStorage.removeItem(SESSION_KEY);
+        setSessionId(null);
+        return;
+      }
 
       // 已经出过草稿时，后续补充只更新那张卡片，不重复插入新卡片。
       // 否则用户会看到多张描述不同的草稿，点「修改」「发布」时容易操作错对象。

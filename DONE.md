@@ -3,6 +3,18 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-31 · READY 后按意图分支处理，不再一律写入任务内容
+
+- **问题**：信息齐全后，用户说什么都会被塞进任务内容，"发布吧""把金额改成12块"也变成了任务内容。
+- **改动**：
+  - 新增 `app/agent/intent.py`：7 类意图（APPEND/FINISH/PUBLISH/EDIT/QUERY/CANCEL/CHITCHAT）+ 提示词 + 关键词兜底 + 输出归一化。
+  - `LLMExtractor.classify_intent()` 复用 `_call_llm`，只输出标签不改数据；失败返回 None 交给规则兜底。
+  - `graph.py` READY 分支按意图执行：APPEND 并入描述、EDIT 走字段抽取、PUBLISH 只标记、CANCEL/QUERY/CHITCHAT 不改草稿。
+  - 回复文案按意图区分；响应新增 `intent` 与 `can_publish` 字段。
+  - 前端 CANCEL 时清空草稿卡片。
+- **验证**：真实模型下 7 类意图全部判对（OK 7/7）；真实多轮对话中仅"快递比较大"进入 description，其余未污染；`pytest` 32 passed。
+
+
 ## 2026-10-31 · 修复 Agent 500：MySQL 长连接失效 + pycache 陈旧
 
 - **现象**：`POST /agent/sessions` 间歇性 500，浏览器与命令行表现不一致。
