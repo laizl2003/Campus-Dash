@@ -65,6 +65,25 @@ def test_finish_sentences_with_prefix_suffix():
         assert guess_intent_by_rules(text) is Intent.FINISH, text
 
 
+def test_colloquial_confirmation_is_finish():
+    """口语确认词（ok了/好的/行）表示认可，不能写进任务内容。"""
+    for text in ("ok了", "OK了", "ok", "好的", "行", "可以", "没问题", "嗯", "收到", "好嘞", "行行"):
+        assert guess_intent_by_rules(text) is Intent.FINISH, text
+
+
+def test_confirmation_word_inside_sentence_is_not_finish():
+    """带任务信息的句子不能因为含"好的""可以"就被判成结束。"""
+    for text in ("好的我要五点送到", "可以带个小推车", "快递比较大需要小推车", "麻烦五点前送到"):
+        assert guess_intent_by_rules(text) is Intent.APPEND, text
+
+
+def test_polite_only_is_chitchat_but_mixed_is_append():
+    for text in ("谢谢你", "辛苦了", "你好"):
+        assert guess_intent_by_rules(text) is Intent.CHITCHAT, text
+    for text in ("尽快还，谢谢", "快递比较大，谢谢", "你好我要取快递"):
+        assert guess_intent_by_rules(text) is Intent.APPEND, text
+
+
 def test_publish_exclusion_is_not_publish():
     """"不用发""先别发"这类收回发布意图的话，绝不能判成 PUBLISH。
 

@@ -92,14 +92,28 @@ _FINISH_WORDS = (
     "没有", "没了", "不用", "不需要", "就这些", "就这样", "行了", "可以了", "够了", "好了",
     "没什么", "没啥", "没别的", "没其他", "别的不", "别的没", "就这么多", "暂时没有", "先这样",
     "没补充", "不补充", "不缺", "没要补充",
+    )
+
+# 口语确认词单独放：它们太短，只能整句匹配，
+# 否则"好的我要五点送到""可以带个小推车"会被误判成结束
+_SHORT_FINISH_RAW = (
+    "ok", "ok了", "okay", "好的", "好吧", "行吧", "行", "可以", "嗯", "嗯嗯",
+    "收到", "明白", "了解", "中", "成", "好", "好了", "可以了", "好嘞",
+    "没问题", "ok好的", "行行",
 )
+
+_SHORT_FINISH = {w.lower() for w in _SHORT_FINISH_RAW}
 _CANCEL_WORDS = ("算了", "不发了", "取消", "别发了", "放弃", "不做了", "先不做")
 # 字段词和动词的先后顺序不固定："把金额改成12块"和"改成12块金额"都要命中
 _EDIT_FIELD = r"(金额|价格|悬赏|标题|地点|时间|送达|取货|位置|内容|描述)"
 _EDIT_VERB = r"(改|换|调整|修改|更新|写错)"
 _EDIT_PATTERN = re.compile(rf"{_EDIT_VERB}.{{0,8}}{_EDIT_FIELD}|{_EDIT_FIELD}.{{0,8}}{_EDIT_VERB}")
 _QUERY_PATTERN = re.compile(r"(多少钱|什么内容|送到哪|从哪里|几点|现在.*(是|为)|看看|显示|是什么)")
-_CHITCHAT_PATTERN = re.compile(r"(你是谁|你叫什么|天气|几点钟|讲个笑话|你能做什么|怎么用)")
+_CHITCHAT_PATTERN = re.compile(
+    r"(你是谁|你叫什么|天气|几点钟|讲个笑话|你能做什么|怎么用)"
+)
+# 客套话只有整句都是它时才算闲聊；"尽快还，谢谢"里带任务信息，应算补充内容
+_POLITE_WORDS = ("谢谢", "辛苦了", "感谢", "谢谢啦", "多谢", "哈", "你好", "在吗")
 
 
 def guess_intent_by_rules(message: str) -> Intent:
@@ -120,6 +134,11 @@ def guess_intent_by_rules(message: str) -> Intent:
     # "不用发""先别发"是收回发布意图，不能算发布
     if any(word in text for word in _PUBLISH_EXCLUDE):
         return Intent.FINISH
+    # 短确认词要求整句匹配，避免"好的我要五点送到"被当成结束
+    normalized = text.lower().replace(" ", "")
+    if normalized in _SHORT_FINISH:
+        return Intent.FINISH
+    # 长句里带明确结束语义才算
     if any(word in text for word in _FINISH_WORDS):
         return Intent.FINISH
     if _EDIT_PATTERN.search(text):
@@ -130,7 +149,25 @@ def guess_intent_by_rules(message: str) -> Intent:
         return Intent.QUERY
     if _CHITCHAT_PATTERN.search(text):
         return Intent.CHITCHAT
+    # 整句就是客套话才算闲聊；去掉客套词后没有实质内容才判
+    if _is_only_polite(text):
+        return Intent.CHITCHAT
     return Intent.APPEND
+
+
+def _is_only_polite(text: str) -> bool:
+    """整句只由客套词和标点组成时返回 True。
+
+    "谢谢你" -> True；"尽快还，谢谢" -> False（带任务信息）。
+    """
+    stripped = text
+    hit = False
+    for word in _POLITE_WORDS:
+        if word in stripped:
+            hit = True
+        stripped = stripped.replace(word, "")
+    stripped = stripped.strip("，,。.！!~ 、你您们")
+    return hit and not stripped
 
 
 def normalize_intent(raw: str) -> Intent | None:
