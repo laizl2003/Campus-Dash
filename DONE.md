@@ -3,6 +3,18 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-31 · Agent 前端目录独立到 agent/agent-frontend
+
+- **目标**：把 AI 悬浮球前端从主前端拆到独立的 agent 目录，构建与启动脚本同步适配。
+- **改动**：
+  - 新建 `agent/agent-frontend/src`，迁入 `AgentAssistant.tsx`、`agentAssistant.css`，新增 `package.json`（peer react）。
+  - 主前端 `vite.config.ts` 增加 `@agent` / `@app` 别名；`tsconfig.json` 增加 `paths` 与 include。
+  - `App.tsx` 改为 `import AgentAssistant from '@agent/AgentAssistant'`。
+  - `start.ps1` 增加 `agentFrontendDir` 校验，构建日志标明包含 Agent；脚本转为 UTF-8 BOM 修复 PowerShell 5.1 解析。
+  - Agent 目录整体移入仓库 `campus-dash-1/agent`。
+- **验证**：`npm run build` 通过；`start.ps1 -Build web` 成功构建镜像并部署；页面悬浮球、面板、草稿按钮（修改/取消/确认发布）均正常。
+
+
 ## 2026-10-30 · 发布卡片显示实收金额 + Redis/Docker 学习笔记
 
 - **目标**：广场 ERRAND 卡片展示跑腿实收，而不是发布悬赏；并把 Redis Pub/Sub 与 Docker 基础沉淀到 Learn.md。
