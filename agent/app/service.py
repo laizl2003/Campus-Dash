@@ -26,6 +26,8 @@ from .models import TaskDraft, next_question, required_slots
 @dataclass
 class Session:
     id: str
+    # 一次聊天（面板）下可以有多个会话：一单发布后换个会话继续
+    panel_id: str | None = None
     draft: TaskDraft = field(default_factory=TaskDraft)
     turns: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -38,10 +40,38 @@ class SessionStore:
     def __init__(self) -> None:
         self._sessions: dict[str, Session] = {}
 
-    def create(self) -> Session:
-        session = Session(id=str(uuid.uuid4()))
+    def create(self, user_id: str | None = None, panel_id: str | None = None) -> Session:
+        session = Session(id=str(uuid.uuid4()), panel_id=panel_id or str(uuid.uuid4()))
         self._sessions[session.id] = session
         return session
+
+    def get_active_session(self, panel_id: str) -> Session | None:
+        for session in self._sessions.values():
+            if session.panel_id == panel_id:
+                return session
+        return None
+
+    def ensure_session(self, panel_id: str, user_id: str | None = None) -> Session:
+        return self.get_active_session(panel_id) or self.create(user_id, panel_id)
+
+    def append_message(self, session_id: str, role: str, content: str) -> None:
+        # 内存版不存消息表，历史只在进程内有意义
+        return None
+
+    def messages(self, session_id: str) -> list[dict[str, object]]:
+        return []
+
+    def panel_messages(self, panel_id: str, limit: int = 200, before_id: int | None = None) -> list[dict[str, object]]:
+        return []
+
+    def list_panels(self, user_id: str, limit: int = 20) -> list[dict[str, object]]:
+        return []
+
+    def delete_panel(self, panel_id: str) -> bool:
+        ids = [s.id for s in self._sessions.values() if s.panel_id == panel_id]
+        for sid in ids:
+            self._sessions.pop(sid, None)
+        return bool(ids)
 
     def get(self, session_id: str) -> Session | None:
         return self._sessions.get(session_id)
@@ -100,6 +130,14 @@ class ChatService:
             # 内存版 save 只收 session，没有状态列可写
             self.store.save(session)
 
+    def mark_published_panel(self, panel_id: str | None) -> None:
+        # 前端只记 panel：把该面板下进行中的会话标记为已结束。
+        if not panel_id:
+            return
+        session = self.store.get_active_session(panel_id)
+        if session is not None:
+            self.mark_published(session.id)
+
     def delete_session(self, session_id: str) -> bool:
         """删除会话。内存版直接丢字典，MySQL 版连消息一起删。"""
         if hasattr(self.store, "delete"):
@@ -123,6 +161,33 @@ class ChatService:
         session = self.store.get(session_id)
         if session is None:
             raise KeyError(session_id)
+        return self._chat(session, message)
+
+    def chat_panel(self, panel_id: str, message: str, user_id: str | None = None) -> AgentReply:
+        # 面板入口：自动挑进行中的会话，没有就开一个。
+        # 前端只记 panel_id，就不用再操心"该用哪个 session"，
+        # 也不会出现发布后还往旧草稿里写的问题。
+        session = self.store.ensure_session(panel_id, user_id)
+        return self._chat(session, message)
+
+    def create_panel(self, user_id: str | None = None) -> dict[str, str]:
+        # 新建一段对话：此刻只发一个 panel_id，真正开 session 等第一条消息。
+        import uuid as _uuid
+
+        panel_id = str(_uuid.uuid4())
+        self.store.ensure_session(panel_id, user_id)
+        return {"panel_id": panel_id}
+
+    def panel_messages(self, panel_id: str, limit: int = 200, before_id: int | None = None):
+        return self.store.panel_messages(panel_id, limit=limit, before_id=before_id)
+
+    def list_panels(self, user_id: str, limit: int = 20):
+        return self.store.list_panels(user_id, limit)
+
+    def delete_panel(self, panel_id: str) -> bool:
+        return bool(self.store.delete_panel(panel_id))
+
+    def _chat(self, session, message: str) -> AgentReply:
 
         missing = required_slots(session.draft)
         state = self.graph.invoke(
@@ -154,5 +219,9 @@ class ChatService:
             self.store.append_message(session.id, "user", message)
             self.store.append_message(session.id, "assistant", reply_text)
 
-        return draft_to_reply(status, draft, missing, question, appended, intent,
-                              list(state.get("updated_fields") or []))
+        reply = draft_to_reply(status, draft, missing, question, appended, intent,
+                                 list(state.get('updated_fields') or []))
+        # 让前端知道这轮落在哪个会话上（同一个面板下，发布后会换成新会话）
+        reply['session_id'] = session.id
+        reply['panel_id'] = session.panel_id
+        return reply

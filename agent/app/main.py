@@ -61,8 +61,13 @@ service = ChatService()
 
 
 class ChatRequest(BaseModel):
-    session_id: str
+    # 二选一：panel_id（推荐，自动挑进行中的会话）或 session_id（兼容旧前端）
+    panel_id: str | None = None
+    session_id: str | None = None
     message: str = Field(min_length=1, max_length=500)
+
+    def resolved_panel(self) -> str | None:
+        return self.panel_id
 
 
 @app.get("/health")
@@ -111,6 +116,34 @@ def _current_user(authorization: str | None) -> str | None:
         return None
 
 
+@app.post("/panels")
+def create_panel(authorization: str | None = Header(default=None)) -> dict[str, object]:
+    """新建一段对话。一段对话里可以发多单，一单结束就换会话。"""
+    user_id = _current_user(authorization)
+    panel = service.create_panel(user_id)
+    return {**panel, "user_id": user_id}
+
+
+@app.get("/panels")
+def list_panels(limit: int = 20, authorization: str | None = Header(default=None)) -> dict[str, object]:
+    """当前用户的对话列表（按面板聚，不是一个会话一条）。"""
+    user_id = _current_user(authorization)
+    if not user_id:
+        return {"panels": []}
+    return {"panels": service.list_panels(user_id, limit)}
+
+
+@app.get("/panels/{panel_id}/messages")
+def panel_messages(panel_id: str, limit: int = 200, before_id: int | None = None) -> dict[str, object]:
+    """整段对话的消息，按雪花 id 排序即真实顺序。"""
+    return {"messages": service.panel_messages(panel_id, limit=limit, before_id=before_id)}
+
+
+@app.delete("/panels/{panel_id}")
+def delete_panel(panel_id: str) -> dict[str, bool]:
+    return {"deleted": service.delete_panel(panel_id)}
+
+
 @app.post("/sessions")
 def create_session(authorization: str | None = Header(default=None)) -> dict[str, object]:
     user_id = _current_user(authorization)
@@ -152,6 +185,8 @@ class PublishRequest(BaseModel):
     description: str | None = None
     # 发布成功后要把这条会话标记为 CLOSED；不属于主项目接口字段，转发时剔除
     sessionId: str | None = Field(default=None, exclude=True)
+    # 前端只记 panel 时走这个：把该面板下进行中的会话置为已结束
+    panelId: str | None = Field(default=None, exclude=True)
 
 
 @app.post("/publish")
@@ -186,7 +221,10 @@ def publish(req: PublishRequest, authorization: str | None = Header(default=None
 
     body = data.get("data") or {}
     # 这一单已经落地：会话到此为止，避免后续消息继续往旧草稿里追加
-    service.mark_published(req.sessionId)
+    if req.sessionId:
+        service.mark_published(req.sessionId)
+    else:
+        service.mark_published_panel(req.panelId)
     return {"errandId": str(body.get("errandId", "")), "status": body.get("status")}
 
 
@@ -205,9 +243,15 @@ def ping(req: PingRequest) -> dict[str, bool]:
 
 
 @app.post("/chat")
-def chat(req: ChatRequest) -> dict[str, object]:
+def chat(req: ChatRequest, authorization: str | None = Header(default=None)) -> dict[str, object]:
     try:
-        reply = service.chat(req.session_id, req.message)
+        if req.panel_id:
+            # 前端只记 panel：服务端自动挑"进行中"的会话，发布后自然换新会话
+            reply = service.chat_panel(req.panel_id, req.message, _current_user(authorization))
+        elif req.session_id:
+            reply = service.chat(req.session_id, req.message)
+        else:
+            raise HTTPException(status_code=400, detail="缺少 panel_id") from None
     except KeyError:
         raise HTTPException(status_code=404, detail="session not found") from None
     draft = reply["draft"]

@@ -59,18 +59,16 @@ interface DraftPayload {
 type EditableField = 'title' | 'reward' | 'pickup' | 'delivery' | 'deadline' | 'description';
 
 interface HistoryItem {
+  /** 面板 id：一段对话 = 一个面板，里面可以有好几单 */
   id: string;
   title: string;
   preview: string;
   time: string;
-  messages: ChatMessage[];
-  /** CLOSED：这一单已经发布，继续说话要新开会话 */
-  status?: string;
 }
 
 const POSITION_KEY = 'agent.fab.position';
-const SESSION_KEY = 'agent.session.id';
-const HISTORY_KEY = 'agent.history';
+// 一次聊天 = 一个 panel。一单发布后服务端自动换会话，前端不用再管 session。
+const PANEL_KEY = 'agent.panel.id';
 const FAB_SIZE = 60;
 const EDGE = 16;
 const DRAG_THRESHOLD = 5;
@@ -189,103 +187,73 @@ async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return await resp.json() as T;
 }
 
-async function createSession(): Promise<string> {
-  const data = await apiPost<{ session_id: string }>('/sessions');
-  localStorage.setItem(SESSION_KEY, data.session_id);
-  return data.session_id;
+async function createPanel(): Promise<string> {
+  const data = await apiPost<{ panel_id: string }>('/panels');
+  localStorage.setItem(PANEL_KEY, data.panel_id);
+  return data.panel_id;
 }
 
-async function ensureSession(): Promise<string> {
-  const saved = localStorage.getItem(SESSION_KEY);
-  return saved || await createSession();
+/** 当前对话的面板 id；没有就新建一个。 */
+async function resolvePanel(): Promise<string> {
+  return localStorage.getItem(PANEL_KEY) || await createPanel();
 }
 
-/**
- * 发送前校正会话：会话存在 MySQL 里，只有被删除（或换了账号）时 id 才会失效。
- * 这里先试探一次，失效就重建，避免用户看到"会话已失效"的报错后再手动重发。
- */
-async function resolveSession(): Promise<string> {
-  const saved = localStorage.getItem(SESSION_KEY);
-  if (!saved) return await createSession();
-  try {
-    await apiPost('/chat/ping', { session_id: saved });
-    return saved;
-  } catch {
-    // 旧会话在后端已不存在（重启/超时），直接新建
-    localStorage.removeItem(SESSION_KEY);
-    return await createSession();
-  }
-}
-
-function readHistory(): HistoryItem[] {
-  try {
-    const raw = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-    return Array.isArray(raw) ? raw as HistoryItem[] : [];
-  } catch {
-    return [];
-  }
-}
-
-interface ApiSession {
-  session_id: string;
+interface ApiPanel {
+  panel_id: string;
   last_message?: string;
-  status?: string;
+  last_role?: string;
   updated_at?: string;
 }
 
-/** 拉取后端会话列表：历史以后端为准，换设备也能看到 */
-async function fetchRemoteHistory(): Promise<HistoryItem[]> {
+/** 历史 = 面板列表（一次聊天一条），不是会话列表（一单一条）。 */
+async function fetchPanels(): Promise<HistoryItem[]> {
   const token = localStorage.getItem('dash_token');
   try {
-    const resp = await fetch(AGENT_BASE + '/sessions', {
+    const resp = await fetch(AGENT_BASE + '/panels', {
       headers: token ? { Authorization: 'Bearer ' + token } : {},
     });
     if (!resp.ok) return [];
-    const data = await resp.json() as { sessions?: ApiSession[] };
-    const local = readHistory();
-    return (data.sessions ?? []).map(session => ({
-      id: session.session_id,
-      title: (session.last_message || '未命名对话').slice(0, 16),
-      preview: session.status === 'READY' ? '草稿已就绪' : '对话进行中',
-      time: session.updated_at
-        ? new Date(session.updated_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+    const data = await resp.json() as { panels?: ApiPanel[] };
+    return (data.panels ?? []).map(panel => ({
+      id: panel.panel_id,
+      title: (panel.last_message || '新的对话').slice(0, 16),
+      preview: panel.last_role === 'user' ? '等待助手回复' : '对话进行中',
+      time: panel.updated_at
+        ? new Date(panel.updated_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
         : '',
-      // 本地有完整消息就复用，否则留空，点开时再从后端拉
-      messages: local.find(item => item.id === session.session_id)?.messages ?? [],
-      status: session.status,
     }));
   } catch {
     return [];
   }
 }
 
-/** 打开历史会话时补齐消息记录 */
-async function fetchSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+/** 打开历史对话：整个面板的消息一次拉回来，跨会话也完整。 */
+async function fetchPanelMessages(panelId: string): Promise<ChatMessage[]> {
   try {
-    const resp = await fetch(AGENT_BASE + '/sessions/' + sessionId + '/messages');
+    const resp = await fetch(AGENT_BASE + '/panels/' + panelId + '/messages');
     if (!resp.ok) return [];
-    const data = await resp.json() as { messages?: { role: Role; content: string }[] };
-    return (data.messages ?? []).map((item, index) => ({
-      id: sessionId + '-' + index,
+    const data = await resp.json() as {
+      messages?: { message_id: string; role: Role; content: string; time?: string }[];
+    };
+    return (data.messages ?? []).map(item => ({
+      // 直接用服务端的雪花 id：跨会话也全局有序
+      id: item.message_id,
       role: item.role,
       content: item.content,
-      time: '',
+      time: item.time
+        ? new Date(item.time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+        : '',
     }));
   } catch {
     return [];
   }
 }
 
-async function deleteRemoteSession(sessionId: string): Promise<void> {
+async function deleteRemotePanel(panelId: string): Promise<void> {
   try {
-    await fetch(AGENT_BASE + '/sessions/' + sessionId, { method: 'DELETE' });
+    await fetch(AGENT_BASE + '/panels/' + panelId, { method: 'DELETE' });
   } catch { /* 删除失败时本地仍会移除，下次刷新会重新出现 */ }
 }
-
-function writeHistory(items: HistoryItem[]) {
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, 10))); } catch { /* ignore */ }
-}
-
 interface Point { x: number; y: number }
 
 function readPosition(): Point | null {
@@ -416,7 +384,7 @@ export default function AgentAssistant() {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
-  const [history, setHistory] = useState<HistoryItem[]>(() => readHistory());
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   // 删除是两步确认：先点 × 进入待删状态，再点"删除"
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // 正在编辑的草稿消息 id 与编辑中的值
@@ -424,7 +392,7 @@ export default function AgentAssistant() {
   const [editing, setEditing] = useState<Partial<Record<EditableField, string>> | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [published, setPublished] = useState<Record<string, string>>({});
-  const [sessionId, setSessionId] = useState<string | null>(() => localStorage.getItem(SESSION_KEY));
+  const [panelId, setPanelId] = useState<string | null>(() => localStorage.getItem(PANEL_KEY));
   const [position, setPosition] = useState<Point | null>(null);
   const [dragging, setDragging] = useState(false);
   const fabRef = useRef<HTMLButtonElement>(null);
@@ -477,18 +445,17 @@ export default function AgentAssistant() {
     if (timerRef.current) window.clearTimeout(timerRef.current);
   }, []);
 
-  // 打开面板时确保后端会话存在，失败不阻塞输入，只提示用户
+  // 打开面板时确保后端有这段对话，并同步历史列表
   useEffect(() => {
     if (!open) return;
     let active = true;
-    // 用 resolveSession：本地 id 失效时当场换成新会话，而不是等发消息才报 404
-    resolveSession()
-      .then(id => { if (active) setSessionId(id); })
+    resolvePanel()
+      .then(id => { if (active) setPanelId(id); })
       .catch(() => { if (active) setNotice('暂时连不上助手服务，请稍后再试'); });
-    // 打开面板时同步一次后端历史，换设备也能看到过去的对话
-    fetchRemoteHistory()
+    // 历史以后端为准：换设备、清缓存都能看到完整记录
+    fetchPanels()
       .then(items => { if (active) setHistory(items); })
-      .catch(() => { /* 拉取失败保留本地记录 */ });
+      .catch(() => { /* 拉取失败就保持空列表 */ });
     return () => { active = false; };
   }, [open]);
 
@@ -547,9 +514,10 @@ export default function AgentAssistant() {
     setMessages(prev => [...prev, userMessage]);
     setBusy(true);
     try {
-      const sid = await resolveSession();
-      if (!sessionId) setSessionId(sid);
-      const reply = await apiPost<ApiReply>('/chat', { session_id: sid, message: text });
+      // 只发 panel：用哪个会话由服务端决定（发布后自然换新会话）
+      const pid = await resolvePanel();
+      if (!panelId) setPanelId(pid);
+      const reply = await apiPost<ApiReply>('/chat', { panel_id: pid, message: text });
       const assistant: ChatMessage = {
         id: Math.random().toString(36).slice(2),
         role: 'assistant',
@@ -561,20 +529,8 @@ export default function AgentAssistant() {
 
       // 用户说"取消"：清掉草稿卡片，回到全新对话
       if (reply.intent === 'CANCEL') {
-        setMessages(prev => {
-          const next = [...prev, { ...assistant, draft: undefined }];
-          writeHistory([{
-            id: sid,
-            title: next.find(item => item.role === 'user')?.content.slice(0, 16) || '新的任务对话',
-            preview: assistant.content,
-            time: nowLabel(),
-            messages: next,
-          }, ...readHistory().filter(item => item.id !== sid)]);
-          setHistory(readHistory());
-          return next;
-        });
-        localStorage.removeItem(SESSION_KEY);
-        setSessionId(null);
+        setMessages(prev => [...prev, { ...assistant, draft: undefined }]);
+        void refreshHistory();
         return;
       }
 
@@ -584,17 +540,9 @@ export default function AgentAssistant() {
         setMessages(prev => {
           const latestDraft = [...prev].reverse()
             .find(item => item.draft && !item.publishedId)?.draft;
-          const next = [...prev, { ...assistant, draft: latestDraft ?? assistant.draft }];
-          writeHistory([{
-            id: sid,
-            title: next.find(item => item.role === 'user')?.content.slice(0, 16) || '新的任务对话',
-            preview: assistant.content,
-            time: nowLabel(),
-            messages: next,
-          }, ...readHistory().filter(item => item.id !== sid)]);
-          setHistory(readHistory());
-          return next;
+          return [...prev, { ...assistant, draft: latestDraft ?? assistant.draft }];
         });
+        void refreshHistory();
         return;
       }
 
@@ -607,43 +555,24 @@ export default function AgentAssistant() {
           const lastDraftIndex = prev
             .map(item => Boolean(item.draft) && !item.publishedId)
             .lastIndexOf(true);
-          const next = lastDraftIndex === -1
-            ? [...prev, assistant]
-            : prev.map((item, index) => index === lastDraftIndex
-                ? { ...item, draft: assistant.draft }
-                : item);
+          if (lastDraftIndex === -1) return [...prev, assistant];
+          const next = prev.map((item, index) => index === lastDraftIndex
+            ? { ...item, draft: assistant.draft }
+            : item);
           // 补充说明本身作为一条普通消息追加，让用户看到自己说了什么
-          const withUser = lastDraftIndex === -1 ? next : [...next, { ...assistant, draft: undefined }];
-          writeHistory([{
-            id: sid,
-            title: withUser.find(item => item.role === 'user')?.content.slice(0, 16) || '新的任务对话',
-            preview: assistant.content,
-            time: nowLabel(),
-            messages: withUser,
-          }, ...readHistory().filter(item => item.id !== sid)]);
-          setHistory(readHistory());
-          return withUser;
+          return [...next, { ...assistant, draft: undefined }];
         });
+        void refreshHistory();
         return;
       }
-      setMessages(prev => {
-        const next = [...prev, assistant];
-        writeHistory([{
-          id: sid,
-          title: next.find(item => item.role === 'user')?.content.slice(0, 16) || '新的任务对话',
-          preview: assistant.content,
-          time: nowLabel(),
-          messages: next,
-        }, ...readHistory().filter(item => item.id !== sid)]);
-        setHistory(readHistory());
-        return next;
-      });
+      setMessages(prev => [...prev, assistant]);
+      void refreshHistory();
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : '助手暂时不可用';
-      // 会话失效时清掉本地 id，下次发送自动重建
+      // 面板失效（被删/换账号）时清掉本地 id，下次发送自动重建
       if (message.includes('会话已失效')) {
-        localStorage.removeItem(SESSION_KEY);
-        setSessionId(null);
+        localStorage.removeItem(PANEL_KEY);
+        setPanelId(null);
       }
       setMessages(prev => [...prev, {
         id: Math.random().toString(36).slice(2), role: 'assistant', content: message, time: nowLabel(),
@@ -698,8 +627,8 @@ export default function AgentAssistant() {
     if (!raw.reward_cents) { setNotice('请先填写悬赏金额'); return; }
 
     setPublishingId(messageId);
-    // 归档用：优先当前会话，其次本地保存的会话 id
-    const sid = sessionId ?? localStorage.getItem(SESSION_KEY) ?? 'local';
+    // 只传面板：服务端会把该面板下进行中的会话标记为结束，下一次发言自动换新会话
+    const pid = panelId ?? localStorage.getItem(PANEL_KEY) ?? null;
     try {
       const result = await apiPost<{ errandId: string }>('/publish', {
         campusId: 1,
@@ -712,7 +641,7 @@ export default function AgentAssistant() {
         expiredAt: raw.expired_at ?? null,
         description: raw.description ?? null,
         // 让后端把这条会话标记成 CLOSED，避免从历史点回来后继续用旧草稿
-        sessionId: sid === 'local' ? null : sid,
+        panelId: pid,
       });
       setPublished({ [messageId]: result.errandId });
       setNotice('任务已发布');
@@ -736,22 +665,11 @@ export default function AgentAssistant() {
           content: '这一单已经结束，接下来想发什么任务？直接告诉我就行。',
           time: nowLabel(),
         }];
-        // 归档当前对话，让历史记录保留完整过程
-        writeHistory([{
-          id: sid,
-          title: next.find(item => item.role === 'user')?.content.slice(0, 16) || '已发布的任务',
-          preview: `任务已发布 #${result.errandId}`,
-          time: nowLabel(),
-          messages: next,
-          status: 'CLOSED',
-        }, ...readHistory().filter(item => item.id !== sid)]);
-        setHistory(readHistory());
         return next;
       });
-      // 关键：换一条新会话。否则下一条消息会被当成这一单的"补充说明"，
-      // 继续往已完成（或已发布）的草稿里追加，第二单根本发不出去。
-      localStorage.removeItem(SESSION_KEY);
-      setSessionId(null);
+      // 不用手动换会话：服务端已把这一单的会话置为 CLOSED，
+      // 下一条消息会自动开一个新会话，第二单不会写进旧草稿。
+      void refreshHistory();
     } catch (reason) {
       const text = reason instanceof Error ? reason.message : '发布失败';
       setNotice(text);
@@ -763,46 +681,51 @@ export default function AgentAssistant() {
     }
   };
 
-  const startNewChat = () => {
+  const startNewChat = async () => {
     setMessages([welcomeMessage]);
     setHistoryOpen(false);
     setInput('');
-    localStorage.removeItem(SESSION_KEY);
-    setSessionId(null);
+    // 换一个面板就是换一段新对话；旧对话仍留在历史里
+    localStorage.removeItem(PANEL_KEY);
+    setPanelId(null);
+    try {
+      const pid = await createPanel();
+      setPanelId(pid);
+    } catch {
+      /* 建面板失败就让下次发送时再建 */
+    }
+    void refreshHistory();
     setNotice('已新建对话');
   };
 
   const loadHistory = async (item: HistoryItem) => {
     setHistoryOpen(false);
     setDeletingId(null);
-    // 本地没有完整消息（换了设备或清了缓存）时，从后端拉回来
-    const messages = item.messages.length > 0 ? item.messages : await fetchSessionMessages(item.id);
-    setMessages(messages.length > 0 ? messages : [welcomeMessage]);
-    // 已发布的会话只用来回看：不接管当前会话，
-    // 否则用户接着说"再帮我买杯奶茶"会往上一单的草稿里追加。
-    if (item.status === 'CLOSED') {
-      setSessionId(null);
-      localStorage.removeItem(SESSION_KEY);
-      setNotice('这是一条已发布的历史记录，继续对话会开启新任务');
-      return;
-    }
-    setSessionId(item.id);
-    localStorage.setItem(SESSION_KEY, item.id);
+    // 消息一律从后端按 panel 拉：跨会话也完整，不依赖本地快照
+    const loaded = await fetchPanelMessages(item.id);
+    setMessages(loaded.length > 0 ? loaded : [welcomeMessage]);
+    // 之后的发言都落在这个面板下；面板里若有"进行中"的会话，服务端会复用
+    setPanelId(item.id);
+    localStorage.setItem(PANEL_KEY, item.id);
   };
 
   const deleteHistory = async (id: string) => {
-    await deleteRemoteSession(id);
-    const next = readHistory().filter(item => item.id !== id);
-    writeHistory(next);
+    await deleteRemotePanel(id);
     setHistory(prev => prev.filter(item => item.id !== id));
     setDeletingId(null);
-    // 删掉的正是当前会话：清空界面并让下次发送自动新建
-    if (id === sessionId) {
+    // 删掉的正是当前对话：清空界面并让下次发送自动新建
+    if (id === panelId) {
       setMessages([welcomeMessage]);
-      localStorage.removeItem(SESSION_KEY);
-      setSessionId(null);
+      localStorage.removeItem(PANEL_KEY);
+      setPanelId(null);
     }
     setNotice('已删除该对话');
+  };
+
+  /** 历史列表以后端为准，每次交互后刷新一次即可 */
+  const refreshHistory = async () => {
+    const items = await fetchPanels();
+    setHistory(items);
   };
 
   const fabStyle: CSSProperties = position
@@ -869,7 +792,7 @@ export default function AgentAssistant() {
         <span className="agent-avatar"><Icon name="bot" size={20}/></span>
         <div className="agent-panel-title">
           <strong>CampusDash 智能助手</strong>
-          <small><i className="agent-dot"/>{sessionId ? '对话式发单 · 已连接' : '对话式发单 · 连接中'}</small>
+          <small><i className="agent-dot"/>{panelId ? '对话式发单 · 已连接' : '对话式发单 · 连接中'}</small>
         </div>
         <button type="button" className="agent-icon-btn" aria-label="历史对话" title="历史对话"
                 onClick={() => setHistoryOpen(value => !value)}><Icon name="history" size={17}/></button>
@@ -923,8 +846,9 @@ export default function AgentAssistant() {
           onCancel={() => {
             setNotice('已取消本次任务草稿');
             setMessages([welcomeMessage]);
-            localStorage.removeItem(SESSION_KEY);
-            setSessionId(null);
+            // 取消后换一段新对话，避免继续在旧草稿上加内容
+            localStorage.removeItem(PANEL_KEY);
+            setPanelId(null);
           }}
           onPublish={() => void onPublish(message.id, message.draft!)}
         />}

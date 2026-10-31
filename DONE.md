@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一条就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-11-01 · Agent 对话提升为"面板"；消息主键改雪花 ID
+
+- **目标**：一次聊天可能连发多单，但历史按 session 归档，导致同段对话重复入库、换设备后残缺；消息自增 ID 只能插入后回读。
+- **改动**：
+  - `agent_session` 增 `panel_id`（一段对话可含多个会话）与生成列 `active_key` + 唯一索引，DB 级保证"一个面板同时只有一个进行中会话"
+  - `agent_message` 主键 `id` → `message_id BIGINT`（雪花：41 位毫秒 + 10 位机器 + 12 位序列，插入前确定、天然有序），接口统一转字符串避免 JS 精度丢失
+  - 新增 `POST /agent/panels`、`GET /agent/panels`、`GET /agent/panels/{id}/messages`、`DELETE /agent/panels/{id}`；`/agent/chat` 改收 `panel_id`，服务端自动挑/建会话
+  - 前端删除本地 `agent.history` 与 `session_id` 存储，只记 `agent.panel.id`；历史列表按面板聚合，打开时按 panel 一次拉全
+- **验证**：老库迁移后 11 会话 / 72 消息无损；同一面板连发两单——首单发布后会话 `CLOSED`，第二条消息自动落到新会话，面板 8 条消息跨 2 会话且雪花 ID 严格递增；浏览器实测首单卡片保留"已发布"、第二单不覆盖；`132 passed, 1 skipped`
+
 ## 2026-10-31 · 标题自动总结；代排队只需排队地点
 
 - **标题不再追问**：`required_slots` 移除 TITLE，用户开头说"送外卖"就直接用它当标题，
