@@ -201,9 +201,10 @@ public class AdminController {
         int safeSize = Math.max(1, Math.min(size, 20));
         int safePage = Math.max(0, page);
 
-        // 在线用户优先：先取全量（普通用户规模很小），按在线状态排序后再分页。
-        // 若数据量变大，应改为维护 Redis 在线集合，再用 SQL CASE 排序 + LIMIT。
-        var all = adminUserQuery.page(0, 10_000);
+        // 在线用户优先：把 Redis 的在线集合下推到 SQL 的 CASE 排序，分页交给数据库。
+        // 之前是"取全量 10000 行再内存排序"，而 role=user 已有 10001 人，
+        // LIMIT 恰好把最老的一条截掉——laizl 就这样从管理端消失了。
+        var all = adminUserQuery.page(safePage * safeSize, safeSize, authPort.onlineUserIds());
         List<Map<String, Object>> mapped = new java.util.ArrayList<>(all.items().stream()
                 .map(row -> {
                     Map<String, Object> item = new LinkedHashMap<>();
@@ -220,14 +221,8 @@ public class AdminController {
                     return item;
                 })
                 .toList());
-        mapped.sort(java.util.Comparator.comparing((Map<String, Object> m) -> Boolean.TRUE.equals(m.get("online")))
-                .reversed());
-        int from = Math.min(safePage * safeSize, mapped.size());
-        int to = Math.min(from + safeSize, mapped.size());
-        List<Map<String, Object>> items = mapped.subList(from, to);
-
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("items", items);
+        data.put("items", mapped);
         data.put("total", all.total());
         data.put("page", safePage);
         data.put("size", safeSize);

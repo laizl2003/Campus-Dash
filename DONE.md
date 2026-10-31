@@ -3,6 +3,20 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-31 · 修复管理端用户列表漏人（laizl 看不到在线状态）
+
+- **现象**：laizl 在管理端整条记录都不出现（不是显示离线），其他账号正常。
+- **根因**：`AdminController` 用 `adminUserQuery.page(0, 10_000)` 取全量后在内存排序分页，
+  而 `role='user'` 已有 **10001** 人（重置脚本灌了 10000 个 stu 账号），
+  `ORDER BY created_at DESC LIMIT 10000` 恰好把最老的一条截掉——就是 laizl。
+  与 Redis 键无关，是数量正好越界触发的潜在 bug。
+- **修复**：把在线优先排序下推为 SQL `CASE WHEN user_id IN (...) THEN 0 ELSE 1 END`，
+  分页交给数据库 `LIMIT/OFFSET`；`AdminUserQueryPort` 新增带 `onlineUserIds` 的重载。
+- **验证**：管理端首页出现 laizl 且 `online=true`；第 501 页仍有 1 条（10001 条全覆盖），不再丢人。
+- **顺带清理**：删除测试遗留的 7 个 `errand:slot:` 残留键、`auth:forced:stu-02000` 标志、
+  stu-00001 测试会话；误删的 `chat:{square}:errand` 索引已从 payload 重建并与 message-errand 对齐。
+
+
 ## 2026-10-31 · Agent 改为"截止时间"语义，选填且固定倒数第二行
 
 - **字段改名**：`start_time` → `expired_at`（`Slot.EXPIRED_AT`、`guess_expired_at`、发布体 `expiredAt`），与主项目 `errand.expired_at` 对齐。
