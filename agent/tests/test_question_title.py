@@ -7,22 +7,38 @@ from app.models import Slot, next_question
 from app.service import ChatService
 
 
-def test_single_slot_question_is_one_line():
+def test_single_slot_question_is_one_list_with_hint():
+    """单字段时也带末尾的细节提示（必填未填完前始终存在）。"""
     q = next_question([Slot.LOCATION_TO])
-    assert q == "送到哪里？例如：3 号楼 502。"
+    assert "送到哪里？" in q
+    assert "任务细节的描述？" in q
+    assert q.index("送到哪里") < q.index("任务细节的描述")
+
+
+def test_every_question_line_ends_with_question_mark():
+    """每一行追问都必须是问句。"""
+    q = next_question([Slot.LOCATION_FROM, Slot.LOCATION_TO, Slot.START_TIME])
+    for line in q.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("·"):
+            assert "？" in stripped, stripped
 
 
 def test_multiple_slots_merge_into_one_question():
     q = next_question([Slot.LOCATION_FROM, Slot.LOCATION_TO, Slot.START_TIME])
     assert "还需要这些信息" in q
-    assert q.count("·") == 3
+    # 3 个必填 + 1 行细节提示
+    assert q.count("·") == 4
     assert "取货" in q and "送到哪里" in q and "什么时候开始" in q
 
 
 def test_more_than_three_slots_reports_remaining():
     q = next_question([Slot.LOCATION_FROM, Slot.LOCATION_TO, Slot.START_TIME, Slot.REWARD])
-    assert q.count("·") == 3
+    # 3 个必填 + 1 行细节提示
+    assert q.count("·") == 4
     assert "还有 1 项" in q
+    # 剩余提示应放在最末
+    assert q.strip().endswith("回答完这些再继续）")
 
 
 def test_no_missing_returns_none():
@@ -70,6 +86,7 @@ def test_first_turn_asks_all_missing_at_once():
     session = service.create_session()
     reply = service.chat(session.id, "帮我取快递")
     assert reply["status"] == "ASKING"
-    # 缺 title/location_from/location_to/start_time/reward，一次最多问 3 个
+    # 缺 5 个必填，一次最多问 3 个，外加 1 行细节提示
     assert "还需要这些信息" in reply["message"]
-    assert reply["message"].count("·") == 3
+    assert reply["message"].count("·") == 4
+    assert "任务细节的描述？" in reply["message"]

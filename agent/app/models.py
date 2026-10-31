@@ -40,16 +40,31 @@ class Slot(str, Enum):
     DESCRIPTION = "description"
 
 
-# 追问时给用户看的问题文案
+# 追问文案：统一成问句，并以问号结尾
 SLOT_QUESTIONS: dict[Slot, str] = {
-    Slot.TYPE: "这是哪一类任务？跑腿配送、帮买、代排队，还是其他帮忙？",
-    Slot.TITLE: "这件任务用一句话怎么描述？我会把它作为任务标题。",
-    Slot.LOCATION_FROM: "从哪里取货或开始？例如：菜鸟驿站（东门）。",
-    Slot.LOCATION_TO: "送到哪里？例如：3 号楼 502。",
-    Slot.START_TIME: "希望什么时候开始？可以写“今天下午 3 点”或具体日期时间。",
-    Slot.REWARD: "悬赏金额是多少？例如 8 元。",
-    Slot.DESCRIPTION: "还有其他要补充的内容吗？没有可以直接回复“没有”。",
+    Slot.TYPE: "这是哪一类任务（跑腿配送 / 帮买 / 代排队 / 其他帮忙）？",
+    Slot.TITLE: "任务标题是什么？用一句话说清要做的事。",
+    Slot.LOCATION_FROM: "从哪里取货或开始？",
+    Slot.LOCATION_TO: "送到哪里？",
+    Slot.START_TIME: "希望什么时候开始？",
+    Slot.REWARD: "悬赏金额是多少？",
+    Slot.DESCRIPTION: "还有其他要补充的内容吗？",
 }
+
+# 每个问句后面的补充说明，不提问、只给例子，避免和问句混在一起
+SLOT_HINTS: dict[Slot, str] = {
+    Slot.TYPE: "",
+    Slot.TITLE: "",
+    Slot.LOCATION_FROM: "如：菜鸟驿站东门",
+    Slot.LOCATION_TO: "如：3 号楼 502",
+    Slot.START_TIME: "如：今天下午 3 点",
+    Slot.REWARD: "如：8 元",
+    Slot.DESCRIPTION: "",
+}
+
+# 追问末尾固定挂着的一行：引导用户补充任务细节。
+# 在必填字段填完之前一直存在，让用户知道随时可以补充、而且该补充什么。
+DESCRIPTION_PROMPT_LINE = "任务细节的描述？（可选，如：外卖有汤，不要撒了）"
 
 
 class TaskDraft(BaseModel):
@@ -125,24 +140,55 @@ def merge_draft(current: TaskDraft, patch: dict[str, object]) -> TaskDraft:
 MAX_QUESTIONS_PER_TURN = 3
 
 
-def next_question(missing: list[Slot]) -> str | None:
+def _slot_line(slot: Slot) -> str:
+    """单个槽位的一行：问句 + 例子（例子单独一段，不抢问句的焦点）。"""
+    question = SLOT_QUESTIONS[slot]
+    hint = SLOT_HINTS.get(slot, "")
+    return f"· {question}（{hint}）" if hint else f"· {question}"
+
+
+def next_question(missing: list[Slot], include_description_hint: bool = True) -> str | None:
     """根据缺失槽位生成追问。
 
-    缺一个就问一句；缺多个时合并成一条清单一次问全，
-    用户往往能一口气答完（"菜鸟驿站送到3号楼502，明天下午三点"），
-    比来回问三轮体验好很多。
+    规则：
+    1. 每一行都是问句，以问号结尾，格式统一；
+    2. 缺多个字段时合并成清单，一次问全；
+    3. 末尾固定挂一行"任务细节描述"，在必填填完前始终存在——
+       用户随时可以补充，也能知道补充成什么样。
+
+    只有缺 description 且也是必填时才单独问；description 本身选填，
+    所以正常情况下它只出现在末尾那一行提示里。
     """
+    # 没有缺失字段就不追问（此时已进入 READY，走意图分支）
     if not missing:
         return None
-    if len(missing) == 1:
-        return SLOT_QUESTIONS[missing[0]]
 
-    chosen = missing[:MAX_QUESTIONS_PER_TURN]
-    lines = [SLOT_QUESTIONS[slot].rstrip("。") for slot in chosen]
-    body = "\n".join(f"· {line}" for line in lines)
-    extra = len(missing) - len(chosen)
-    tail = f"\n（还有 {extra} 项，先回答这些即可。）" if extra > 0 else ""
-    return f"还需要这些信息，可以一起告诉我：\n{body}{tail}"
+    # description 是选填，不参与"还缺什么"的清单，只作为末尾提示
+    required_missing = [slot for slot in missing if slot is not Slot.DESCRIPTION]
+    if not required_missing and not include_description_hint:
+        return None
+
+    lines: list[str] = []
+    remaining_note = ""
+    if required_missing:
+        chosen = required_missing[:MAX_QUESTIONS_PER_TURN]
+        lines = [_slot_line(slot) for slot in chosen]
+        extra = len(required_missing) - len(chosen)
+        if extra > 0:
+            # 剩余项数放最末，不打断问句清单
+            remaining_note = f"（还有 {extra} 项必填，回答完这些再继续）"
+
+    if include_description_hint:
+        lines.append(f"· {DESCRIPTION_PROMPT_LINE}")
+    if remaining_note:
+        lines.append(remaining_note)
+
+    if not lines:
+        return None
+    if len(lines) == 1:
+        # 只剩细节提示时，单独成句，不加前缀
+        return lines[0].lstrip("· ").strip()
+    return "还需要这些信息，可以一起告诉我：\n" + "\n".join(lines)
 
 
 # 信息齐全后，允许用户继续补充"任务内容"。

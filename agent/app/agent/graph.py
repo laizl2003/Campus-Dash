@@ -138,11 +138,16 @@ def build_graph(extractor: Extractor):
         except Exception:
             # 抽取失败不能中断对话：本轮当作"没有新增信息"，仍然继续追问
             patch = {}
+        # 追问阶段也允许模型顺带抽出任务细节（description）。
+        # 用户常说"明天下午三点，快递有点大需要小推车"，
+        # 时间进 start_time、细节进 description，不该整句塞进某一个字段。
         draft = merge_draft(current, patch)
         # 用户回答追问时，可能只给一个值；只回填"当前正在追问"的那个槽位。
         # 顺序必须是：先合并抽取结果 -> 用"上一轮"的缺失追问回填。
         # 如果用合并后的重新计算，刚通过抽取填好类型的这一轮会被当成"在问标题"，
         # 于是"跑腿配送"被写进 title。
+        # 只有当模型确实给出了描述时才跳过裸回答回填；
+        # 否则"快递比较大"这句还是会被当成当前追问的裸回答（比如地点），造成错位。
         draft = _apply_pending_answer(
             state.get("message", ""),
             draft,
@@ -270,6 +275,15 @@ def clean_title(text: str) -> str:
     return title if len(title) >= 2 else text.strip()[:64]
 
 
+def _patch_covers_message(patch: dict[str, object]) -> bool:
+    """判断模型是否已经理解这句话。
+
+    只要抽出任意字段，就说明模型读懂了这一轮的意思，
+    此时把整句再按"裸回答"回填会污染已被正确解析的字段。
+    """
+    return any(value not in (None, "") for value in patch.values())
+
+
 def _looks_like_title(text: str) -> bool:
     """判断一句话更像"任务标题"还是"单纯的地点/描述回答"。
 
@@ -302,6 +316,12 @@ def _apply_pending_answer(
     """
     text = message.strip()
     if not text or not missing:
+        return draft
+
+    # 模型已经从这句话里抽出了字段（含 description）时，不再做裸回答回填。
+    # 否则"明天下午三点，快递有点大"会把整句塞进 start_time 或 location_from，
+    # 覆盖掉模型正确解析出的值。
+    if _patch_covers_message(patch):
         return draft
 
     target = missing[0]
