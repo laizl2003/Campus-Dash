@@ -53,10 +53,50 @@ def status() -> dict[str, object]:
     }
 
 
+def _current_user(authorization: str | None) -> str | None:
+    """从主项目会话里取当前用户 id。
+
+    这里不重复实现鉴权：调用主项目 /api/auth/me 由它校验 token，
+    能拿到 userId 就说明登录态有效。取不到也允许匿名使用，只是历史无法按人隔离。
+    """
+    if not authorization:
+        return None
+    backend = os.getenv("DASH_BACKEND_URL", "http://app:8080")
+    try:
+        resp = httpx.get(f"{backend}/api/auth/me", headers={"Authorization": authorization}, timeout=5.0)
+        if resp.status_code >= 400:
+            return None
+        body = resp.json().get("data") or {}
+        return str(body.get("userId") or "") or None  # 与主项目 CurrentUser 一致：字符串 id
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @app.post("/sessions")
-def create_session() -> dict[str, str]:
-    session = service.create_session()
-    return {"session_id": session.id}
+def create_session(authorization: str | None = Header(default=None)) -> dict[str, object]:
+    user_id = _current_user(authorization)
+    session = service.create_session(user_id)
+    return {"session_id": session.id, "user_id": user_id}
+
+
+@app.get("/sessions")
+def list_sessions(authorization: str | None = Header(default=None)) -> dict[str, object]:
+    """当前用户的会话列表，最多 20 条。"""
+    user_id = _current_user(authorization)
+    if not user_id:
+        return {"sessions": []}
+    return {"sessions": service.list_sessions(user_id)}
+
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str) -> dict[str, bool]:
+    """删除会话，MySQL 版会连消息一起删掉。"""
+    return {"deleted": service.delete_session(session_id)}
+
+
+@app.get("/sessions/{session_id}/messages")
+def session_messages(session_id: str) -> dict[str, object]:
+    return {"messages": service.messages(session_id)}
 
 
 class PublishRequest(BaseModel):

@@ -5,7 +5,11 @@
 2. 计算缺失槽位；
 3. 返回追问或完整草稿。
 
-本 Demo 的会话保存在进程内存里；接 Redis/MySQL 时替换 store 即可。
+会话存储两种实现：
+- SessionStore     进程内存，零依赖，适合本地随手跑
+- MySQLSessionStore 落库，容器重启后历史对话还在（生产用这个）
+
+设置 AGENT_MYSQL_DSN 后自动切换成 MySQL。
 """
 
 from __future__ import annotations
@@ -46,14 +50,57 @@ class SessionStore:
         self._sessions[session.id] = session
 
 
+def default_store() -> "SessionStore | MySQLSessionStore":
+    """配了 DSN 就用 MySQL，否则退回内存。
+
+    MySQL 连不上时不让整个服务起不来：打日志并降级到内存，
+    用户仍能对话，只是重启后会话不保留。
+    """
+    import logging
+    import os
+
+    if not os.getenv("AGENT_MYSQL_DSN"):
+        return SessionStore()
+    try:
+        from .store_mysql import MySQLSessionStore
+
+        return MySQLSessionStore()
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("MySQL 会话存储不可用，降级为内存: %s", exc)
+        return SessionStore()
+
+
 class ChatService:
-    def __init__(self, extractor: Extractor | None = None, store: SessionStore | None = None) -> None:
+    def __init__(self, extractor: Extractor | None = None, store=None) -> None:
         self.extractor = extractor or default_extractor()
-        self.store = store or SessionStore()
+        self.store = store if store is not None else default_store()
         self.graph = build_graph(self.extractor)
 
-    def create_session(self) -> Session:
-        return self.store.create()
+    def create_session(self, user_id: str | None = None) -> Session:
+        try:
+            return self.store.create(user_id)
+        except TypeError:
+            # 内存版 create 不接收 user_id
+            return self.store.create()
+
+    def delete_session(self, session_id: str) -> bool:
+        """删除会话。内存版直接丢字典，MySQL 版连消息一起删。"""
+        if hasattr(self.store, "delete"):
+            return bool(self.store.delete(session_id))
+        existed = self.store.get(session_id) is not None
+        if existed:
+            self.store._sessions.pop(session_id, None)  # noqa: SLF001
+        return existed
+
+    def list_sessions(self, user_id: str, limit: int = 20) -> list[dict[str, object]]:
+        if hasattr(self.store, "list_sessions"):
+            return self.store.list_sessions(user_id, limit)
+        return []
+
+    def messages(self, session_id: str) -> list[dict[str, object]]:
+        if hasattr(self.store, "messages"):
+            return self.store.messages(session_id)
+        return []
 
     def chat(self, session_id: str, message: str) -> AgentReply:
         session = self.store.get(session_id)
@@ -78,7 +125,15 @@ class ChatService:
         session.draft = draft
         session.turns += 1
         session.history.append({"role": "user", "content": message})
-        session.history.append({"role": "assistant", "content": state.get("message") or question or ""})
-        self.store.save(session)
+        reply_text = state.get("message") or question or ""
+        session.history.append({"role": "assistant", "content": reply_text})
+
+        try:
+            self.store.save(session, status=status, last_message=message)
+        except TypeError:
+            self.store.save(session)
+        if hasattr(self.store, "append_message"):
+            self.store.append_message(session.id, "user", message)
+            self.store.append_message(session.id, "assistant", reply_text)
 
         return draft_to_reply(status, draft, missing, question, appended)

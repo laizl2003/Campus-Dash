@@ -215,6 +215,61 @@ function readHistory(): HistoryItem[] {
   }
 }
 
+interface ApiSession {
+  session_id: string;
+  last_message?: string;
+  status?: string;
+  updated_at?: string;
+}
+
+/** 拉取后端会话列表：历史以后端为准，换设备也能看到 */
+async function fetchRemoteHistory(): Promise<HistoryItem[]> {
+  const token = localStorage.getItem('dash_token');
+  try {
+    const resp = await fetch(AGENT_BASE + '/sessions', {
+      headers: token ? { Authorization: 'Bearer ' + token } : {},
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json() as { sessions?: ApiSession[] };
+    const local = readHistory();
+    return (data.sessions ?? []).map(session => ({
+      id: session.session_id,
+      title: (session.last_message || '未命名对话').slice(0, 16),
+      preview: session.status === 'READY' ? '草稿已就绪' : '对话进行中',
+      time: session.updated_at
+        ? new Date(session.updated_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+        : '',
+      // 本地有完整消息就复用，否则留空，点开时再从后端拉
+      messages: local.find(item => item.id === session.session_id)?.messages ?? [],
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** 打开历史会话时补齐消息记录 */
+async function fetchSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+  try {
+    const resp = await fetch(AGENT_BASE + '/sessions/' + sessionId + '/messages');
+    if (!resp.ok) return [];
+    const data = await resp.json() as { messages?: { role: Role; content: string }[] };
+    return (data.messages ?? []).map((item, index) => ({
+      id: sessionId + '-' + index,
+      role: item.role,
+      content: item.content,
+      time: '',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function deleteRemoteSession(sessionId: string): Promise<void> {
+  try {
+    await fetch(AGENT_BASE + '/sessions/' + sessionId, { method: 'DELETE' });
+  } catch { /* 删除失败时本地仍会移除，下次刷新会重新出现 */ }
+}
+
 function writeHistory(items: HistoryItem[]) {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, 10))); } catch { /* ignore */ }
 }
@@ -411,11 +466,14 @@ export default function AgentAssistant() {
   useEffect(() => {
     if (!open) return;
     let active = true;
-    // 用 resolveSession：本地 id 失效时（后端重启）当场换成新会话，
-    // 而不是等到用户发消息才报 404
+    // 用 resolveSession：本地 id 失效时当场换成新会话，而不是等发消息才报 404
     resolveSession()
       .then(id => { if (active) setSessionId(id); })
       .catch(() => { if (active) setNotice('暂时连不上助手服务，请稍后再试'); });
+    // 打开面板时同步一次后端历史，换设备也能看到过去的对话
+    fetchRemoteHistory()
+      .then(items => { if (active) setHistory(items); })
+      .catch(() => { /* 拉取失败保留本地记录 */ });
     return () => { active = false; };
   }, [open]);
 
@@ -624,29 +682,29 @@ export default function AgentAssistant() {
     setNotice('已新建对话');
   };
 
-  const loadHistory = (item: HistoryItem) => {
-    setMessages(item.messages);
-    // 切换到历史会话时必须同步会话 id，否则继续发消息会打到旧会话上
-    setSessionId(item.id);
-    localStorage.setItem(SESSION_KEY, item.id);
+  const loadHistory = async (item: HistoryItem) => {
     setHistoryOpen(false);
     setDeletingId(null);
+    // 本地没有完整消息（换了设备或清了缓存）时，从后端拉回来
+    const messages = item.messages.length > 0 ? item.messages : await fetchSessionMessages(item.id);
+    setMessages(messages.length > 0 ? messages : [welcomeMessage]);
+    setSessionId(item.id);
+    localStorage.setItem(SESSION_KEY, item.id);
   };
 
-  const deleteHistory = (id: string) => {
+  const deleteHistory = async (id: string) => {
+    await deleteRemoteSession(id);
     const next = readHistory().filter(item => item.id !== id);
     writeHistory(next);
-    setHistory(next);
+    setHistory(prev => prev.filter(item => item.id !== id));
     setDeletingId(null);
     // 删掉的正是当前会话：清空界面并让下次发送自动新建
     if (id === sessionId) {
       setMessages([welcomeMessage]);
       localStorage.removeItem(SESSION_KEY);
       setSessionId(null);
-      setNotice('已删除该对话');
-    } else {
-      setNotice('已删除该对话');
     }
+    setNotice('已删除该对话');
   };
 
   const fabStyle: CSSProperties = position

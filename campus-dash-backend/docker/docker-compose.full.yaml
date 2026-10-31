@@ -160,6 +160,8 @@ services:
       LLM_JSON_MODE: ${LLM_JSON_MODE:-true}
       # 发布转发目标：Agent 收到确认后调用主项目发单接口
       DASH_BACKEND_URL: http://app:8080
+      # 会话持久化：配了就落 MySQL，容器重启后历史对话还在
+      AGENT_MYSQL_DSN: mysql:3306/campus_dash?user=root&password=dash123456
     healthcheck:
       # slim 镜像没有 curl，用 python 自带的 urllib 探活
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status==200 else 1)"]

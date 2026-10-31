@@ -10,7 +10,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
  && pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
-      fastapi "uvicorn[standard]" pydantic "langgraph>=0.2"
+      fastapi "uvicorn[standard]" pydantic "langgraph>=0.2" pymysql
 
 COPY app ./app
 

@@ -3,6 +3,19 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-31 · Agent 会话持久化到 MySQL，修复刷新后 session not found
+
+- **目标**：会话不再存进程内存，容器重启/页面刷新后历史对话仍可继续。
+- **改动**：
+  - 新增 `migrate-agent-session.sql`：`agent_session`（草稿/轮数/状态）+ `agent_message`（对话记录）。
+  - 新增 `app/store_mysql.py`：`MySQLSessionStore` 实现 create/get/save/list/delete/messages。
+  - `ChatService` 按 `AGENT_MYSQL_DSN` 自动切换 MySQL/内存，连不上时降级并打日志。
+  - 新增 `GET /sessions`（按用户列历史）、`DELETE /sessions/{id}`、`GET /sessions/{id}/messages`。
+  - 前端历史列表改为以后端为准，删除走 DELETE，打开历史时按需拉消息。
+- **验证**：创建会话→对话→重启容器→ping alive=true→继续对话草稿保留；删除后 DB 中 session 与 message 均为 0 行；`pytest` 23 passed。
+- **坑**：Docker 层缓存导致镜像内代码未更新，必须 `build --no-cache` 才能生效。
+
+
 ## 2026-10-31 · 悬浮球接入真实发布、逐项修改、信息完整后追加任务内容
 
 - **目标**：把 Agent 草稿真正发布出去，并支持在卡片上改条目、完整后继续补内容。
