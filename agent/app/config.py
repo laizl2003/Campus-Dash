@@ -29,9 +29,9 @@ def _env_bool(name: str, default: bool = False) -> bool:
 @dataclass(frozen=True)
 class LLMSettings:
     enabled: bool = False
-    base_url: str = "https://api.llm.ustc.edu.cn/v1"
-    api_key: str = "sk-Fl99aQS69YV3mfyIeV9Ic8eim84kewpYirRjH-AMwJ4"
-    model: str = "qwen3.8-reasoner"
+    base_url: str = ""
+    api_key: str = ""
+    model: str = ""
     timeout: float = 20.0
     temperature: float = 0.0
     max_tokens: int = 512
