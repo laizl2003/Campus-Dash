@@ -38,6 +38,8 @@ class Intent(str, Enum):
     CANCEL = "CANCEL"
     # 与任务无关的闲聊或提问
     CHITCHAT = "CHITCHAT"
+    # 要求清空任务内容
+    CLEAR_DESCRIPTION = "CLEAR_DESCRIPTION"
 
 
 INTENT_LABELS: dict[Intent, str] = {
@@ -48,6 +50,7 @@ INTENT_LABELS: dict[Intent, str] = {
     Intent.QUERY: "询问草稿信息",
     Intent.CANCEL: "要求取消",
     Intent.CHITCHAT: "无关闲聊",
+    Intent.CLEAR_DESCRIPTION: "清空任务内容",
 }
 
 # 模型输出常带的包裹字符，解析前统一剥掉
@@ -66,12 +69,14 @@ INTENT_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿助手的意图分类器
 - QUERY    询问当前草稿信息（如"现在是什么内容""多少钱""送到哪")
 - CANCEL   要求取消这次任务（如"算了""不发了""取消"）
 - CHITCHAT 与任务无关的话（如"你是谁""今天天气怎么样"）
+- CLEAR_DESCRIPTION 要求清空任务内容（如"把任务内容删掉""清空备注""不要任务内容了""去掉刚才那些说明"）
 
 判断原则：
 1. 只要是在描述任务相关的细节，就是 APPEND；
 2. 明确表达"提交/发布/确认"是 PUBLISH；
 3. 指出某个字段要改是 EDIT；
-4. 拿不准时选 APPEND（补充内容不会造成数据损坏）。
+4. 明确要求删除/清空任务内容（不是删除整个任务）是 CLEAR_DESCRIPTION；
+5. 拿不准时选 APPEND（补充内容不会造成数据损坏）。
 
 重要：只输出标签本身（例如 APPEND），不要解释、不要标点、不要 JSON。"""
 
@@ -104,6 +109,11 @@ _SHORT_FINISH_RAW = (
 
 _SHORT_FINISH = {w.lower() for w in _SHORT_FINISH_RAW}
 _CANCEL_WORDS = ("算了", "不发了", "取消", "别发了", "放弃", "不做了", "先不做")
+
+# 清空任务内容：必须同时出现"删除类动词"和"内容类名词"，
+# 否则"删掉取件码"这类会误伤（那其实是在补充或修改）
+_CLEAR_VERB = r"(删|去掉|清除|清空|取消|不要|不用|抹掉)"
+_CLEAR_NOUN = r"(任务内容|内容|描述|备注|说明|补充的|刚才说的|那些字)"
 # 字段词和动词的先后顺序不固定："把金额改成12块"和"改成12块金额"都要命中
 _EDIT_FIELD = r"(金额|价格|悬赏|标题|地点|时间|送达|取货|位置|内容|描述)"
 _EDIT_VERB = r"(改|换|调整|修改|更新|写错)"
@@ -112,6 +122,7 @@ _QUERY_PATTERN = re.compile(r"(多少钱|什么内容|送到哪|从哪里|几点
 _CHITCHAT_PATTERN = re.compile(
     r"(你是谁|你叫什么|天气|几点钟|讲个笑话|你能做什么|怎么用)"
 )
+_CLEAR_PATTERN = re.compile(rf"{_CLEAR_VERB}.{{0,6}}{_CLEAR_NOUN}|{_CLEAR_NOUN}.{{0,6}}{_CLEAR_VERB}")
 # 客套话只有整句都是它时才算闲聊；"尽快还，谢谢"里带任务信息，应算补充内容
 _POLITE_WORDS = ("谢谢", "辛苦了", "感谢", "谢谢啦", "多谢", "哈", "你好", "在吗")
 
@@ -131,6 +142,9 @@ def guess_intent_by_rules(message: str) -> Intent:
 
     if any(word in text for word in _CANCEL_WORDS):
         return Intent.CANCEL
+    # 清空内容要排在 EDIT 前面："把任务内容删掉"含"改/删"语义，但动作是清空
+    if _CLEAR_PATTERN.search(text) and not re.search(r"(改成|换成|更新为)", text):
+        return Intent.CLEAR_DESCRIPTION
     # "不用发""先别发"是收回发布意图，不能算发布
     if any(word in text for word in _PUBLISH_EXCLUDE):
         return Intent.FINISH

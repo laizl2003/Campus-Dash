@@ -55,6 +55,8 @@ class AgentState(TypedDict, total=False):
     appended: bool
     # READY 状态下识别出的意图
     intent: Intent | None
+    # 本轮是否清空了任务内容
+    cleared: bool
 
 
 class AgentReply(TypedDict, total=False):
@@ -65,6 +67,7 @@ class AgentReply(TypedDict, total=False):
     question: str | None
     intent: str | None
     can_publish: bool
+    cleared: bool
 
 
 def build_graph(extractor: Extractor):
@@ -95,8 +98,19 @@ def build_graph(extractor: Extractor):
             if intent in (Intent.QUERY, Intent.CHITCHAT, Intent.CANCEL):
                 # 这三类不改草稿，只回话
                 return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
-            # APPEND：把这句话并入任务内容
-            updated = append_description(current, message)
+            if intent == Intent.CLEAR_DESCRIPTION:
+                # 清空任务内容，其余字段保持不动
+                return {
+                    "draft": current.model_copy(update={"description": None}),
+                    "extracted": {},
+                    "appended": False,
+                    "cleared": True,
+                    "intent": intent,
+                }
+            # APPEND：把这句话并入任务内容，并做去口语化整理
+            summarized = _summarize(extractor, current.description, message)
+            updated = current.model_copy(update={"description": summarized[:300] if summarized else None}) \
+                if summarized else append_description(current, message)
             change = updated.description != current.description
             return {"draft": updated, "extracted": {}, "appended": change, "intent": intent}
         # 本轮是补齐必填字段：首次进入 READY，不带 appended 标记
@@ -142,6 +156,7 @@ def build_graph(extractor: Extractor):
             "missing": [],
             "appended": state.get("appended"),
             "intent": state.get("intent"),
+            "cleared": state.get("cleared"),
         }
 
     def route_after_check(state: AgentState) -> str:
@@ -159,6 +174,18 @@ def build_graph(extractor: Extractor):
     graph.add_edge("ask_user", END)
     graph.add_edge("ready", END)
     return graph.compile()
+
+
+def _summarize(extractor: Extractor, existing: str | None, message: str) -> str | None:
+    """让模型把任务内容整理成书面描述。
+
+    模型不可用或返回空时返回 None，调用方退回原文拼接，
+    这样"整理"是增强项，不是单点故障。
+    """
+    try:
+        return extractor.summarize_description(existing, message)
+    except Exception:
+        return None
 
 
 def _classify(extractor: Extractor, message: str, draft: TaskDraft) -> Intent:
@@ -255,6 +282,7 @@ INTENT_MESSAGES: dict[Intent, str] = {
     Intent.CANCEL: "好的，这次任务先不发了。需要的话可以重新描述。",
     Intent.CHITCHAT: "我是校园跑腿助手，帮你把需求整理成任务。要继续补充任务内容，还是点「确认发布」？",
     Intent.FINISH: READY_STOP_MESSAGE,
+    Intent.CLEAR_DESCRIPTION: "已清空任务内容，其他信息保持不变。需要补充可以继续告诉我。",
 }
 
 
@@ -267,7 +295,8 @@ def draft_to_reply(
     intent: Intent | None = None,
 ) -> AgentReply:
     if status == "READY":
-        if intent in (Intent.PUBLISH, Intent.EDIT, Intent.QUERY, Intent.CANCEL, Intent.CHITCHAT):
+        if intent in (Intent.PUBLISH, Intent.EDIT, Intent.QUERY, Intent.CANCEL,
+                      Intent.CHITCHAT, Intent.CLEAR_DESCRIPTION):
             text = INTENT_MESSAGES[intent]
         elif intent == Intent.FINISH:
             text = READY_STOP_MESSAGE
@@ -288,7 +317,8 @@ def draft_to_reply(
         # 前端据此决定显示草稿卡片还是纯文本回话
         "intent": intent.value if intent else None,
         # READY + PUBLISH 时前端可以直接调发布，不用再让用户点一次
-        "can_publish": bool(status == "READY" and intent in (None, Intent.PUBLISH, Intent.APPEND, Intent.FINISH, Intent.EDIT, Intent.QUERY)),
+        "can_publish": bool(status == "READY" and intent is not Intent.CANCEL),
+        "cleared": bool(intent is Intent.CLEAR_DESCRIPTION),
     }
 
 

@@ -28,7 +28,13 @@ from datetime import datetime, timedelta
 from ..config import LLMSettings
 from ..models import STRUCTURED_TYPES, TaskDraft, required_slots
 from .intent import INTENT_SYSTEM_PROMPT, Intent, build_intent_prompt, normalize_intent
-from .prompts import SYSTEM_PROMPT, build_user_prompt
+from .intent import QUOTE_CHARS
+from .prompts import (
+    DESCRIPTION_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    build_description_prompt,
+    build_user_prompt,
+)
 
 
 class ExtractionError(RuntimeError):
@@ -259,6 +265,28 @@ class LLMExtractor(Extractor):
             return normalize_intent(result.content)
         except Exception:
             return None
+
+    def summarize_description(self, existing: str | None, message: str) -> str | None:
+        """把已有内容 + 新补充改写成书面化描述。
+
+        失败返回 None，调用方会退回"原文拼接"，保证不丢信息。
+        """
+        try:
+            result = self._call_llm(
+                DESCRIPTION_SYSTEM_PROMPT,
+                build_description_prompt(existing, message),
+                json_mode=False,
+            )
+        except Exception:
+            return None
+
+        text = (result.content or "").strip()
+        # 去掉模型可能加的引号或前缀
+        text = text.strip(QUOTE_CHARS).strip()
+        for prefix in ("任务内容：", "整理后：", "内容："):
+            if text.startswith(prefix):
+                text = text[len(prefix):].strip()
+        return text[:300] or None
 
     # ------------------------------------------------------------ 待填实现
 
@@ -508,6 +536,24 @@ class CircuitBreakerExtractor(Extractor):
                 self._open_until = time.time() + self.cooldown_seconds
                 self._failures = 0
             return self.fallback.extract(message, draft)
+
+    # 包装器必须把新方法透传给 primary，否则会静默落到基类默认实现（返回 None），
+    # 表现为"功能写了但完全不生效"。意图识别和内容整理都踩过这个坑。
+    def classify_intent(self, message: str, draft: TaskDraft) -> "Intent | None":
+        if time.time() < self._open_until:
+            return self.fallback.classify_intent(message, draft)
+        try:
+            return self.primary.classify_intent(message, draft)
+        except Exception:
+            return self.fallback.classify_intent(message, draft)
+
+    def summarize_description(self, existing: str | None, message: str) -> str | None:
+        if time.time() < self._open_until:
+            return self.fallback.summarize_description(existing, message)
+        try:
+            return self.primary.summarize_description(existing, message)
+        except Exception:
+            return self.fallback.summarize_description(existing, message)
 
 
 def default_extractor() -> Extractor:
