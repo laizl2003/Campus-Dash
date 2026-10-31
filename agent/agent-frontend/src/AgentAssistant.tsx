@@ -284,6 +284,19 @@ async function deleteRemotePanel(panelId: string): Promise<void> {
 }
 interface Point { x: number; y: number }
 
+/**
+ * 悬浮球默认位置：页面内容右侧、竖向中上。
+ *
+ * 对齐的是 .content 的右边界（页面 1200px 居中容器），不是视口边缘，
+ * 这样宽屏下不会飘到很远的地方，和页面主体保持同一栏。
+ */
+function defaultPosition(): Point {
+  const content = document.querySelector('.content');
+  const rect = content?.getBoundingClientRect();
+  const right = rect && rect.right > FAB_SIZE ? rect.right : window.innerWidth - 24;
+  const top = Math.round(window.innerHeight * 0.28);
+  return { x: Math.round(right - FAB_SIZE), y: Math.max(88, top) };
+}
 function readPosition(): Point | null {
   try {
     const raw = localStorage.getItem(POSITION_KEY);
@@ -436,8 +449,7 @@ export default function AgentAssistant() {
 
   useEffect(() => {
     const saved = readPosition();
-    const initial = saved ?? { x: window.innerWidth - FAB_SIZE - 24, y: window.innerHeight - FAB_SIZE - 28 };
-    setPosition(clampPosition(initial));
+    setPosition(clampPosition(saved ?? defaultPosition()));
   }, []);
 
   useEffect(() => {
@@ -469,10 +481,24 @@ export default function AgentAssistant() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, historyOpen]);
 
+  /** 滚到最新一条。
+   *
+   * 等一帧再滚：面板刚打开、卡片刚插入时高度还没算完，
+   * 立刻设 scrollTop 会停在旧位置（表现为"从最早的消息开始"）。
+   */
+  const scrollToBottom = useCallback(() => {
+    const node = listRef.current;
+    if (!node) return;
+    requestAnimationFrame(() => {
+      node.scrollTop = node.scrollHeight;
+    });
+  }, []);
+
+  // 打开面板、来新消息、进入"正在输入"都要贴底
   useEffect(() => {
-    if (!listRef.current) return;
-    listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages, busy]);
+    if (!open) return;
+    scrollToBottom();
+  }, [open, messages, busy, scrollToBottom]);
 
   useEffect(() => () => {
     if (timerRef.current) window.clearTimeout(timerRef.current);
@@ -602,7 +628,7 @@ export default function AgentAssistant() {
           // 只认"还没发布"的卡片。已发布的那张属于上一单，是历史记录，
           // 新任务必须另起一张，否则会把上一单的卡片改写成这一单的内容。
           const lastDraftIndex = prev
-            .map(item => Boolean(item.draft) && !item.publishedId)
+            .map(item => Boolean(item.draft) && !item.publishedId && !item.cancelled)
             .lastIndexOf(true);
           if (lastDraftIndex === -1) return [...prev, assistant];
           const next = prev.map((item, index) => index === lastDraftIndex
