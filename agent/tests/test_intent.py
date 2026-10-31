@@ -15,7 +15,9 @@ class ReadyExtractor(Extractor):
         self.calls = 0
         self.fixed_intent = intent
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         self.calls += 1
         if self.calls > 1:
             # EDIT 意图下，抽取器要能把"金额改成12"解析成字段

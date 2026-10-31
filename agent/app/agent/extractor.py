@@ -45,7 +45,9 @@ class Extractor(ABC):
     """把一句自然语言转成任务字段 patch。"""
 
     @abstractmethod
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         raise NotImplementedError
 
     def classify_intent(self, message: str, draft: TaskDraft) -> "Intent | None":
@@ -152,7 +154,9 @@ class RuleExtractor(Extractor):
     同时给模型抽取提供一个可对比的基线。
     """
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         patch: dict[str, object] = {}
         if draft.type is None:
             guessed = guess_type(message)
@@ -170,7 +174,9 @@ class RuleExtractor(Extractor):
 class EmptyExtractor(Extractor):
     """空实现：永远返回空 patch，用于测试最差情况。"""
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         return {}
 
 # ---------------------------------------------------------------- 真实模型
@@ -215,12 +221,14 @@ class LLMExtractor(Extractor):
 
     # ------------------------------------------------------------ 对外入口
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         text = message.strip()
         if not text:
             return {}
 
-        user_prompt = build_user_prompt(text, draft, required_slots(draft))
+        user_prompt = build_user_prompt(text, draft, required_slots(draft), history=history)
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -233,7 +241,7 @@ class LLMExtractor(Extractor):
             except NotImplementedError:
                 # 使用者还没填 _call_llm：直接降级，避免无意义重试
                 self.last_error = "LLMExtractor._call_llm 未实现"
-                return self.fallback.extract(text, draft)
+                return self.fallback.extract(text, draft, history)
             except ExtractionError as exc:
                 self.last_error = str(exc)
                 if attempt < self.max_retries:
@@ -528,9 +536,11 @@ class CircuitBreakerExtractor(Extractor):
         self._failures = 0
         self._open_until = 0.0
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         if time.time() < self._open_until:
-            return self.fallback.extract(message, draft)
+            return self.fallback.extract(message, draft, history)
         try:
             patch = self.primary.extract(message, draft)
             self._failures = 0

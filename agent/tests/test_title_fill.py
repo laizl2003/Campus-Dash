@@ -10,7 +10,9 @@ from app.service import ChatService
 class DistractingExtractor(Extractor):
     """模拟模型：回答标题时顺手把地点也抽出来，导致 patch 非空。"""
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         if draft.type is None:
             return {"type": "DELIVERY"}
         if "3号楼502" in message:

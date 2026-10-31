@@ -10,7 +10,9 @@ from app.service import ChatService, Session
 class StubExtractor(Extractor):
     """只认类型，其余交给规则，验证会话切换不依赖模型。"""
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         patch: dict[str, object] = {}
         if draft.type is None and ("快递" in message or "奶茶" in message):
             patch["type"] = "DELIVERY"

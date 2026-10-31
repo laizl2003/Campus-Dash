@@ -14,9 +14,19 @@ from datetime import datetime
 
 from ..models import STRUCTURED_TYPES, TYPE_LABELS, Slot, TaskDraft
 
+# 短期记忆上限：最近 8 条消息、每条 120 字，防止 prompt 随对话膨胀
+MAX_HISTORY_MESSAGES = 8
+MAX_HISTORY_CHARS = 120
+
 SYSTEM_PROMPT = """你是 CampusDash 校园跑腿平台的任务信息抽取助手。
 
 你的唯一职责：从用户这一句话里，抽取出**本轮新出现**的任务字段，输出 JSON。
+
+你会看到"最近对话"作为短期记忆，用来理解省略和指代（如"就那个""改成刚才说的"）。
+判断规则：
+1. 后面的说法与前面的**冲突**时，一律以**靠后的说法**为准，不要保留旧值；
+2. 后面的说法是对前面的**补充**时，合并处理，不要丢弃已确认的信息；
+3. "已收集字段"是当前事实，若本轮这句话与它冲突，以本轮这句话为准。
 
 字段分两类，务必分清，不要串味：
 
@@ -98,6 +108,27 @@ def build_description_prompt(existing: str | None, message: str) -> str:
     return "\n".join(parts)
 
 
+def _history_block(history: list[dict] | None) -> str:
+    """把当前会话的最近几轮拼成短期记忆。
+
+    只取最近几条、每条截断，避免 prompt 随对话变长；
+    越靠后的说法越新，system prompt 里已约定冲突时以靠后的为准。
+    """
+    if not history:
+        return ""
+    lines: list[str] = []
+    for item in history[-MAX_HISTORY_MESSAGES:]:
+        role = item.get("role")
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        speaker = "用户" if role == "user" else "助手"
+        lines.append(f"{speaker}：{content[:MAX_HISTORY_CHARS]}")
+    if not lines:
+        return ""
+    return "最近对话（越靠后越新）：\n" + "\n".join(lines) + "\n\n"
+
+
 def _pending_hint(pending: list[Slot]) -> str:
     """针对"正在追问的槽位"给一句额外说明。
 
@@ -119,6 +150,7 @@ def build_user_prompt(
     draft: TaskDraft,
     pending: list[Slot],
     now: datetime | None = None,
+    history: list[dict] | None = None,
 ) -> str:
     """把当前上下文拼成一条用户消息。"""
     current = now or datetime.now()
@@ -137,6 +169,7 @@ def build_user_prompt(
 
     return (
         f"当前时间：{current.strftime('%Y-%m-%d %H:%M:%S')}（星期{'一二三四五六日'[current.weekday()]}）\n"
+        f"{_history_block(history)}"
         f"已收集字段：{json.dumps(filled, ensure_ascii=False)}\n"
         f"当前正在追问：{pending_text}\n"
         f"可选字段：{json.dumps(schema_hint, ensure_ascii=False)}\n"

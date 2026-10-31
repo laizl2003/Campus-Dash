@@ -70,6 +70,8 @@ class AgentState(TypedDict, total=False):
     updated_fields: list[str]
     # 追问地点时用户答得不像地点（用于提示语）
     rejected_location: bool
+    # 当前会话最近几轮（短期记忆），由 service 注入
+    history: list[dict]
 
 
 class AgentReply(TypedDict, total=False):
@@ -129,7 +131,7 @@ def build_graph(extractor: Extractor):
             # 只做一次抽取，让模型把两者分开：字段进对应槽位，剩下的进 description。
             # 之前只捞 expired_at，导致"把标题改成XX，另外别放门口"里的内容被整段丢掉，
             # 或者整句糊进任务描述、字段一个都没改到。
-            raw_patch = _extract(extractor, message, current)
+            raw_patch = _extract(extractor, message, current, state.get("history"))
             # 地点先过校验：不像地点就不落进草稿，并给一句说明
             patch = sanitize_places(raw_patch)
             bad_location = any(
@@ -178,7 +180,7 @@ def build_graph(extractor: Extractor):
         # 这样文案是"信息已完整"，而不是"保持现状"
 
         try:
-            patch = extractor.extract(message, current)
+            patch = extractor.extract(message, current, state.get("history"))
         except Exception:
             # 抽取失败不能中断对话：本轮当作"没有新增信息"，仍然继续追问
             patch = {}
@@ -397,14 +399,16 @@ def _deadline_fallback(message: str) -> dict[str, object]:
     return {"expired_at": guessed} if guessed is not None else {}
 
 
-def _extract(extractor: Extractor, message: str, draft: TaskDraft) -> dict[str, object]:
+def _extract(
+    extractor: Extractor, message: str, draft: TaskDraft, history: list[dict] | None = None
+) -> dict[str, object]:
     """READY 阶段做一次完整抽取：字段修改 + 剩余说明。
 
     模型返回的 description 是"非字段的那部分信息"，调用方会把它并进任务描述；
     其余键都是用户要求修改的字段值（标题、地点、悬赏、截止时间等）。
     """
     try:
-        patch = extractor.extract(message, draft)
+        patch = extractor.extract(message, draft, history)
     except Exception:
         return {}
     # 模型漏掉时间时用规则补一次，避免"明天下午三点"被当成任务内容

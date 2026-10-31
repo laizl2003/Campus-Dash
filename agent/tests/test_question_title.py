@@ -80,7 +80,7 @@ def test_first_turn_asks_all_missing_at_once():
     from app.agent.extractor import Extractor
 
     class FullType(Extractor):
-        def extract(self, message, draft):
+        def extract(self, message, draft, history=None):
             if draft.type is None:
                 return {"type": "DELIVERY"}
             return {}

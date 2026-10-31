@@ -13,7 +13,9 @@ class OneShotExtractor(Extractor):
     def __init__(self) -> None:
         self.calls = 0
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         self.calls += 1
         if self.calls > 1:
             return {}

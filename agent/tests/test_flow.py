@@ -23,7 +23,9 @@ class FakeExtractor(Extractor):
         self.script = script
         self.calls = 0
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         if not self.script:
             return {}
         index = min(self.calls, len(self.script) - 1)

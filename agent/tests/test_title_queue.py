@@ -12,7 +12,9 @@ from app.service import ChatService
 class TypeExtractor(Extractor):
     """只认类型，其余交给规则/兜底，用来验证"标题不用回答"。"""
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         patch: dict[str, object] = {}
         if draft.type is None:
             if "外卖" in message or "快递" in message:

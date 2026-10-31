@@ -12,7 +12,9 @@ from app.service import ChatService
 class StubExtractor(Extractor):
     """只认类型，其余交给裸回答回填，方便验证地点校验。"""
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         patch: dict[str, object] = {}
         if draft.type is None:
             patch["type"] = "DELIVERY"
@@ -78,7 +80,9 @@ def test_model_returned_garbage_location_is_filtered():
     """模型硬要返回"就那个"，也不能写进草稿。"""
 
     class BadModel(Extractor):
-        def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+        def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
             patch: dict[str, object] = {}
             if draft.type is None:
                 patch["type"] = "DELIVERY"

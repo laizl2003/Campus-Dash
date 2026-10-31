@@ -255,11 +255,20 @@ class ChatService:
     def _chat(self, session, message: str) -> AgentReply:
 
         missing = required_slots(session.draft)
+        # 短期记忆：把本次会话最近几轮喂给抽取器，便于理解"就那个"这类省略；
+        # 从库里取（而不是只靠内存），刷新/重连后也能接上上下文。
+        history: list[dict] = []
+        if hasattr(self.store, "messages"):
+            try:
+                history = self.store.messages(session.id)[-8:]
+            except Exception:  # noqa: BLE001
+                history = []
         state = self.graph.invoke(
             {
                 "message": message,
                 "draft": session.draft,
                 "missing": missing,
+                "history": history,
             }
         )
         draft: TaskDraft = state["draft"]

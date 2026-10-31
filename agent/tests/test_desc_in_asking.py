@@ -12,7 +12,9 @@ from app.service import ChatService
 class SparseExtractor(Extractor):
     """模拟模型：能从一句话里同时抽出截止时间、金额和描述。"""
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         patch: dict[str, object] = {}
         if "明天" in message or "点" in message:
             patch["expired_at"] = (datetime.now() + timedelta(days=1)).replace(

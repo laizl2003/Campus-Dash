@@ -16,7 +16,9 @@ class MixedExtractor(Extractor):
     def __init__(self, intent: Intent = Intent.APPEND) -> None:
         self.fixed_intent = intent
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         patch: dict[str, object] = {}
         if "标题改成" in message:
             patch["title"] = "代取快递"

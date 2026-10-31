@@ -21,7 +21,9 @@ class DeadlineExtractor(Extractor):
     def __init__(self, intent: Intent | None = None) -> None:
         self.fixed_intent = intent
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         if "明天" in message and ("点" in message or "截止" in message):
             return {"expired_at": _deadline()}
         return {}

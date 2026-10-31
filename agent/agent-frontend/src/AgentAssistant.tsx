@@ -17,6 +17,8 @@ interface ChatMessage {
   publishedId?: string;
   /** 这一单被取消了：卡片冻结成"已取消"，不会被新任务覆盖 */
   cancelled?: boolean;
+  /** 这条消息属于哪个会话：换会话即新任务，卡片必须另起一张 */
+  sessionId?: string;
 }
 
 interface ApiDraft {
@@ -43,6 +45,8 @@ interface ApiReply {
   show_draft?: boolean;
   /** 用户清空了任务内容 */
   cleared?: boolean;
+  /** 这轮落在哪个会话上：发布/取消后会换新会话 */
+  session_id?: string;
 }
 
 interface DraftPayload {
@@ -237,6 +241,7 @@ async function fetchPanelMessages(panelId: string): Promise<ChatMessage[]> {
     const data = await resp.json() as {
       messages?: {
         message_id: string;
+        session_id?: string;
         role: Role;
         content: string;
         time?: string;
@@ -246,6 +251,7 @@ async function fetchPanelMessages(panelId: string): Promise<ChatMessage[]> {
     return (data.messages ?? []).map(item => ({
       // 直接用服务端的雪花 id：跨会话也全局有序
       id: item.message_id,
+      sessionId: item.session_id,
       role: item.role,
       content: item.content,
       time: item.time
@@ -609,6 +615,7 @@ export default function AgentAssistant() {
         role: 'assistant',
         content: reply.message,
         time: nowLabel(),
+        sessionId: reply.session_id,
         // 只有信息齐全才展示草稿卡片；追问阶段只显示问题
         draft: reply.status === 'READY' ? toDraftPayload(reply) : undefined,
       };
@@ -647,10 +654,13 @@ export default function AgentAssistant() {
         setMessages(prev => {
           // 只认"还没发布"的卡片。已发布的那张属于上一单，是历史记录，
           // 新任务必须另起一张，否则会把上一单的卡片改写成这一单的内容。
-          const lastDraftIndex = prev
-            .map(item => Boolean(item.draft) && !item.publishedId && !item.cancelled)
-            .lastIndexOf(true);
-          if (lastDraftIndex === -1) return [...prev, assistant];
+          // 判据是"是否同一个会话"，不再依赖卡片上的标志位：
+          // 发布/取消都会换新会话，于是新任务必然另起一张卡片。
+          const lastDraftIndex = prev.map(item => Boolean(item.draft)).lastIndexOf(true);
+          const sameSession = lastDraftIndex !== -1
+            && Boolean(reply.session_id)
+            && prev[lastDraftIndex].sessionId === reply.session_id;
+          if (!sameSession) return [...prev, assistant];
           const next = prev.map((item, index) => index === lastDraftIndex
             ? { ...item, draft: assistant.draft }
             : item);

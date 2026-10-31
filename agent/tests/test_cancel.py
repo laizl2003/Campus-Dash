@@ -8,7 +8,9 @@ from app.service import ChatService, Session
 
 
 class StubExtractor(Extractor):
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         patch: dict[str, object] = {}
         if draft.type is None:
             patch["type"] = "DELIVERY"

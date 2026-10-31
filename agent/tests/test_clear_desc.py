@@ -16,7 +16,9 @@ class EditableExtractor(Extractor):
         self.fixed_intent = intent
         self.summary = summary
 
-    def extract(self, message: str, draft: TaskDraft) -> dict[str, object]:
+    def extract(
+        self, message: str, draft: TaskDraft, history: list[dict] | None = None
+    ) -> dict[str, object]:
         self.calls += 1
         if self.calls > 1:
             return {}
