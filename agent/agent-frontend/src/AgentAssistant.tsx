@@ -64,6 +64,8 @@ interface HistoryItem {
   preview: string;
   time: string;
   messages: ChatMessage[];
+  /** CLOSED：这一单已经发布，继续说话要新开会话 */
+  status?: string;
 }
 
 const POSITION_KEY = 'agent.fab.position';
@@ -199,7 +201,7 @@ async function ensureSession(): Promise<string> {
 }
 
 /**
- * 发送前校正会话：后端会话存在内存里，服务重启后旧 id 会变成 404。
+ * 发送前校正会话：会话存在 MySQL 里，只有被删除（或换了账号）时 id 才会失效。
  * 这里先试探一次，失效就重建，避免用户看到"会话已失效"的报错后再手动重发。
  */
 async function resolveSession(): Promise<string> {
@@ -250,6 +252,7 @@ async function fetchRemoteHistory(): Promise<HistoryItem[]> {
         : '',
       // 本地有完整消息就复用，否则留空，点开时再从后端拉
       messages: local.find(item => item.id === session.session_id)?.messages ?? [],
+      status: session.status,
     }));
   } catch {
     return [];
@@ -708,6 +711,8 @@ export default function AgentAssistant() {
         locationTo: raw.location_to ?? null,
         expiredAt: raw.expired_at ?? null,
         description: raw.description ?? null,
+        // 让后端把这条会话标记成 CLOSED，避免从历史点回来后继续用旧草稿
+        sessionId: sid === 'local' ? null : sid,
       });
       setPublished({ [messageId]: result.errandId });
       setNotice('任务已发布');
@@ -738,6 +743,7 @@ export default function AgentAssistant() {
           preview: `任务已发布 #${result.errandId}`,
           time: nowLabel(),
           messages: next,
+          status: 'CLOSED',
         }, ...readHistory().filter(item => item.id !== sid)]);
         setHistory(readHistory());
         return next;
@@ -772,6 +778,14 @@ export default function AgentAssistant() {
     // 本地没有完整消息（换了设备或清了缓存）时，从后端拉回来
     const messages = item.messages.length > 0 ? item.messages : await fetchSessionMessages(item.id);
     setMessages(messages.length > 0 ? messages : [welcomeMessage]);
+    // 已发布的会话只用来回看：不接管当前会话，
+    // 否则用户接着说"再帮我买杯奶茶"会往上一单的草稿里追加。
+    if (item.status === 'CLOSED') {
+      setSessionId(null);
+      localStorage.removeItem(SESSION_KEY);
+      setNotice('这是一条已发布的历史记录，继续对话会开启新任务');
+      return;
+    }
     setSessionId(item.id);
     localStorage.setItem(SESSION_KEY, item.id);
   };

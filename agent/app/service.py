@@ -83,6 +83,23 @@ class ChatService:
             # 内存版 create 不接收 user_id
             return self.store.create()
 
+    def mark_published(self, session_id: str | None) -> None:
+        """发布成功后把会话标记成 CLOSED。
+
+        不标记的话，用户从历史里点开这一单继续说，会被当成"给已发布的草稿补内容"，
+        新任务就带着上一单的字段开始了。
+        """
+        if not session_id:
+            return
+        session = self.store.get(session_id)
+        if session is None:
+            return
+        try:
+            self.store.save(session, status="CLOSED")
+        except TypeError:
+            # 内存版 save 只收 session，没有状态列可写
+            self.store.save(session)
+
     def delete_session(self, session_id: str) -> bool:
         """删除会话。内存版直接丢字典，MySQL 版连消息一起删。"""
         if hasattr(self.store, "delete"):

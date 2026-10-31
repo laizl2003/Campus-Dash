@@ -6,8 +6,12 @@
 
 from __future__ import annotations
 
-import httpx
+import asyncio
+import contextlib
+import logging
 import os
+
+import httpx
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -17,7 +21,42 @@ from .config import LLMSettings
 from .models import TYPE_LABELS
 from .service import ChatService
 
-app = FastAPI(title="CampusDash Agent", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+# 空会话（只建了会话没说话）默认每天清一次
+PURGE_INTERVAL_SECONDS = int(os.getenv("AGENT_PURGE_INTERVAL_SECONDS", "86400"))
+
+
+async def _purge_loop() -> None:
+    # 定时清理空会话，避免 agent_session 被建会话的请求撑大。
+    # 只删 turns == 0 且超过一天没动过的行，说过话的会话不受影响。
+    while True:
+        try:
+            await asyncio.sleep(PURGE_INTERVAL_SECONDS)
+            purge = getattr(service.store, "purge_empty", None)
+            if purge is None:
+                continue
+            removed = await asyncio.to_thread(purge)
+            if removed:
+                logger.info("已清理 %s 个空会话", removed)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            logger.exception("清理空会话失败，下一轮重试")
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_: FastAPI):
+    task = asyncio.create_task(_purge_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(title="CampusDash Agent", version="0.1.0", lifespan=lifespan)
 service = ChatService()
 
 
@@ -111,6 +150,8 @@ class PublishRequest(BaseModel):
     locationTo: str | None = None
     expiredAt: str | None = None
     description: str | None = None
+    # 发布成功后要把这条会话标记为 CLOSED；不属于主项目接口字段，转发时剔除
+    sessionId: str | None = Field(default=None, exclude=True)
 
 
 @app.post("/publish")
@@ -144,6 +185,8 @@ def publish(req: PublishRequest, authorization: str | None = Header(default=None
         raise HTTPException(status_code=400, detail=data.get("message") or "发布失败")
 
     body = data.get("data") or {}
+    # 这一单已经落地：会话到此为止，避免后续消息继续往旧草稿里追加
+    service.mark_published(req.sessionId)
     return {"errandId": str(body.get("errandId", "")), "status": body.get("status")}
 
 
