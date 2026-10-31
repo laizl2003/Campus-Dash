@@ -9,6 +9,8 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from .agent.extractor import CircuitBreakerExtractor, LLMExtractor, RuleExtractor
+from .config import LLMSettings
 from .models import TYPE_LABELS
 from .service import ChatService
 
@@ -24,6 +26,28 @@ class ChatRequest(BaseModel):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/status")
+def status() -> dict[str, object]:
+    """排查用：模型是否真的接上了、缺哪些配置。
+
+    网关（nginx）会把 /agent 前缀去掉再转发，
+    所以这里注册的是 /status，对外访问是 /agent/status。
+    """
+    settings = LLMSettings.from_env()
+    extractor = service.extractor
+    if isinstance(extractor, CircuitBreakerExtractor):
+        extractor_name = type(extractor.primary).__name__
+    else:
+        extractor_name = type(extractor).__name__
+    return {
+        "extractor": extractor_name,
+        "llm_enabled": settings.enabled,
+        "llm_usable": settings.usable(),
+        "model": settings.model or None,
+        "missing_config": settings.missing_fields(),
+    }
 
 
 @app.post("/sessions")

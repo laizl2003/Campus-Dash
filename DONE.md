@@ -3,6 +3,19 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-31 · LLM 抽取链路：脚手架完成，仅留 HTTP 调用待填
+
+- **目标**：把接入模型后的逻辑全部写好，使用者只需填 API 调用。
+- **改动**：
+  - 新增 `agent/app/config.py`：`LLMSettings.from_env()` 读环境变量，`usable()` 判断配置是否齐全。
+  - 新增 `agent/app/agent/prompts.py`：系统提示词与用户提示词模板（含当前草稿、待追问槽位、当前时间）。
+  - 重写 `LLMExtractor`：JSON 容错解析、金额单位换算、时间解析、类型别名、字段校验、重试退避、失败降级到规则兜底；仅 `_call_llm` 留空。
+  - 新增 `CircuitBreakerExtractor`：模型连续失败 5 次冷却 30 秒。
+  - `default_extractor()` 按环境变量自动选择 LLM 或规则兜底；新增 `GET /agent/status` 排查配置。
+  - compose 增加 LLM 环境变量；新增 `agent/LLM.md` 接入说明。
+- **验证**：`pytest` 17 passed（含 12 个 LLM 链路测试）；`/agent/status` 未配置时返回 `RuleExtractor`，配置齐全时返回 `LLMExtractor` 并正确降级。
+
+
 ## 2026-10-31 · 悬浮球接入真实 Agent 后端
 
 - **目标**：保留原悬浮球样式与交互，把 mock 数据源换成真实后端对话。
