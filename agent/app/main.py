@@ -109,7 +109,7 @@ class PublishRequest(BaseModel):
     slotTotal: int = 1
     locationFrom: str | None = None
     locationTo: str | None = None
-    startTime: str | None = None
+    expiredAt: str | None = None
     description: str | None = None
 
 

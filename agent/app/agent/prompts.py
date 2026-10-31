@@ -23,7 +23,8 @@ SYSTEM_PROMPT = """你是 CampusDash 校园跑腿平台的任务信息抽取助�
 - title: 任务标题，一句话，最多 64 字
 - location_from: 取货地点（DELIVERY/BUY/QUEUE 需要）
 - location_to: 送达地点（DELIVERY/BUY/QUEUE 需要）
-- start_time: 开始时间，ISO-8601 格式，例如 2026-11-01T15:00:00
+- expired_at: 任务截止时间（超过该时刻无人接单则任务过期），ISO-8601 格式，
+  例如 2026-11-01T15:00:00。**这是选填项**——用户没说就不要填，表示任务永久有效
 - reward_cents: 悬赏金额，**整数，单位分**，例如 8 元写作 800
 - description: 任务描述，补充细节，最多 300 字
 
@@ -44,6 +45,7 @@ SYSTEM_PROMPT = """你是 CampusDash 校园跑腿平台的任务信息抽取助�
 2. 不要臆造地点、时间、金额；不确定就不要给。
 3. 金额要换算成分：8 块 -> 800，15.5 元 -> 1550。
 4. 时间是未来时间，相对说法要结合下面的"当前时间"换算成绝对时间。
+   用户说的"明天三点前/几点送达/截止到某时"都算 expired_at，而不是开始时间。
 5. 如果用户只是回答一个地点（例如"3 号楼 502"），就只填对应的地点字段。
 6. 只输出 JSON 对象本身，不要 markdown 代码块，不要任何解释文字。"""
 
@@ -92,7 +94,7 @@ def build_user_prompt(
         "title": "string",
         "location_from": "string",
         "location_to": "string",
-        "start_time": "ISO-8601 datetime",
+        "expired_at": "ISO-8601 datetime（选填，任务截止时间）",
         "reward_cents": "integer (分)",
         "description": "string",
     }

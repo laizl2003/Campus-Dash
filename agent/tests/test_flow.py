@@ -43,7 +43,7 @@ def test_missing_fields_are_asked_one_by_one():
         {"type": "DELIVERY", "title": "取快递"},
         {"location_from": "菜鸟驿站"},
         {"location_to": "3 号楼 502"},
-        {"start_time": "2026-11-01T15:00:00", "reward_cents": 800},
+        {"expired_at": "2026-11-01T15:00:00", "reward_cents": 800},
     ]
     service = ChatService(FakeExtractor(script))
     session = service.create_session()
@@ -56,7 +56,8 @@ def test_missing_fields_are_asked_one_by_one():
     assert "送到哪里" in reply["message"]
 
     reply = service.chat(session.id, "3 号楼 502")
-    assert reply["missing"] == ["start_time", "reward_cents"]
+    # 截止时间是选填，不再出现在缺失清单里
+    assert reply["missing"] == ["reward_cents"]
 
     reply = service.chat(session.id, "明天下午三点，8 块")
     assert reply["status"] == "READY"
@@ -104,4 +105,4 @@ def test_rule_extractor_collects_fields_across_turns():
     reply = service.chat(session.id, "明天下午三点，8块")
     assert reply["status"] == "READY"
     assert reply["draft"]["reward_cents"] == 800
-    assert reply["draft"]["start_time"].startswith("2026-11-01T15:00")
+    assert reply["draft"]["expired_at"].startswith("2026-11-01T15:00")

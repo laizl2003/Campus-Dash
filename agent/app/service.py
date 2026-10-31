@@ -118,7 +118,7 @@ class ChatService:
         draft: TaskDraft = state["draft"]
         missing = state["missing"]
         status = state.get("status", "ASKING")
-        question = next_question(missing) if status != "READY" else None
+        question = next_question(missing, draft=draft) if status != "READY" else None
         # 只有本轮真的追加了内容才传 True；首次完整和"没有了"都要区分开
         appended = state.get("appended") if status == "READY" else None
         intent = state.get("intent") if status == "READY" else None
@@ -137,4 +137,5 @@ class ChatService:
             self.store.append_message(session.id, "user", message)
             self.store.append_message(session.id, "assistant", reply_text)
 
-        return draft_to_reply(status, draft, missing, question, appended, intent)
+        return draft_to_reply(status, draft, missing, question, appended, intent,
+                              bool(state.get("deadline_updated")))

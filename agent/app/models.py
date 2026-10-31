@@ -35,7 +35,7 @@ class Slot(str, Enum):
     TITLE = "title"
     LOCATION_FROM = "location_from"
     LOCATION_TO = "location_to"
-    START_TIME = "start_time"
+    EXPIRED_AT = "expired_at"
     REWARD = "reward_cents"
     DESCRIPTION = "description"
 
@@ -46,7 +46,7 @@ SLOT_QUESTIONS: dict[Slot, str] = {
     Slot.TITLE: "任务标题是什么？用一句话说清要做的事。",
     Slot.LOCATION_FROM: "从哪里取货或开始？",
     Slot.LOCATION_TO: "送到哪里？",
-    Slot.START_TIME: "希望什么时候开始？",
+    Slot.EXPIRED_AT: "截止时间是什么时候？",
     Slot.REWARD: "悬赏金额是多少？",
     Slot.DESCRIPTION: "还有其他要补充的内容吗？",
 }
@@ -57,7 +57,7 @@ SLOT_HINTS: dict[Slot, str] = {
     Slot.TITLE: "",
     Slot.LOCATION_FROM: "如：菜鸟驿站东门",
     Slot.LOCATION_TO: "如：3 号楼 502",
-    Slot.START_TIME: "如：今天下午 3 点",
+    Slot.EXPIRED_AT: "可选，如：明天下午 3 点",
     Slot.REWARD: "如：8 元",
     Slot.DESCRIPTION: "",
 }
@@ -74,7 +74,7 @@ class TaskDraft(BaseModel):
     title: str | None = Field(default=None, max_length=64)
     location_from: str | None = Field(default=None, max_length=128)
     location_to: str | None = Field(default=None, max_length=128)
-    start_time: datetime | None = None
+    expired_at: datetime | None = None
     reward_cents: int | None = Field(default=None, gt=0)
     description: str | None = Field(default=None, max_length=300)
 
@@ -109,8 +109,7 @@ def required_slots(draft: TaskDraft) -> list[Slot]:
             missing.append(Slot.LOCATION_FROM)
         if not draft.location_to:
             missing.append(Slot.LOCATION_TO)
-        if draft.start_time is None:
-            missing.append(Slot.START_TIME)
+        # 截止时间是选填：不填代表任务永久有效，不参与必填判定
     if draft.reward_cents is None:
         missing.append(Slot.REWARD)
     return missing
@@ -164,17 +163,22 @@ def _slot_line(slot: Slot) -> str:
     return f"· {question}（{hint}）" if hint else f"· {question}"
 
 
-def next_question(missing: list[Slot], include_description_hint: bool = True) -> str | None:
+def next_question(
+    missing: list[Slot],
+    include_description_hint: bool = True,
+    include_expired_hint: bool = True,
+    draft: TaskDraft | None = None,
+) -> str | None:
     """根据缺失槽位生成追问。
 
     规则：
     1. 每一行都是问句，以问号结尾，格式统一；
-    2. 缺多个字段时合并成清单，一次问全；
-    3. 末尾固定挂一行"任务细节描述"，在必填填完前始终存在——
-       用户随时可以补充，也能知道补充成什么样。
+    2. 缺多个必填字段时合并成清单，一次问全；
+    3. 倒数第二行固定是"截止时间"——选填，但多数任务用得上；
+    4. 最后一行固定是"任务细节描述"，同样选填。
 
-    只有缺 description 且也是必填时才单独问；description 本身选填，
-    所以正常情况下它只出现在末尾那一行提示里。
+    certified 必填只有 title/地点/悬赏：截止时间与细节都不参与
+    required_slots 判定，用户不提就当作"永久有效 / 无补充"。
     """
     # 没有缺失字段就不追问（此时已进入 READY，走意图分支）
     if not missing:
@@ -182,23 +186,24 @@ def next_question(missing: list[Slot], include_description_hint: bool = True) ->
 
     # description 是选填，不参与"还缺什么"的清单，只作为末尾提示
     required_missing = [slot for slot in missing if slot is not Slot.DESCRIPTION]
-    if not required_missing and not include_description_hint:
+    if not required_missing and not include_description_hint and not include_expired_hint:
         return None
 
     lines: list[str] = []
-    remaining_note = ""
     if required_missing:
         chosen = required_missing[:MAX_QUESTIONS_PER_TURN]
         lines = [_slot_line(slot) for slot in chosen]
         extra = len(required_missing) - len(chosen)
         if extra > 0:
-            # 剩余项数放最末，不打断问句清单
-            remaining_note = f"（还有 {extra} 项必填，回答完这些再继续）"
+            # 剩余项数紧跟必填清单，避免插在"截止时间/细节"这两个选填提示之间
+            lines.append(f"（还有 {extra} 项必填，回答完这些再继续）")
+
+    # 截止时间固定在倒数第二行：它是选填，但多数任务需要，放在细节提示之前
+    if include_expired_hint and not (draft and draft.expired_at):
+        lines.append(_slot_line(Slot.EXPIRED_AT))
 
     if include_description_hint:
         lines.append(f"· {DESCRIPTION_PROMPT_LINE}")
-    if remaining_note:
-        lines.append(remaining_note)
 
     if not lines:
         return None

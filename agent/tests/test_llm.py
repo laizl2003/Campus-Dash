@@ -57,10 +57,10 @@ def test_type_alias_is_normalized():
 
 
 def test_natural_language_time_falls_back_to_rule():
-    llm = ScriptedLLM('{"start_time":"明天下午三点"}')
+    llm = ScriptedLLM('{"expired_at":"明天下午三点"}')
     patch = llm.extract("明天下午三点", TaskDraft())
-    assert isinstance(patch["start_time"], datetime)
-    assert patch["start_time"].hour == 15
+    assert isinstance(patch["expired_at"], datetime)
+    assert patch["expired_at"].hour == 15
 
 
 def test_invalid_type_is_dropped():

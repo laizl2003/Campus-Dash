@@ -29,7 +29,7 @@ from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from .extractor import TYPE_KEYWORDS, Extractor, guess_start_time, guess_reward_cents
+from .extractor import TYPE_KEYWORDS, Extractor, guess_expired_at, guess_reward_cents
 from .intent import UNCLEAR_REPLY, Intent, guess_intent_by_rules
 from ..models import (
     READY_HINT,
@@ -62,6 +62,8 @@ class AgentState(TypedDict, total=False):
     show_draft: bool
     # 本轮意图是否无法确定
     unclear: bool
+    # 本轮只是更新了截止时间，任务内容未变
+    deadline_updated: bool
 
 
 class AgentReply(TypedDict, total=False):
@@ -75,6 +77,7 @@ class AgentReply(TypedDict, total=False):
     cleared: bool
     show_draft: bool
     unclear: bool
+    deadline_updated: bool
 
 
 def build_graph(extractor: Extractor):
@@ -125,6 +128,14 @@ def build_graph(extractor: Extractor):
                     "cleared": True,
                     "intent": intent,
                 }
+            # APPEND：先看这句话里有没有截止时间。
+            # 用户在这个阶段说"截止时间改成明天下午三点"，属于改字段，不该写进任务内容。
+            deadline_patch = _extract_deadline(extractor, message, current)
+            if deadline_patch:
+                updated = merge_draft(current, deadline_patch)
+                return {"draft": updated, "extracted": deadline_patch, "appended": False,
+                        "intent": intent, "deadline_updated": True}
+
             # APPEND：把这句话并入任务内容，并做去口语化整理
             summarized = _summarize(extractor, current.description, message)
             updated = current.model_copy(update={"description": summarized[:300] if summarized else None}) \
@@ -141,7 +152,7 @@ def build_graph(extractor: Extractor):
             patch = {}
         # 追问阶段也允许模型顺带抽出任务细节（description）。
         # 用户常说"明天下午三点，快递有点大需要小推车"，
-        # 时间进 start_time、细节进 description，不该整句塞进某一个字段。
+        # 时间进 expired_at、细节进 description，不该整句塞进某一个字段。
         draft = merge_draft(current, patch)
         # 用户回答追问时，可能只给一个值；只回填"当前正在追问"的那个槽位。
         # 顺序必须是：先合并抽取结果 -> 用"上一轮"的缺失追问回填。
@@ -166,7 +177,8 @@ def build_graph(extractor: Extractor):
         missing = state["missing"]
         return {
             "status": "ASKING",
-            "question": next_question(missing),
+            # 传 draft：用户已经说过截止时间就不再重复问那一行
+            "question": next_question(missing, draft=state["draft"]),
             "missing": missing,
         }
 
@@ -298,6 +310,22 @@ def _looks_like_title(text: str) -> bool:
     return any(keyword in text for keyword in keywords)
 
 
+def _extract_deadline(extractor: Extractor, message: str, draft: TaskDraft) -> dict[str, object]:
+    """从"补充内容"阶段的一句话里单独捞出截止时间。
+
+    只认 expired_at 一个字段：其它字段在这个阶段被顺口提到（比如"外卖"），
+    不应该改变已完成的信息，否则又回到"随口一句就把草稿改乱"的老问题。
+    """
+    try:
+        patch = extractor.extract(message, draft)
+    except Exception:
+        return {}
+    value = patch.get("expired_at")
+    if value in (None, ""):
+        return {}
+    return {"expired_at": value}
+
+
 def _apply_pending_answer(
     message: str,
     draft: TaskDraft,
@@ -320,7 +348,7 @@ def _apply_pending_answer(
         return draft
 
     # 模型已经从这句话里抽出了字段（含 description）时，不再做裸回答回填。
-    # 否则"明天下午三点，快递有点大"会把整句塞进 start_time 或 location_from，
+    # 否则"明天下午三点，快递有点大"会把整句塞进 expired_at 或 location_from，
     # 覆盖掉模型正确解析出的值。
     if _patch_covers_message(patch):
         return draft
@@ -353,6 +381,7 @@ def _apply_pending_answer(
 READY_FIRST_MESSAGE = "信息已完整，下面是任务草稿。还需要补充任务内容吗？直接回复补充说明，或点「确认发布」提交。"
 READY_APPENDED_MESSAGE = "任务内容添加成功，还需要补充任务内容吗？直接回复补充说明，或点「确认发布」提交。"
 READY_STOP_MESSAGE = "好的，任务内容保持现状。点「确认发布」即可提交。"
+READY_DEADLINE_MESSAGE = "截止时间已更新，点「确认发布」即可提交。"
 
 
 # 按意图区分的回复文案
@@ -376,6 +405,7 @@ def draft_to_reply(
     question: str | None,
     appended: bool | None = None,
     intent: Intent | None = None,
+    deadline_updated: bool = False,
 ) -> AgentReply:
     if status == "READY":
         if intent in (Intent.PUBLISH, Intent.EDIT, Intent.QUERY, Intent.CANCEL,
@@ -384,6 +414,8 @@ def draft_to_reply(
             text = INTENT_MESSAGES[intent]
         elif intent == Intent.FINISH:
             text = READY_STOP_MESSAGE
+        elif deadline_updated:
+            text = READY_DEADLINE_MESSAGE
         elif appended:
             text = READY_APPENDED_MESSAGE
         elif appended is False:
@@ -407,6 +439,8 @@ def draft_to_reply(
         "show_draft": bool(intent is Intent.SHOW_DRAFT),
         # 意图不明确：前端可以据此把固定引导做成可点选项
         "unclear": bool(intent is Intent.UNCLEAR),
+        # 本轮只是更新了截止时间，任务内容没有变化
+        "deadline_updated": bool(deadline_updated),
     }
 
 

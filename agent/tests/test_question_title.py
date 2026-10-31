@@ -17,7 +17,7 @@ def test_single_slot_question_is_one_list_with_hint():
 
 def test_every_question_line_ends_with_question_mark():
     """每一行追问都必须是问句。"""
-    q = next_question([Slot.LOCATION_FROM, Slot.LOCATION_TO, Slot.START_TIME])
+    q = next_question([Slot.LOCATION_FROM, Slot.LOCATION_TO, Slot.REWARD])
     for line in q.splitlines():
         stripped = line.strip()
         if stripped.startswith("·"):
@@ -25,20 +25,23 @@ def test_every_question_line_ends_with_question_mark():
 
 
 def test_multiple_slots_merge_into_one_question():
-    q = next_question([Slot.LOCATION_FROM, Slot.LOCATION_TO, Slot.START_TIME])
+    q = next_question([Slot.LOCATION_FROM, Slot.LOCATION_TO, Slot.REWARD])
     assert "还需要这些信息" in q
-    # 3 个必填 + 1 行细节提示
-    assert q.count("·") == 4
-    assert "取货" in q and "送到哪里" in q and "什么时候开始" in q
+    # 3 个必填 + 截止时间 + 细节提示
+    assert q.count("·") == 5
+    assert "取货" in q and "送到哪里" in q and "悬赏金额" in q
 
 
 def test_more_than_three_slots_reports_remaining():
-    q = next_question([Slot.LOCATION_FROM, Slot.LOCATION_TO, Slot.START_TIME, Slot.REWARD])
-    # 3 个必填 + 1 行细节提示
-    assert q.count("·") == 4
+    q = next_question([Slot.LOCATION_FROM, Slot.LOCATION_TO, Slot.REWARD, Slot.TITLE])
+    # 3 个必填 + 截止时间 + 细节提示
+    assert q.count("·") == 5
     assert "还有 1 项" in q
-    # 剩余提示应放在最末
-    assert q.strip().endswith("回答完这些再继续）")
+    # "还有 N 项"紧跟必填清单，不打断两个选填提示
+    lines = q.splitlines()
+    assert "还有 1 项" in lines[-3]
+    assert "截止时间是什么时候？" in lines[-2]
+    assert "任务细节的描述？" in lines[-1]
 
 
 def test_no_missing_returns_none():
@@ -86,7 +89,7 @@ def test_first_turn_asks_all_missing_at_once():
     session = service.create_session()
     reply = service.chat(session.id, "帮我取快递")
     assert reply["status"] == "ASKING"
-    # 缺 5 个必填，一次最多问 3 个，外加 1 行细节提示
+    # 缺 4 个必填，一次最多问 3 个，外加截止时间与细节两行选填提示
     assert "还需要这些信息" in reply["message"]
-    assert reply["message"].count("·") == 4
+    assert reply["message"].count("·") == 5
     assert "任务细节的描述？" in reply["message"]

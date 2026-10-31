@@ -94,7 +94,7 @@ def _cn_hour(token: str) -> int | None:
     return CN_HOURS.get(token)
 
 
-def guess_start_time(message: str, now: datetime | None = None) -> datetime | None:
+def guess_expired_at(message: str, now: datetime | None = None) -> datetime | None:
     """只处理 Demo 里最常见的几种说法，真实解析交给 LLM。"""
     base = now or datetime.now()
     day_offset = 0
@@ -156,9 +156,9 @@ class RuleExtractor(Extractor):
         reward = guess_reward_cents(message)
         if reward is not None:
             patch["reward_cents"] = reward
-        start = guess_start_time(message)
+        start = guess_expired_at(message)
         if start is not None:
-            patch["start_time"] = start
+            patch["expired_at"] = start
         return patch
 
 
@@ -428,11 +428,11 @@ class LLMExtractor(Extractor):
             if cents is not None:
                 patch["reward_cents"] = cents
 
-        start = payload.get("start_time")
+        start = payload.get("expired_at")
         if start is not None:
             parsed = LLMExtractor._to_datetime(start, message)
             if parsed is not None:
-                patch["start_time"] = parsed
+                patch["expired_at"] = parsed
 
         return patch
 
@@ -470,9 +470,9 @@ class LLMExtractor(Extractor):
                     return parser(text)
                 except ValueError:
                     continue
-            return guess_start_time(text)
+            return guess_expired_at(text)
         # 模型没解析出来，退回原始句子再试一次
-        return guess_start_time(message)
+        return guess_expired_at(message)
 
     @staticmethod
     def _validate(patch: dict[str, object], draft: TaskDraft) -> dict[str, object]:

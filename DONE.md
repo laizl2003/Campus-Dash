@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-10-31 · Agent 改为"截止时间"语义，选填且固定倒数第二行
+
+- **字段改名**：`start_time` → `expired_at`（`Slot.EXPIRED_AT`、`guess_expired_at`、发布体 `expiredAt`），与主项目 `errand.expired_at` 对齐。
+- **选填语义**：`required_slots` 不再包含截止时间——不填即"任务永久有效"，必填只剩标题/取货地/送达地/悬赏。
+- **追问位置**：截止时间问句固定排在**倒数第二行**，最后一行仍是"任务细节描述"；"还有 N 项必填"紧跟必填清单，不打断这两行选填提示。已填过则该行自动消失。
+- **补充阶段回填**：信息完整后用户提到时间（如"截止时间改成后天中午"），走 EDIT 识别为字段更新；即使被判成 APPEND，`_extract_deadline` 也只捞 `expired_at` 而不写进任务内容，并回"截止时间已更新"。
+- **坑**：`deadline_updated` 一开始加到了 `AgentReply` 而非 `AgentState`，LangGraph 把未声明的键丢掉，导致标记恒为 False。
+- **验证**：真实模型三轮对话——首轮列出 4 行问句（截止时间在倒数第二）；"菜鸟驿站送到3号楼502"后剩标题+两行选填；"截止时间明天下午三点，外卖有汤不要撒了"一次填入 `expired_at` 与 `description`，截止时间行消失。
+- **测试**：`84 passed, 1 skipped`（新增 `test_deadline.py` 8 例）。
+
+
 ## 2026-10-31 · 过期退款退券 + 消息中心分页 + 截止时间日历选择器
 
 - **过期退款退券**：`ExpireErrandUseCase` 在状态改 EXPIRED 后，于同一事务内退托管款（`HELD -> REFUNDED` CAS）并把券从 `locked` 退回 `available`（`restoreByErrand`）。实测：扣 1700 → 过期后余额全额回补，券 `available`、`used_errand_id` 清空。

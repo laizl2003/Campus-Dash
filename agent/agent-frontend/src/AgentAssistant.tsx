@@ -20,7 +20,7 @@ interface ApiDraft {
   title?: string | null;
   location_from?: string | null;
   location_to?: string | null;
-  start_time?: string | null;
+  expired_at?: string | null;
   reward_cents?: number | null;
   description?: string | null;
 }
@@ -109,7 +109,7 @@ function toDraftPayload(reply: ApiReply): DraftPayload {
     reward: yuan(d.reward_cents),
     pickup: d.location_from || '待填写',
     delivery: d.location_to || '待填写',
-    deadline: formatDateTime(d.start_time),
+    deadline: formatDateTime(d.expired_at),
     description: d.description || undefined,
     raw: d,
   };
@@ -141,7 +141,7 @@ function applyEdits(raw: ApiDraft, edits: Partial<Record<EditableField, string>>
   if (edits.deadline !== undefined) {
     // datetime-local 的值没有时区，转换后是本地时间对应的 ISO
     const time = new Date(edits.deadline);
-    if (!Number.isNaN(time.getTime())) next.start_time = time.toISOString();
+    if (!Number.isNaN(time.getTime())) next.expired_at = time.toISOString();
   }
   return next;
 }
@@ -648,7 +648,7 @@ export default function AgentAssistant() {
       reward: draft.raw.reward_cents ? String(draft.raw.reward_cents / 100) : '',
       pickup: draft.raw.location_from ?? draft.pickup ?? '',
       delivery: draft.raw.location_to ?? draft.delivery ?? '',
-      deadline: toLocalInput(draft.raw.start_time),
+      deadline: toLocalInput(draft.raw.expired_at),
       // description 用 raw 与展示值兜底，避免 raw 未及时更新时被清空
       description: draft.raw.description ?? draft.description ?? '',
     });
@@ -694,7 +694,7 @@ export default function AgentAssistant() {
         slotTotal: 1,
         locationFrom: raw.location_from ?? null,
         locationTo: raw.location_to ?? null,
-        startTime: raw.start_time ?? null,
+        expiredAt: raw.expired_at ?? null,
         description: raw.description ?? null,
       });
       setPublished({ [messageId]: result.errandId });
