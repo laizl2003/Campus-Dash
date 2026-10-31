@@ -203,10 +203,37 @@ class MySQLSessionStore:
         ]
 
     def delete(self, session_id: str) -> bool:
-        """删除会话：消息和会话一起删，一次事务完成。"""
-        self._run("DELETE FROM agent_message WHERE session_id = %s", (session_id,))
-        removed = self._run("DELETE FROM agent_session WHERE session_id = %s", (session_id,))
+        """删除会话：消息和会话必须在同一事务里删掉。
+
+        _run 是 autocommit 的，两条 DELETE 分开执行时中途失败会留下孤儿消息
+        （agent_message 有行、agent_session 没行），既查不到也删不掉。
+        所以这里显式开事务。
+        """
+        try:
+            self._conn.ping(reconnect=True)
+        except Exception:
+            self._conn = self._connect()
+
+        self._conn.begin()
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute("DELETE FROM agent_message WHERE session_id = %s", (session_id,))
+                cur.execute("DELETE FROM agent_session WHERE session_id = %s", (session_id,))
+                removed = cur.rowcount
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
         return bool(removed and removed > 0)
+
+    def message_count(self, session_id: str) -> int:
+        """统计某会话的消息条数，测试和排查用。"""
+        row = self._run(
+            "SELECT COUNT(1) FROM agent_message WHERE session_id = %s",
+            (session_id,),
+            fetch="one",
+        )
+        return int(row[0]) if row and row[0] is not None else 0
 
     def purge_empty(self) -> int:
         """清理没说过话的空会话，避免表被建会话的请求撑大。"""

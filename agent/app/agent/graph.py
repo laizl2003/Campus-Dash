@@ -100,7 +100,8 @@ def build_graph(extractor: Extractor):
                     patch = extractor.extract(message, current)
                 except Exception:
                     patch = {}
-                updated = merge_draft(current, patch)
+                # EDIT 是用户明确要求改字段，允许覆盖 title/type
+                updated = merge_draft(current, patch, allow_locked=True)
                 return {"draft": updated, "extracted": patch, "appended": False, "intent": intent}
             if intent in (Intent.QUERY, Intent.CHITCHAT, Intent.CANCEL, Intent.UNCLEAR):
                 # 这几类不改草稿，只回话。

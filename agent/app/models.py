@@ -120,17 +120,34 @@ def is_complete(draft: TaskDraft) -> bool:
     return not required_slots(draft)
 
 
-def merge_draft(current: TaskDraft, patch: dict[str, object]) -> TaskDraft:
+# 一旦有值就不再被后续轮次自动改写的字段。
+# 标题最典型：用户第三轮提到"外卖"，模型会把"取快递"改成"取外卖送到3号楼502"，
+# 但用户其实只是在描述细节。标题只应由明确的修改意图（EDIT）变更。
+LOCKED_FIELDS: frozenset[str] = frozenset({"title", "type"})
+
+
+def merge_draft(
+    current: TaskDraft,
+    patch: dict[str, object],
+    *,
+    allow_locked: bool = False,
+) -> TaskDraft:
     """把本轮抽取结果合并进草稿。
 
-    规则：只覆盖非空值，已有的信息不会被"没提到"冲掉。
-    这样多轮追问时，用户只回答一个字段也不会丢之前的输入。
+    规则：
+    1. 只覆盖非空值，已有的信息不会被"没提到"冲掉；
+    2. title/type 默认锁定：已有值就不动，除非 allow_locked=True（EDIT 意图）。
+
+    这样多轮追问时，用户只回答一个字段不会丢之前的输入，
+    也不会因为顺口提了别的词就把标题改掉。
     """
     data = current.model_dump()
     for key, value in patch.items():
         if key not in data:
             continue
         if value is None or value == "":
+            continue
+        if not allow_locked and key in LOCKED_FIELDS and data.get(key):
             continue
         data[key] = value
     return TaskDraft.model_validate(data)
