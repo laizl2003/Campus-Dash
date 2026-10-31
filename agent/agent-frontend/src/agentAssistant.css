@@ -383,12 +383,15 @@
 }
 .agent-notice button { display: grid; place-items: center; padding: 2px; color: #ddd; }
 
+/* 小屏幕上面板铺满，此时不跟随悬浮球（跟随会把 400px 宽的卡片挤变形） */
 @media (max-width: 560px) {
   .agent-panel {
-    right: 0;
-    bottom: 0;
-    width: 100vw;
-    height: 100dvh;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
     max-height: none;
     border-radius: 0;
     border: 0;

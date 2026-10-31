@@ -756,6 +756,36 @@ export default function AgentAssistant() {
     ? { left: position.x, top: position.y }
     : { visibility: 'hidden' };
 
+  /**
+   * 面板跟随悬浮球。
+   *
+   * 尺寸与 CSS 完全一致（min(400px, 100vw-32px) / min(620px, 100vh-140px)），
+   * 这里只是算出它该出现在悬浮球的哪一侧，再把坐标夹回视口内，
+   * 所以外观、大小都不变，只是位置跟着球走。
+   */
+  const panelStyle: CSSProperties = (() => {
+    if (!position) return { visibility: 'hidden' };
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // 与 CSS 的 min() 相同的算法
+    const panelW = Math.min(400, vw - 32);
+    const panelH = Math.min(620, vh - 140);
+    const gap = 12;
+
+    // 水平：优先让面板左边对齐球；放不下就贴右；再不行贴左
+    let left = position.x + FAB_SIZE - panelW;
+    if (left + panelW > vw - gap) left = vw - gap - panelW;
+    if (left < gap) left = gap;
+
+    // 垂直：球在屏幕下半部时面板放上面，否则放下面
+    const above = position.y + FAB_SIZE / 2 > vh / 2;
+    let top = above ? position.y - panelH - gap : position.y + FAB_SIZE + gap;
+    if (top + panelH > vh - gap) top = vh - gap - panelH;
+    if (top < gap) top = gap;
+
+    return { left, top, right: 'auto', bottom: 'auto', width: panelW, height: panelH };
+  })();
+
   // 只发任务类型，具体信息交给后面追问，避免用户被预填内容带偏
   const suggestions = useMemo(() => [
     { icon: 'package', text: '取快递', prompt: '取快递' },
@@ -781,7 +811,7 @@ export default function AgentAssistant() {
       <Icon name="bot" size={27}/>
     </button>
 
-    {open && <section className="agent-panel" role="dialog" aria-modal="false" aria-label="AI 校园助手">
+    {open && <section className="agent-panel" style={panelStyle} role="dialog" aria-modal="false" aria-label="AI 校园助手">
       <header className="agent-panel-head">
         <span className="agent-avatar"><Icon name="bot" size={20}/></span>
         <div className="agent-panel-title">
