@@ -50,6 +50,9 @@ INTENT_LABELS: dict[Intent, str] = {
     Intent.CHITCHAT: "无关闲聊",
 }
 
+# 模型输出常带的包裹字符，解析前统一剥掉
+QUOTE_CHARS = "\"'`*。.!！\n\t "
+
 INTENT_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿助手的意图分类器。
 
 用户的任务信息已经收集完整，当前处于"待确认发布"状态。
@@ -70,7 +73,7 @@ INTENT_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿助手的意图分类器
 3. 指出某个字段要改是 EDIT；
 4. 拿不准时选 APPEND（补充内容不会造成数据损坏）。
 
-只输出标签本身，不要解释。"""
+重要：只输出标签本身（例如 APPEND），不要解释、不要标点、不要 JSON。"""
 
 
 def build_intent_prompt(message: str, draft_summary: str) -> str:
@@ -84,8 +87,13 @@ def build_intent_prompt(message: str, draft_summary: str) -> str:
 # ---------------------------------------------------------------- 兜底规则
 
 _PUBLISH_WORDS = ("发布", "提交", "确认发", "就这个", "就这样发", "可以发", "发吧", "下单")
-_FINISH_WORDS = ("没有", "没有了", "不用", "没了", "不需要", "就这些", "行了", "可以了", "够了", "好了")
-_CANCEL_WORDS = ("算了", "不发了", "取消", "别发了", "放弃")
+_PUBLISH_EXCLUDE = ("不用发", "别发", "不发", "稍后发", "先不发", "先别")
+_FINISH_WORDS = (
+    "没有", "没了", "不用", "不需要", "就这些", "就这样", "行了", "可以了", "够了", "好了",
+    "没什么", "没啥", "没别的", "没其他", "别的不", "别的没", "就这么多", "暂时没有", "先这样",
+    "没补充", "不补充", "不缺", "没要补充",
+)
+_CANCEL_WORDS = ("算了", "不发了", "取消", "别发了", "放弃", "不做了", "先不做")
 # 字段词和动词的先后顺序不固定："把金额改成12块"和"改成12块金额"都要命中
 _EDIT_FIELD = r"(金额|价格|悬赏|标题|地点|时间|送达|取货|位置|内容|描述)"
 _EDIT_VERB = r"(改|换|调整|修改|更新|写错)"
@@ -97,8 +105,11 @@ _CHITCHAT_PATTERN = re.compile(r"(你是谁|你叫什么|天气|几点钟|讲个
 def guess_intent_by_rules(message: str) -> Intent:
     """关键词兜底：模型不可用时保证行为可预测。
 
-    顺序很重要：先判断"取消"再判断"发布"，
-    因为"算了不发了"里同时含有否定和发布语义。
+    用**子串包含**而不是精确等于：
+    用户会说"别的没什么要补充的了""那就这样吧谢谢"，
+    精确匹配只能认出"没有了"，这类带前后缀的说法会漏掉。
+
+    顺序很重要：先判断"取消"，因为"算了不发了"同时含有否定和发布语义。
     """
     text = message.strip().rstrip("。.！!~ ")
     if not text:
@@ -106,6 +117,9 @@ def guess_intent_by_rules(message: str) -> Intent:
 
     if any(word in text for word in _CANCEL_WORDS):
         return Intent.CANCEL
+    # "不用发""先别发"是收回发布意图，不能算发布
+    if any(word in text for word in _PUBLISH_EXCLUDE):
+        return Intent.FINISH
     if any(word in text for word in _FINISH_WORDS):
         return Intent.FINISH
     if _EDIT_PATTERN.search(text):
@@ -120,19 +134,42 @@ def guess_intent_by_rules(message: str) -> Intent:
 
 
 def normalize_intent(raw: str) -> Intent | None:
-    """把模型输出解析成 Intent，非法值返回 None。"""
+    """把模型输出解析成 Intent，解析不出返回 None。
+
+    模型输出不总是干净的标签：可能带解释、带标点、甚至一段无意义字符。
+    这里做三层尝试：直接解析 -> 整段文本里搜标签 -> 放弃。
+    找不到时返回 None，交给规则兜底，不会误判成 APPEND。
+    """
     if not raw:
         return None
-    text = raw.strip().strip('"\'`*。.!！')
-    # 模型可能输出 "APPEND: 因为..." 或 json
+
+    # 先去掉控制字符（推理模型偶尔会吐大量 \r）
+    text = re.sub(r"[\x00-\x1f]+", " ", raw).strip()
+    if not text:
+        return None
+
+    text = text.strip(QUOTE_CHARS)
+
+    # 1) 模型返回 JSON
     if text.startswith("{"):
         try:
             data = json.loads(text)
             text = str(data.get("intent", "")).strip()
         except json.JSONDecodeError:
-            return None
+            pass
+
+    # 2) 首个 token 就是标签（"APPEND"、"publish"、"PUBLISH: 因为..."）
     token = re.split(r"[\s:，,]", text, maxsplit=1)[0].upper()
     try:
         return Intent(token)
     except ValueError:
-        return None
+        pass
+
+    # 3) 整段文本里搜完整标签，取最先出现的
+    upper = text.upper()
+    found = [(upper.find(i.value), i) for i in Intent if upper.find(i.value) != -1]
+    if found:
+        found.sort(key=lambda pair: pair[0])
+        return found[0][1]
+
+    return None

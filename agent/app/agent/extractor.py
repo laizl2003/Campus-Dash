@@ -248,20 +248,35 @@ class LLMExtractor(Extractor):
             ensure_ascii=False,
         )
         try:
-            result = self._call_llm(INTENT_SYSTEM_PROMPT, build_intent_prompt(message, summary))
+            # 意图只要一个词，不能用 JSON 模式：
+            # response_format=json_object 会逼模型输出 JSON，与"只输出标签"冲突，
+            # 推理模型在矛盾指令下可能吐出大量乱码（实测出现过几百个 \r）。
+            result = self._call_llm(
+                INTENT_SYSTEM_PROMPT,
+                build_intent_prompt(message, summary),
+                json_mode=False,
+            )
             return normalize_intent(result.content)
         except Exception:
             return None
 
     # ------------------------------------------------------------ 待填实现
 
-    def _call_llm(self, system_prompt: str, user_prompt: str) -> LLMCallResult:
+    def _call_llm(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool | None = None,
+    ) -> LLMCallResult:
         """调用 OpenAI 兼容的 Chat Completions 接口。
 
         默认按 https://api.llm.ustc.edu.cn/v1 这类地址实现，
         换厂商时只要改环境变量 LLM_BASE_URL / LLM_MODEL / LLM_API_KEY。
 
-        注意：不是所有厂商都支持 response_format，失败会自动去掉重试一次。
+        json_mode 为空时跟随配置；意图分类会显式传 False，
+        避免 JSON 模式与"只输出一个词"的指令冲突。
+
+        不是所有厂商都支持 response_format，失败会自动去掉重试一次。
         """
         import httpx
 
@@ -280,7 +295,8 @@ class LLMExtractor(Extractor):
             ],
         }
         # 支持 JSON 模式的厂商能显著提高结构稳定性；不支持的会在下面自动降级
-        if self.settings.json_mode:
+        use_json = self.settings.json_mode if json_mode is None else json_mode
+        if use_json:
             payload["response_format"] = {"type": "json_object"}
 
         with httpx.Client(timeout=self.settings.timeout) as client:
