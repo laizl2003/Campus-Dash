@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一条就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-11-01 · 取消任务与发布同款收尾：卡片冻结"已取消"，会话置 CANCELED
+
+- **目标**：取消后整段对话被清空、面板被重置，用户回不到原来的上下文；取消也没在历史和刷新后留下痕迹。
+- **改动**：
+  - `agent_session.active_key` 生成列改为 `IF(status IN ('CLOSED','CANCELED'), NULL, panel_id)`，取消同样释放"进行中"名额；`_rebuild_active_key_if_needed()` 负责老库重建
+  - `get_active_session` 同时排除 CLOSED 与 CANCELED
+  - `service.record_cancelled()`：会话置 CANCELED + `mark_card_cancelled` + 两条提示消息；对话里说"取消"也走这里（不重复播报）
+  - `mark_card_published` 泛化为 `mark_card_status`，meta 里可存 `publishedId` 或 `cancelled`
+  - 新增 `POST /agent/panels/{id}/cancel`；前端取消改为调接口 + 冻结卡片，不再清空消息、不再重置面板
+- **验证**：取消后卡片显示"已取消 · 本次任务未发布"、会话 `CANCELED`、同面板下一条消息自动开新会话；刷新后卡片仍是已取消且无"确认发布"按钮；`162 passed, 1 skipped`
+
 ## 2026-11-01 · 地点字段加"像不像地名"校验，不合法就继续追问
 
 - **目标**：用户回"哈哈哈""就那个""8块"也被当成起止地点提交，草稿里出现明显不是地址的值。

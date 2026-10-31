@@ -15,6 +15,8 @@ interface ChatMessage {
   draft?: DraftPayload;
   /** 这张卡片对应的一单已经发布：不能继续被后续消息覆盖，也不能再点发布 */
   publishedId?: string;
+  /** 这一单被取消了：卡片冻结成"已取消"，不会被新任务覆盖 */
+  cancelled?: boolean;
 }
 
 interface ApiDraft {
@@ -238,7 +240,7 @@ async function fetchPanelMessages(panelId: string): Promise<ChatMessage[]> {
         role: Role;
         content: string;
         time?: string;
-        meta?: { draft?: ApiDraft; type_label?: string | null; publishedId?: string } | null;
+        meta?: { draft?: ApiDraft; type_label?: string | null; publishedId?: string; cancelled?: boolean } | null;
       }[];
     };
     return (data.messages ?? []).map(item => ({
@@ -252,6 +254,8 @@ async function fetchPanelMessages(panelId: string): Promise<ChatMessage[]> {
       // 卡片状态存在消息 meta 里，刷新后原样画回来
       draft: metaToDraft(item.meta),
       publishedId: item.meta?.publishedId,
+      // 后端 JSON_SET 写布尔会落成 1，这里按真值判断，别用 === true
+      cancelled: Boolean(item.meta?.cancelled),
     }));
   } catch {
     return [];
@@ -307,6 +311,7 @@ interface DraftCardProps {
   editing: Partial<Record<EditableField, string>> | null;
   publishing: boolean;
   publishedId?: string;
+  cancelled?: boolean;
   onEditStart: () => void;
   onChange: (field: EditableField, value: string) => void;
   onEditSave: () => void;
@@ -316,7 +321,7 @@ interface DraftCardProps {
 }
 
 function DraftCard({
-  draft, editing, publishing, publishedId,
+  draft, editing, publishing, publishedId, cancelled,
   onEditStart, onChange, onEditSave, onEditCancel, onCancel, onPublish,
 }: DraftCardProps) {
   // 其他帮忙类型没有地点和时间，只展示标题与任务内容
@@ -380,7 +385,11 @@ function DraftCard({
       </div>
     )}
 
-    {publishedId ? (
+    {cancelled ? (
+      <div className="agent-draft-cancelled">
+        <Icon name="close" size={14}/>已取消 · 本次任务未发布
+      </div>
+    ) : publishedId ? (
       <div className="agent-draft-published">
         <Icon name="check" size={14}/>已发布 · 编号 {publishedId}
       </div>
@@ -560,7 +569,16 @@ export default function AgentAssistant() {
 
       // 用户说"取消"：清掉草稿卡片，回到全新对话
       if (reply.intent === 'CANCEL') {
-        setMessages(prev => [...prev, { ...assistant, draft: undefined }]);
+        // 服务端已把会话置为 CANCELED 并标记卡片，这里同步冻结本地那张卡片
+        setMessages(prev => {
+          const index = prev
+            .map(item => Boolean(item.draft) && !item.publishedId && !item.cancelled)
+            .lastIndexOf(true);
+          const next = index === -1
+            ? prev
+            : prev.map((item, i) => (i === index ? { ...item, cancelled: true } : item));
+          return [...next, { ...assistant, draft: undefined }];
+        });
         void refreshHistory();
         return;
       }
@@ -707,6 +725,39 @@ export default function AgentAssistant() {
       setMessages(prev => [...prev, {
         id: Math.random().toString(36).slice(2), role: 'assistant', content: `发布没有成功：${text}`, time: nowLabel(),
       }]);
+    } finally {
+      setPublishingId(null);
+    }
+  };
+
+  /** 取消这一单：和发布同款收尾——卡片冻结成"已取消"，会话结束，面板继续可用 */
+  const onCancelTask = async (messageId: string) => {
+    if (publishingId) return;
+    setPublishingId(messageId);
+    const pid = panelId ?? localStorage.getItem(PANEL_KEY);
+    try {
+      if (pid) await apiPost('/panels/' + pid + '/cancel', {});
+      setNotice('已取消本次任务');
+      setMessages(prev => [
+        // 卡片保留在原地，只把状态改成"已取消"，和新任务互不干扰
+        ...prev.map(item => item.id === messageId
+          ? { ...item, cancelled: true, draft: item.draft ? { ...item.draft, raw: item.draft.raw } : item.draft }
+          : item),
+        {
+          id: Math.random().toString(36).slice(2),
+          role: 'assistant' as const,
+          content: '任务已取消，这一单不会发布。',
+          time: nowLabel(),
+        }, {
+          id: Math.random().toString(36).slice(2),
+          role: 'assistant' as const,
+          content: '接下来想发什么任务？直接告诉我就行。',
+          time: nowLabel(),
+        },
+      ]);
+      void refreshHistory();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : '取消失败');
     } finally {
       setPublishingId(null);
     }
@@ -870,17 +921,12 @@ export default function AgentAssistant() {
           editing={editingId === message.id ? editing : null}
           publishing={publishingId === message.id}
           publishedId={message.publishedId ?? published[message.id]}
+          cancelled={message.cancelled}
           onEditStart={() => onEditStart(message.id, message.draft!)}
           onChange={(field, value) => setEditing(prev => ({ ...(prev ?? {}), [field]: value }))}
           onEditSave={() => onEditSave(message.id)}
           onEditCancel={onEditCancel}
-          onCancel={() => {
-            setNotice('已取消本次任务草稿');
-            setMessages([welcomeMessage]);
-            // 取消后换一段新对话，避免继续在旧草稿上加内容
-            localStorage.removeItem(PANEL_KEY);
-            setPanelId(null);
-          }}
+          onCancel={() => void onCancelTask(message.id)}
           onPublish={() => void onPublish(message.id, message.draft!)}
         />}
             <time className="agent-row-time">{message.time}</time>

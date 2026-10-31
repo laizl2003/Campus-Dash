@@ -139,6 +139,13 @@ def panel_messages(panel_id: str, limit: int = 200, before_id: int | None = None
     return {"messages": service.panel_messages(panel_id, limit=limit, before_id=before_id)}
 
 
+@app.post("/panels/{panel_id}/cancel")
+def cancel_panel_task(panel_id: str) -> dict[str, bool]:
+    """取消当前这一单：会话置 CANCELED，卡片标记已取消，面板本身继续可用。"""
+    service.record_cancelled(panel_id=panel_id)
+    return {"cancelled": True}
+
+
 @app.delete("/panels/{panel_id}")
 def delete_panel(panel_id: str) -> dict[str, bool]:
     return {"deleted": service.delete_panel(panel_id)}

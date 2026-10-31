@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS agent_session (
   draft_json   JSON         NOT NULL,
   turns        INT          NOT NULL DEFAULT 0,
   status       VARCHAR(16)  NULL,
-  active_key   VARCHAR(36)  GENERATED ALWAYS AS (IF(status = 'CLOSED', NULL, panel_id)) STORED,
+  active_key   VARCHAR(36)  GENERATED ALWAYS AS (IF(status IN ('CLOSED', 'CANCELED'), NULL, panel_id)) STORED,
   last_message VARCHAR(500) NULL,
   created_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -162,12 +162,7 @@ class MySQLSessionStore:
         cols = self._columns("agent_session")
         if "panel_id" not in cols:
             self._run("ALTER TABLE agent_session ADD COLUMN panel_id VARCHAR(36) NULL AFTER session_id")
-        if "active_key" not in cols:
-            self._run(
-                "ALTER TABLE agent_session ADD COLUMN active_key VARCHAR(36) "
-                "GENERATED ALWAYS AS (IF(status = 'CLOSED', NULL, panel_id)) STORED"
-            )
-            self._run("ALTER TABLE agent_session ADD UNIQUE KEY uk_active_panel (active_key)")
+        self._rebuild_active_key_if_needed()
         # 老会话没有面板概念：各自独立成一个面板，历史仍然能按条看
         self._run("UPDATE agent_session SET panel_id = UUID() WHERE panel_id IS NULL")
 
@@ -177,6 +172,39 @@ class MySQLSessionStore:
         if "id" in message_cols and "message_id" not in message_cols:
             # 只改名 + 去掉自增，老数据原样保留（老 id 都比雪花小，顺序不会乱）
             self._run("ALTER TABLE agent_message CHANGE COLUMN id message_id BIGINT NOT NULL")
+
+    def _rebuild_active_key_if_needed(self) -> None:
+        """保证 active_key 把 CLOSED 和 CANCELED 都当作"已结束"。
+
+        生成列的表达式不能就地改，只能删掉重建；升级老库时用得到。
+        """
+        row = self._run(
+            "SELECT GENERATION_EXPRESSION FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agent_session' "
+            "AND COLUMN_NAME = 'active_key'",
+            fetch="one",
+        )
+        expression = (row[0] if row else "") or ""
+        if "CANCELED" in expression:
+            return
+
+        definition = (
+            "ALTER TABLE agent_session ADD COLUMN active_key VARCHAR(36) "
+            "GENERATED ALWAYS AS (IF(status IN ('CLOSED', 'CANCELED'), NULL, panel_id)) STORED"
+        )
+        if not row:
+            self._run(definition)
+            self._run("ALTER TABLE agent_session ADD UNIQUE KEY uk_active_panel (active_key)")
+            return
+
+        try:
+            self._run("ALTER TABLE agent_session DROP INDEX uk_active_panel")
+        except Exception:  # noqa: BLE001
+            # 索引名可能被改过，删不掉就让下面的 DROP COLUMN 顺带处理
+            pass
+        self._run("ALTER TABLE agent_session DROP COLUMN active_key")
+        self._run(definition)
+        self._run("ALTER TABLE agent_session ADD UNIQUE KEY uk_active_panel (active_key)")
 
     # ------------------------------------------------------------ 会话读写
 
@@ -220,7 +248,7 @@ class MySQLSessionStore:
         """面板下还没结束的那个会话；没有说明该开新会话了。"""
         row = self._run(
             "SELECT session_id, draft_json, panel_id, turns FROM agent_session "
-            "WHERE panel_id = %s AND (status IS NULL OR status <> 'CLOSED') "
+            "WHERE panel_id = %s AND (status IS NULL OR status NOT IN ('CLOSED', 'CANCELED')) "
             "ORDER BY created_at DESC LIMIT 1",
             (panel_id,),
             fetch="one",
@@ -333,21 +361,27 @@ class MySQLSessionStore:
             for row in reversed(rows)
         ]
 
-    def mark_card_published(self, session_id: str, errand_id: str) -> int:
-        """把这一单最后一张草稿卡片标记成"已发布"。
+    def mark_card_status(self, session_id: str, key: str, value: object) -> int:
+        """把这一单最后一张草稿卡片的展示状态写入 meta_json。
 
-        卡片状态存在 message 的 meta_json 里，刷新页面后才能恢复成"已发布"，
-        而不是又变回可编辑的草稿。
+        卡片状态跟消息一起存，刷新页面后才不会变回可编辑草稿。
+        key=publishedId 表示已发布，key=cancelled 表示已取消。
         """
         return self._run(
             "UPDATE agent_message"
-            "   SET meta_json = JSON_SET(COALESCE(meta_json, JSON_OBJECT()), '$.publishedId', %s)"
+            "   SET meta_json = JSON_SET(COALESCE(meta_json, JSON_OBJECT()), %s, %s)"
             " WHERE session_id = %s"
             "   AND JSON_EXTRACT(meta_json, '$.draft') IS NOT NULL"
             " ORDER BY message_id DESC"
             " LIMIT 1",
-            (errand_id, session_id),
+            (f"$.{key}", value, session_id),
         ) or 0
+
+    def mark_card_published(self, session_id: str, errand_id: str) -> int:
+        return self.mark_card_status(session_id, "publishedId", errand_id)
+
+    def mark_card_cancelled(self, session_id: str) -> int:
+        return self.mark_card_status(session_id, "cancelled", True)
 
     # ------------------------------------------------------------ 面板
 

@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 
 from .agent.extractor import Extractor, default_extractor
 from .agent.graph import AgentReply, build_graph, draft_to_reply
+from .agent.intent import Intent
 from .models import TYPE_LABELS, TaskDraft, next_question, required_slots
 
 
@@ -131,6 +132,40 @@ class ChatService:
         except TypeError:
             # 内存版 save 只收 session，没有状态列可写
             self.store.save(session)
+
+    def record_cancelled(self, panel_id: str | None = None,
+                         session_id: str | None = None,
+                         announce: bool = True) -> None:
+        """取消这一单：会话置 CANCELED、卡片标记已取消、按需补提示消息。
+
+        和发布走同一套收尾，只是一单"没发出去"。会话结束后面板仍可用，
+        下一句话会自动开新会话，用户不用刷新页面。
+        """
+        target = session_id
+        if target is None and panel_id:
+            session = self.store.get_active_session(panel_id)
+            target = session.id if session is not None else None
+        if target is None:
+            return
+
+        session = self.store.get(target)
+        if session is not None:
+            try:
+                self.store.save(session, status="CANCELED")
+            except TypeError:
+                self.store.save(session)
+        mark_card = getattr(self.store, "mark_card_cancelled", None)
+        if mark_card is not None:
+            mark_card(target)
+        if announce and hasattr(self.store, "append_message"):
+            self.store.append_message(
+                target, "assistant",
+                "任务已取消，这一单不会发布。",
+            )
+            self.store.append_message(
+                target, "assistant",
+                "接下来想发什么任务？直接告诉我就行。",
+            )
 
     def record_published(self, errand_id: str, panel_id: str | None = None,
                          session_id: str | None = None) -> None:
@@ -266,6 +301,9 @@ class ChatService:
             self.store.append_message(session.id, "user", message)
             self.store.append_message(session.id, "assistant", reply_text, card_meta)
 
+        # 用户在对话里说"取消"：和点卡片取消一样收尾，但不再重复播报
+        if status == "READY" and intent == Intent.CANCEL:
+            self.record_cancelled(session_id=session.id, announce=False)
         # 让前端知道这轮落在哪个会话上（同一个面板下，发布后会换成新会话）
         reply["session_id"] = session.id
         reply["panel_id"] = session.panel_id
