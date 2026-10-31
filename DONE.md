@@ -1,7 +1,24 @@
 # DONE
 
-> 已完成需求的增量日志。每完成一项就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
+> 已完成需求的增量日志。每完成一条就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
+
+## 2026-10-31 · 帮拿/取/带归为跑腿配送；start.ps1 支持 agent 前后端构建
+
+- **类型判定**：`帮忙拿外卖`、`帮我拿个快递`、`顺手把餐带上来` 一律判为 DELIVERY，不再是 OTHER。
+  - 提示词里明确"只要涉及替人把东西拿到/送到就是配送"，并写清"帮忙"两个字不代表 OTHER；
+    同时说明"外卖"通常已付款，属配送而非 BUY。
+  - 规则兜底关键词加入 拿/捎/取/送/餐/还书/归还/还到/代取；OTHER 只留真正不搬东西的（带句话/看管/拍）。
+  - 实测：帮忙拿外卖/拿快递/带餐/取外卖/还书 → DELIVERY；帮买奶茶 → BUY；代排队 → QUEUE；带句话 → OTHER。
+- **start.ps1 增加 agent**：`-Build` 新增 `agent`（agent 后端镜像）与 `agentui`（agent 前端，编进主前端）；
+  `all` 现在覆盖 app + web + agent；`up` 带上 agent，并从 compose ps 到健康检查都覆盖 /agent/health。
+- **修 nginx 502**：`proxy_pass http://agent:8000/` 只在启动时解析一次，agent 重建换 IP 后 /agent/* 全 502；
+  改成 `resolver 127.0.0.11` + 变量 + rewrite 剥前缀，按 TTL 重新解析。
+- **修脚本静默退出**：外部做 `2>&1` 重定向时，docker/mvn/npm 的 stderr 会被 `ErrorActionPreference=Stop`
+  当成终止错误，脚本在构建中途无声退出；`Invoke-Tool`/`Invoke-Compose` 内部临时降级为 Continue。
+- **验证**：`start.ps1 -Build agent` 42s exit 0；`-Status`、`-Build none` 均 exit 0；
+  `/agent/health` 返回 `{"status":"ok"}`；agent 测试 `97 passed, 1 skipped`。
+
 
 ## 2026-10-31 · Agent 截止时间落库 + 发布后重置会话
 

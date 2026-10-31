@@ -3,16 +3,22 @@
     CampusDash 本地一键构建 / 启动 / 运维。
 
 .DESCRIPTION
-    改完前后端代码后，只需要在仓库根目录运行 .\start.ps1：
+    改完代码后，只需要在仓库根目录运行 .\start.ps1：
       1. 重新打包后端 fat jar（dash-bootstrap + dash-worker）
       2. 重新构建前端静态产物（tsc + vite build）
-      3. 重建镜像并用 docker compose 启动
-      4. 等 /api/health 通过，打印访问地址与容器状态
+      3. 重建镜像并用 docker compose 启动（含 agent 服务）
+      4. 等 /api/health 与 /agent/health 通过，打印访问地址与容器状态
 
     不想构建时用 -Build none 直接重启；只想看状态用 -Status。
 
 .PARAMETER Build
-    all（默认，前后端都构建）| api（只后端）| web（只前端）| none（不构建，只重启）
+    all       默认，主项目前后端 + agent 全都构建
+    api       只构建主项目后端（Maven）
+    web       只构建主项目前端（tsc + vite build）
+    agent     只构建 agent 后端镜像（agent/app、agent/tests）
+    agentui   只构建 agent 前端（agent/agent-frontend 通过 @agent 别名打进主前端，
+              所以本质是重建 web，但语义上比 -Build web 更明确）
+    none      不构建，只重启容器
 
 .PARAMETER Down
     停止整套服务（保留 MySQL 数据卷）。
@@ -41,6 +47,14 @@
     只改了前端，跳过 Maven 打包。
 
 .EXAMPLE
+    .\start.ps1 -Build agent
+    只改了 agent 后端（提示词、抽取器、会话逻辑）。
+
+.EXAMPLE
+    .\start.ps1 -Build agentui
+    只改了 agent 的聊天界面（agent/agent-frontend/src）。
+
+.EXAMPLE
     .\start.ps1 -Status
     看看现在跑得怎么样。
 #>
@@ -49,7 +63,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('all', 'api', 'web', 'none')]
+    [ValidateSet('all', 'api', 'web', 'agent', 'agentui', 'none')]
     [string]$Build = 'all',
 
     [switch]$Down,
@@ -71,6 +85,8 @@ $script:frontendDir = Join-Path $script:root 'campus-dash-frontend'
 
 $script:dockerDir = Join-Path $script:backendDir 'docker'
 $script:baseUrl = 'http://localhost:8088'
+# agent 通过 nginx 的 /agent/ 前缀暴露（转发时剥掉前缀）
+$script:agentHealthUrl = 'http://localhost:8088/agent/health'
 $script:composeFiles = @('-f', 'docker-compose.yaml', '-f', 'docker-compose.full.yaml')
 
 function Write-Step {
@@ -100,6 +116,11 @@ function Invoke-Tool {
     Write-Step $Title
     $log = Join-Path $env:TEMP ('campusdash-' + [guid]::NewGuid().ToString('N') + '.log')
     $watch = [Diagnostics.Stopwatch]::StartNew()
+    # mvn / npm 会往 stderr 写进度。全局 ErrorActionPreference=Stop 时，
+    # 一旦调用方从外部做了 2>&1 重定向，这些 stderr 行会被当成终止错误，
+    # 脚本会在构建中途无声退出。这里临时降级成 Continue，只看退出码。
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     Push-Location $WorkDir
     try {
         & $Exe @Arguments *> $log
@@ -107,6 +128,7 @@ function Invoke-Tool {
     }
     finally {
         Pop-Location
+        $ErrorActionPreference = $prevEap
     }
     $watch.Stop()
 
@@ -159,6 +181,10 @@ function Wait-DockerEngine {
 function Invoke-Compose {
     param([string[]]$Arguments)
 
+    # 同 Invoke-Tool：docker compose 的构建进度走 stderr，
+    # 不能让外部重定向把它变成终止错误。
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     Push-Location $script:dockerDir
     try {
         & docker compose @script:composeFiles @Arguments
@@ -166,6 +192,7 @@ function Invoke-Compose {
     }
     finally {
         Pop-Location
+        $ErrorActionPreference = $prevEap
     }
 }
 
@@ -192,6 +219,29 @@ function Wait-AppHealthy {
     return $false
 }
 
+function Wait-AgentHealthy {
+    param([int]$Seconds)
+
+    Write-Step "等待 agent 健康（最多 $Seconds 秒）"
+    $deadline = (Get-Date).AddSeconds($Seconds)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $response = Invoke-RestMethod -Uri $script:agentHealthUrl -TimeoutSec 3
+            if ($response.status -eq 'ok' -or $response.code -eq 'OK') {
+                Write-Ok 'agent 已就绪'
+                return $true
+            }
+        }
+        catch {
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    Write-Warn 'agent 健康检查超时，最近的日志：'
+    & docker logs dash-agent --tail 40 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+    return $false
+}
+
 function Show-Summary {
     Write-Step '容器状态'
     Invoke-Compose @('ps')
@@ -200,6 +250,8 @@ function Show-Summary {
     Write-Host $script:baseUrl -ForegroundColor Green
     Write-Host '    健康检查  ' -NoNewline
     Write-Host "$script:baseUrl/api/health" -ForegroundColor DarkGray
+    Write-Host '    Agent 接口 ' -NoNewline
+    Write-Host $script:agentHealthUrl -ForegroundColor DarkGray
     Write-Host '    演示身份  1001 发单 / 2001、2002 跑腿 / 9001 仲裁' -ForegroundColor DarkGray
     Write-Host '    跟随日志  ' -NoNewline
     Write-Host '.\start.ps1 -Logs' -ForegroundColor DarkGray
@@ -239,39 +291,51 @@ if ($Down) {
 if (-not (Wait-DockerEngine)) { exit 1 }
 
 $started = Get-Date
-$buildTargets = @()
-if ($Build -eq 'all') { $buildTargets = @('app', 'web') }
-elseif ($Build -eq 'api') { $buildTargets = @('app') }
-elseif ($Build -eq 'web') { $buildTargets = @('web') }
 
-if ($buildTargets -contains 'app') {
+# compose 的构建目标；Maven / npm 各自是否需要跑，单独标记。
+# agentui 只重建 web：agent 前端通过 @agent 别名编进主前端产物，
+# 所以改 agent/agent-frontend 时必须重新 vite build。
+$composeTargets = @()
+$needMaven = $false
+$needNpm = $false
+switch ($Build) {
+    'all' { $composeTargets = @('app', 'web', 'agent'); $needMaven = $true; $needNpm = $true }
+    'api' { $composeTargets = @('app'); $needMaven = $true }
+    'web' { $composeTargets = @('web'); $needNpm = $true }
+    'agent' { $composeTargets = @('agent') }
+    'agentui' { $composeTargets = @('web'); $needNpm = $true }
+}
+
+if ($needMaven) {
     Invoke-Tool -Title '打包后端（dash-bootstrap + dash-worker）' -Exe 'mvn' -Arguments @('-pl', 'dash-bootstrap,dash-worker', '-am', 'package', '-DskipTests') -WorkDir $script:backendDir
 }
 
-if ($buildTargets -contains 'web') {
+if ($needNpm) {
     if (-not (Test-Path (Join-Path $script:frontendDir 'node_modules'))) {
         Invoke-Tool -Title '安装前端依赖（首次）' -Exe 'npm' -Arguments @('ci') -WorkDir $script:frontendDir
     }
     Invoke-Tool -Title '构建前端（tsc + vite build）' -Exe 'npm' -Arguments @('run', 'build') -WorkDir $script:frontendDir
 }
 
-if ($buildTargets.Count -gt 0) {
+if ($composeTargets.Count -gt 0) {
     Write-Step '重建镜像'
-    $buildArgs = @('build') + $buildTargets
+    $buildArgs = @('build') + $composeTargets
     Invoke-Compose $buildArgs
     if ($script:lastComposeExit -ne 0) { throw '镜像构建失败' }
-    $joined = $buildTargets -join ', '
+    $joined = $composeTargets -join ', '
     Write-Ok "已构建：$joined"
 }
 
 Write-Step '启动 / 更新容器'
 # 只点名要跑的服务：mq-init 是"一次性任务"，如果已经成功退出就不再重跑，
 # 否则每次 up 都会重建它、白等十几秒
-Invoke-Compose @('up', '-d', 'app', 'worker', 'web')
+# agent 放在 web 前面：nginx 启动时要解析 agent 主机名，先起 agent 少一次 502
+Invoke-Compose @('up', '-d', 'app', 'worker', 'agent', 'web')
 if ($script:lastComposeExit -ne 0) { throw '容器启动失败' }
 Write-Ok 'compose 已收敛'
 
 $healthy = Wait-AppHealthy -Seconds $TimeoutSeconds
+$agentHealthy = Wait-AgentHealthy -Seconds $TimeoutSeconds
 Show-Summary
 
 $elapsed = (Get-Date) - $started
@@ -279,10 +343,11 @@ Write-Host ""
 Write-Host ("    总耗时    {0:N1} 秒" -f $elapsed.TotalSeconds) -ForegroundColor DarkGray
 
 if (-not $healthy) { exit 1 }
+if (-not $agentHealthy) { exit 1 }
 
 if ($Logs) {
     Write-Step '跟随日志（Ctrl+C 退出）'
-    Invoke-Compose @('logs', '-f', '--tail', '30', 'app', 'worker', 'web')
+    Invoke-Compose @('logs', '-f', '--tail', '30', 'app', 'worker', 'web', 'agent')
 }
 
 exit 0
