@@ -73,6 +73,7 @@ public enum ErrorCode {
     ILLEGAL_STATE_TRANSITION("非法状态流转"),
     STALE_VERSION("数据已被并发修改"),
     INVALID_STATUS("状态参数不合法"),
+    INVALID_EXPIRED_AT("截止时间必须晚于当前时间"),
     INTERNAL_ERROR("系统内部错误");
 
     private final String message;

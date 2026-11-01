@@ -493,6 +493,16 @@ def publish_errand(
     voucher_id: str | None = None,
 ) -> dict:
     """把草稿发布成真实任务（等价于前端「确认发布」）。"""
+    if expired_at:
+        try:
+            from datetime import datetime
+
+            when = datetime.fromisoformat(str(expired_at).replace("Z", "+00:00"))
+            ref = datetime.now(when.tzinfo) if when.tzinfo else datetime.now()
+            if when <= ref:
+                return {"ok": False, "error": "截止时间已经过去，请换个时间再发布"}
+        except ValueError:
+            pass
     body = {
         "campusId": 1,
         "type": type,

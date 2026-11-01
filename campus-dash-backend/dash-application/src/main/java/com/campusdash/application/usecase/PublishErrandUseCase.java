@@ -130,6 +130,12 @@ public class PublishErrandUseCase {
 
     @Transactional(rollbackFor = Exception.class)
     public Result publish(Command cmd) {
+        // 截止时间必须落在未来：否则单子刚发出来就会被过期任务收走，
+        // 用户看到的是"发布成功"，实际一单都跑不起来。
+        if (cmd.expiredAt() != null && !cmd.expiredAt().isAfter(Instant.now())) {
+            throw new BizException(ErrorCode.INVALID_EXPIRED_AT, "expiredAt=" + cmd.expiredAt());
+        }
+
         Money reward = Money.ofCents(cmd.rewardCents());
         long errandId = idGenerator.nextId();
 

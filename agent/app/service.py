@@ -398,6 +398,11 @@ class ChatService:
                                list(state.get("updated_fields") or []),
                                bool(state.get("rejected_location")),
                                state.get("published"))
+        # 截止时间被纠正过：先说清楚，再给原来的回话
+        note = state.get("deadline_note")
+        if note:
+            reply["deadline_note"] = note
+            reply["message"] = f"{note}\n{reply.get('message') or question or ''}"
         reply_text = reply.get("message") or question or ""
 
         session.history.append({"role": "user", "content": message})

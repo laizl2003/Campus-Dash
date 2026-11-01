@@ -42,6 +42,7 @@ from ..models import (
     is_no_more,
     merge_draft,
     next_question,
+    normalize_expired_at,
     looks_like_place,
     purpose_of,
     refresh_title,
@@ -82,6 +83,8 @@ class AgentState(TypedDict, total=False):
     tool_calls: list[dict]
     # 本轮是否真的通过工具发出了任务
     published: dict
+    # 截止时间被纠正过时，要顺带告诉用户一句话
+    deadline_note: str | None
 
 
 class AgentReply(TypedDict, total=False):
@@ -185,6 +188,7 @@ def build_graph(extractor: Extractor, tool_loop=None):
                 key in raw_patch and key not in patch
                 for key in ("location_from", "location_to")
             )
+            deadline_note = _guard_deadline(patch)
             field_patch = {key: value for key, value in patch.items() if key in EDITABLE_FIELDS}
             content = patch.get("description")
             # 模型只给了字段、没给 description，且这句话里没有字段可改时，
@@ -237,6 +241,7 @@ def build_graph(extractor: Extractor, tool_loop=None):
         # 模型返回的地点先过一道校验：不像地点就不写进草稿（和金额一样
         # 的处理方式——解析不了就继续问，而不是把随口一句当地址存下来）。
         patch = sanitize_places(patch)
+        deadline_note = _guard_deadline(patch)
         draft = merge_draft(current, patch)
         # 用户回答追问时，可能只给一个值；只回填"当前正在追问"的那个槽位。
         # 顺序必须是：先合并抽取结果 -> 用"上一轮"的缺失追问回填。
@@ -279,7 +284,12 @@ def build_graph(extractor: Extractor, tool_loop=None):
             if base:
                 draft = draft.model_copy(update={"title_base": base})
         draft = refresh_title(draft)
-        return {"draft": draft, "extracted": patch, "rejected_location": rejected_location}
+        return {
+            "draft": draft,
+            "extracted": patch,
+            "rejected_location": rejected_location,
+            "deadline_note": deadline_note,
+        }
 
     def check_node(state: AgentState) -> AgentState:
         draft = state["draft"]
@@ -339,6 +349,15 @@ def _publish(token: str, draft: TaskDraft) -> dict:
     """通过 MCP 发布；任何异常都收敛成 {ok: False}，不让图崩掉。"""
     from ..tools.actions import publish_draft
 
+    # 兜底：草稿里的截止时间已经过去时，发出去会立刻自动截止，必须先让用户改
+    if draft.expired_at is not None:
+        _, status = normalize_expired_at(draft.expired_at)
+        if status in ("rolled", "dropped"):
+            return {
+                "ok": False,
+                "error": "截止时间已经过去了，先告诉我一个新的截止时间再发布",
+            }
+
     try:
         return publish_draft(token, draft)
     except Exception as exc:  # noqa: BLE001
@@ -364,6 +383,38 @@ def _summarize(extractor: Extractor, existing: str | None, message: str) -> str 
 
 # 这些意图边界清晰，关键词判断已经足够，不必等模型（模型慢时每轮要多等数十秒）
 _UNAMBIGUOUS = (Intent.CANCEL, Intent.PUBLISH)
+
+
+def _guard_deadline(patch: dict) -> str | None:
+    """把 patch 里的截止时间收敛到未来，返回需要告诉用户的话。
+
+    模型会把"一小时以内"算成"1 点钟"，或者直接抄一个过期时间；
+    这里就地纠正，并把改动说出来，避免用户以为系统记错了。
+    """
+    if not patch or "expired_at" not in patch:
+        return None
+    raw = patch.get("expired_at")
+    if raw is None or raw == "":
+        return None
+
+    normalized, status = normalize_expired_at(raw)  # type: ignore[arg-type]
+    patch["expired_at"] = normalized
+    if status == "rolled":
+        return (
+            f"你说的 {_fmt_time(raw)} 已经过去了，我按 {_fmt_time(normalized)} 记的；"
+            "如果要别的时间，直接告诉我。"
+        )
+    if status == "dropped":
+        return "这个截止时间早得离谱，我没采用，麻烦再给一个时间（例如“明天下午三点”）。"
+    return None
+
+
+def _fmt_time(value) -> str:
+    try:
+        return value.strftime("%m月%d日 %H:%M")
+    except AttributeError:
+        return str(value)
+
 
 
 def _classify(extractor: Extractor, message: str, draft: TaskDraft) -> Intent:

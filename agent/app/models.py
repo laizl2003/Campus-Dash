@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Literal
 
@@ -252,6 +252,58 @@ def is_complete(draft: TaskDraft) -> bool:
 LOCKED_FIELDS: frozenset[str] = frozenset({"type"})
 
 
+# 截止时间至少要留出的余量：等于"现在就过期"的单发出去只会立刻自动截止
+MIN_DEADLINE_LEAD = timedelta(seconds=60)
+
+
+def _coerce_datetime(value: object) -> datetime | None:
+    """模型常直接给字符串，这里统一转成 datetime；转不了就当无效。"""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
+
+
+def _local_naive(value: datetime) -> datetime:
+    """统一成本地时区的 naive 时间，便于和 datetime.now() 比较。"""
+    if value.tzinfo is not None:
+        return value.astimezone().replace(tzinfo=None)
+    return value
+
+
+def normalize_expired_at(
+    value: datetime | None, now: datetime | None = None
+) -> tuple[datetime | None, str | None]:
+    """把截止时间收敛到"未来"，返回 (新值, 调整类型)。
+
+    模型经常把"一小时以内"理解成"1 点钟"，给出一个已经过去的时间；
+    这样的单发出去会立刻自动截止，所以在写入草稿这一层就兜住：
+      - 还未来：原样保留            -> None
+      - 过去 24 小时内：顺延一天     -> "rolled"（多半是"今天这个点过了"）
+      - 更早：直接丢弃              -> "dropped"（离谱值，宁可重新问）
+    """
+    parsed = _coerce_datetime(value)
+    if parsed is None:
+        return None, ("dropped" if value else None)
+
+    current = _local_naive(parsed)
+    now = _local_naive(now or datetime.now())
+
+    if current > now + MIN_DEADLINE_LEAD:
+        return parsed, None
+    if current > now - timedelta(days=1):
+        return parsed + timedelta(days=1), "rolled"
+    return None, "dropped"
+
+
+
 def merge_draft(
     current: TaskDraft,
     patch: dict[str, object],
@@ -275,6 +327,11 @@ def merge_draft(
             continue
         if not allow_locked and key in LOCKED_FIELDS and data.get(key):
             continue
+        if key == "expired_at":
+            # 唯一入口：任何来源的截止时间都必须落在未来
+            value, _ = normalize_expired_at(value)  # type: ignore[arg-type]
+            if value is None:
+                continue
         data[key] = value
     return TaskDraft.model_validate(data)
 

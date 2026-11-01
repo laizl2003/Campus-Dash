@@ -566,3 +566,51 @@ def test_settle_reports_partial_failure(monkeypatch):
     assert result["settled_count"] == 1
     assert len(result["failed"]) == 1
     assert result["failed"][0]["error"] == "资金不足"
+
+
+def test_normalize_expired_at_rolls_past_time():
+    """过去的时刻顺延一天；太早的直接丢弃；未来的原样保留。"""
+    from datetime import datetime
+
+    from app.models import normalize_expired_at
+
+    now = datetime(2026, 11, 1, 20, 46)
+
+    rolled, status = normalize_expired_at(datetime(2026, 11, 1, 1, 0), now)
+    assert status == "rolled"
+    assert rolled == datetime(2026, 11, 2, 1, 0)
+
+    future, status = normalize_expired_at(datetime(2026, 11, 2, 12, 0), now)
+    assert status is None and future == datetime(2026, 11, 2, 12, 0)
+
+    dropped, status = normalize_expired_at(datetime(2026, 10, 1, 1, 0), now)
+    assert status == "dropped" and dropped is None
+
+
+def test_merge_draft_never_stores_past_deadline():
+    """任何来源的过期时间都进不了草稿。"""
+    from datetime import datetime, timedelta
+
+    from app.models import TaskDraft, merge_draft
+
+    draft = TaskDraft(type="DELIVERY", title="取快递")
+    merged = merge_draft(draft, {"expired_at": datetime.now() - timedelta(hours=3)})
+
+    assert merged.expired_at is not None
+    assert merged.expired_at > datetime.now()
+
+    very_old = merge_draft(draft, {"expired_at": datetime.now() - timedelta(days=10)})
+    assert very_old.expired_at is None
+
+
+def test_guard_deadline_tells_user_about_roll():
+    """纠正后要给用户一句话，不能说改就改。"""
+    from datetime import datetime, timedelta
+
+    from app.agent.graph import _guard_deadline
+
+    patch = {"expired_at": datetime.now() - timedelta(hours=2)}
+    note = _guard_deadline(patch)
+
+    assert note and "已经过去" in note
+    assert patch["expired_at"] > datetime.now()
