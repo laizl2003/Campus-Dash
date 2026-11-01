@@ -196,8 +196,12 @@ async function apiPost<T>(path: string, body?: unknown): Promise<T> {
       const data = await resp.json();
       if (typeof data?.detail === 'string') detail = data.detail;
     } catch { /* 非 JSON 响应忽略 */ }
-    if (detail) throw new Error(detail);
-    throw new Error(resp.status === 404 ? '会话已失效，请新建对话' : '助手暂时不可用 HTTP ' + resp.status);
+    const error = new Error(
+      detail || (resp.status === 404 ? '会话已失效，请新建对话' : '助手暂时不可用 HTTP ' + resp.status),
+    );
+    // 带上状态码：调用方要区分"404 面板失效"和"其它错误"
+    (error as Error & { status?: number }).status = resp.status;
+    throw error;
   }
   return await resp.json() as T;
 }
@@ -280,7 +284,10 @@ async function fetchPanelMessages(panelId: string): Promise<ChatMessage[]> {
       // 后端 JSON_SET 写布尔会落成 1，这里按真值判断，别用 === true
       cancelled: Boolean(item.meta?.cancelled),
     }));
-  } catch {
+  } catch (err) {
+    // 面板不属于当前用户时要抛出去，让上层换一段新对话；
+    // 这里若一并 return []，上层会以为"这段对话是空的"，本地脏 id 永远清不掉。
+    if (err instanceof PanelGoneError) throw err;
     return [];
   }
 }
@@ -651,9 +658,20 @@ export default function AgentAssistant() {
     setBusy(true);
     try {
       // 只发 panel：用哪个会话由服务端决定（发布后自然换新会话）
-      const pid = await resolvePanel();
+      let pid = await resolvePanel();
       if (!panelId) setPanelId(pid);
-      const reply = await apiPost<ApiReply>('/chat', { panel_id: pid, message: text });
+      let reply: ApiReply;
+      try {
+        reply = await apiPost<ApiReply>('/chat', { panel_id: pid, message: text });
+      } catch (err) {
+        // 本地存的 panel 已失效（比如换了账号登录）：换一段新对话再试一次。
+        // 不自动恢复的话，之后每句话都会撞在同一个 404 上，表现为"怎么发都说对话不存在"。
+        if ((err as Error & { status?: number }).status !== 404) throw err;
+        localStorage.removeItem(PANEL_KEY);
+        pid = await createPanel();
+        setPanelId(pid);
+        reply = await apiPost<ApiReply>('/chat', { panel_id: pid, message: text });
+      }
       const assistant: ChatMessage = {
         id: Math.random().toString(36).slice(2),
         role: 'assistant',
