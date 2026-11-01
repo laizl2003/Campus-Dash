@@ -132,16 +132,33 @@ def default_store() -> "SessionStore | MySQLSessionStore":
 
 
 # 确认"是不是新的一单"时的回话
-_YES_WORDS = ("是", "对", "嗯", "好", "可以", "新建", "新的", "新单", "另一单", "是的", "对对")
-_NO_WORDS = ("不", "不是", "改", "别", "不用", "算了", "还是")
+# 规则只兜最直白的说法；"还是原来那单""这算新的一单吧"这种交给模型判断，
+# 否则用户得记住必须回"是/否"，体验很差。
+_YES_WORDS = ("是", "对", "嗯", "好", "可以", "新建", "新的", "新单", "另一单", "是的", "对对", "另起一单")
+_NO_WORDS = ("不", "不是", "改", "别", "不用", "算了", "还是", "原来那单", "原来这一单", "就这一单")
+
+CONFIRM_SYSTEM_PROMPT = """你在判断用户对一句提问的回答。
+
+助手刚才问："这看起来是新的一单，不是要改当前这一单。是新建，还是改当前这一单？"
+用户回答说了一句中文。请判断用户的意思属于哪一类，只输出一个英文标签：
+
+- NEW   这是新的一单，要单独新建（如"是新的一单""对，另外建一个""重新开一单""这单另算"）
+- SAME  还是当前这一单，只是修改（如"还是原来那单""就改这个""不用新建""我说的是这单的金额"）
+- OTHER 没有在回答这个问题（如"等会儿再说""先看看广场""帮我接个单"）
+
+判断原则：
+1. 抓"新建 / 另外 / 新的一单"这类语义 → NEW；
+2. 抓"还是原来 / 就这个 / 改这一单 / 不用新建"这类语义 → SAME；
+3. 完全不相关 → OTHER；
+4. 拿不准就 OTHER，不要硬猜。
+
+只输出标签本身，不要解释。"""
 
 
-def parse_confirmation(message: str) -> bool | None:
-    """把"是/不"解析成 True/False；不是明确的确认就返回 None。"""
-    text = (message or "").strip().strip("。.!！~ ")
-    if not text or len(text) > 8:
-        return None
-    if any(word in text for word in ("不是", "不新", "不用", "不要")):
+def _confirmation_by_rules(text: str) -> bool | None:
+    if any(word in text for word in ("不是", "不新", "不用", "不要", "不用建")):
+        return False
+    if any(word in text for word in ("原来那单", "原来这一单", "就这一单", "还是这单")):
         return False
     if text in _NO_WORDS or text.startswith(("不", "别")):
         return False
@@ -150,10 +167,50 @@ def parse_confirmation(message: str) -> bool | None:
     return None
 
 
+def parse_confirmation(
+    message: str, pending_message: str | None = None, extractor=None
+) -> bool | None:
+    """判断用户对"是新的一单吗"的回答：True=新建，False=改当前，None=没回答。
+
+    先走关键词（快且确定），再让模型理解"还是原来那单"这类自然说法。
+    """
+    text = (message or "").strip().strip("。.!！~ ")
+    if not text:
+        return None
+
+    by_rules = _confirmation_by_rules(text)
+    if by_rules is not None:
+        return by_rules
+
+    # 太长的句子多半是在说别的事，不值得为它多调一次模型
+    if len(text) > 30 or extractor is None:
+        return None
+
+    context = (
+        f"助手刚才把你说的「{pending_message}」理解成新的一单，问你是新建还是改当前这单。\n"
+        f"用户回答：{text}"
+        if pending_message
+        else f"用户回答：{text}"
+    )
+    try:
+        label = extractor.classify_text(CONFIRM_SYSTEM_PROMPT, context)
+    except Exception:  # noqa: BLE001
+        return None
+
+    if not label:
+        return None
+    value = label.strip().upper()
+    if "NEW" in value and "SAME" not in value:
+        return True
+    if "SAME" in value:
+        return False
+    return None
+
+
 NEW_TASK_QUESTION = (
     "这看起来是新的一单，不是要改当前这一单。\n"
-    "· 回「是」，我就把它当成新任务单独建一单\n"
-    "· 回「不」，我就当成对当前这一单的修改"
+    "· 要单独建，就说「是新的一单」\n"
+    "· 要改当前这单，就说「还是原来那单」"
 )
 
 
@@ -362,20 +419,29 @@ class ChatService:
     def _chat(self, session, message: str, user_token: str | None = None) -> AgentReply:
         # 上一轮问了"这是新的一单吗"，这一轮先把"是/不"翻译成实际动作
         prefix = ""
+        force_merge = False
         pending = getattr(session, "pending", None)
         if pending and pending.get("message"):
-            answer = parse_confirmation(message)
+            answer = parse_confirmation(
+                message,
+                pending_message=pending.get("message"),
+                extractor=self.extractor,
+            )
             if answer is not None:
+                # 两个分支都要重放"当时那条新任务描述"
+                message = pending["message"]
                 if answer:
-                    # 新的一单：清空草稿，用当时那句描述重新抽取
+                    # 新的一单：清空草稿，用原话重新抽取
                     session.draft = TaskDraft()
                     prefix = "好的，按新的一单处理。\n"
                 else:
-                    # 当成对当前这一单的修改：在原草稿上合并
+                    # 改当前这一单：原草稿保留，并且**禁止**再判新单，
+                    # 否则重放这句话又会被识别成 NEW_TASK，陷入反复追问
+                    force_merge = True
                     prefix = "好的，按对当前这一单的修改处理。\n"
-                message = pending["message"]
-                session.pending = None
-                self.store.save(session)
+            # 没在回答这个问题（或回答不清）：把待确认丢掉，当作普通指令继续
+            session.pending = None
+            self.store.save(session)
 
         missing = required_slots(session.draft)
         # 短期记忆：把本次会话最近几轮喂给抽取器，便于理解"就那个"这类省略；
@@ -396,6 +462,7 @@ class ChatService:
                 "missing": missing,
                 "history": history,
                 "user_token": user_token or "",
+                "force_merge": force_merge,
             }
         )
         draft: TaskDraft = state["draft"]
@@ -439,8 +506,9 @@ class ChatService:
                 "panel_id": session.panel_id,
             }
 
-        if intent == Intent.NEW_TASK:
-            # 不动草稿，先把这句话记下来，等用户回"是/不"
+        if intent == Intent.NEW_TASK and not force_merge:
+            # 不动草稿，先把这句话记下来，等用户确认。
+            # （用户已经确认过"改当前这单"时 force_merge=True，这里不再问）
             session.pending = {"message": message}
             self.store.save(session)
             if hasattr(self.store, "append_message"):

@@ -87,6 +87,8 @@ class AgentState(TypedDict, total=False):
     deadline_note: str | None
     # 疑似新任务时，暂存用户这句话，等确认
     new_task_hint: str
+    # 用户已经确认"就是改当前这单"：这一轮别再判新单
+    force_merge: bool
 
 
 class AgentReply(TypedDict, total=False):
@@ -143,6 +145,10 @@ def build_graph(extractor: Extractor, tool_loop=None):
         # 之前这里是"不管说什么都追加到任务内容"，导致"发布吧""改金额"也变成任务内容。
         if not required_slots(current):
             intent = _classify(extractor, message, current)
+            if state.get("force_merge") and intent == Intent.NEW_TASK:
+                # 用户已经确认"这是改当前这单"：把意图改回普通补充，
+                # 否则下游还会把它当成新单再问一次
+                intent = Intent.APPEND
 
             if intent == Intent.FINISH:
                 return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
@@ -161,7 +167,7 @@ def build_graph(extractor: Extractor, tool_loop=None):
                 # 这几类不改草稿，只回话。
                 # UNCLEAR 尤其重要：宁可回固定引导，也不把看不懂的内容写进任务。
                 return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
-            if intent == Intent.NEW_TASK:
+            if intent == Intent.NEW_TASK and not state.get("force_merge"):
                 # 用户又描述了一件不一样的事：先不合并，交给 service 问一句
                 return {
                     "draft": current,
@@ -200,7 +206,7 @@ def build_graph(extractor: Extractor, tool_loop=None):
                 for key in ("location_from", "location_to")
             )
             deadline_note = _guard_deadline(patch)
-            if _looks_like_new_task(current, patch):
+            if not state.get("force_merge") and _looks_like_new_task(current, patch):
                 intent = Intent.NEW_TASK
                 return {
                     "draft": current,

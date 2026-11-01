@@ -715,3 +715,126 @@ def test_heuristic_new_task_when_both_locations_change():
     assert _looks_like_new_task(draft, {"location_from": "一食堂", "location_to": "5号楼201"})
     # 只改一个地点不算换单
     assert not _looks_like_new_task(draft, {"location_to": "5号楼201"})
+
+
+def test_confirmation_understands_natural_phrasing():
+    """不再只认"是/否"：自然说法交给模型判断。"""
+    from app.agent.extractor import Extractor
+    from app.service import parse_confirmation
+
+    class Labeler(Extractor):
+        def __init__(self, label):
+            self.label = label
+
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            return self.label
+
+    new = Labeler("NEW")
+    same = Labeler("SAME")
+    other = Labeler("OTHER")
+
+    assert parse_confirmation("这是新的一单", extractor=new) is True
+    assert parse_confirmation("还是原来那单", extractor=same) is False
+    assert parse_confirmation("先看看广场有什么", extractor=other) is None
+
+    # 规则能直接判的，不走模型（extractor 传 None 也行）
+    assert parse_confirmation("是") is True
+    assert parse_confirmation("不用，就改这个") is False
+
+
+def test_confirmation_falls_back_when_model_fails():
+    from app.agent.extractor import Extractor
+    from app.service import parse_confirmation
+
+    class Broken(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            raise RuntimeError("模型挂了")
+
+    # 规则判不出来的说法，模型又挂了 -> 不硬猜，交回正常流程
+    assert parse_confirmation("说的就是这一单的金额", extractor=Broken()) is None
+
+
+def test_confirmation_too_long_is_not_confirmation():
+    from app.agent.extractor import Extractor
+    from app.service import parse_confirmation
+
+    class Labeler(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            return "NEW"
+
+    long_text = "我觉得这个任务还是先别发了等我把地址确认一下再说吧顺便问下余额"
+    assert parse_confirmation(long_text, extractor=Labeler()) is None
+
+
+def test_confirmed_modify_does_not_ask_again():
+    """回「还是原来那单」后，重放原话不能再被判定成新单（否则反复追问）。"""
+    from app.agent.extractor import Extractor
+    from app.agent.intent import Intent
+    from app.models import TaskDraft
+    from app.service import ChatService
+
+    class SameLabeler(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            return "SAME"
+
+        def classify_intent(self, message, draft):
+            # 模型仍然觉得这是新的一单
+            return Intent.NEW_TASK
+
+    service = ChatService(extractor=SameLabeler())
+    session = service.store.create(user_id="u-1", panel_id="p-1")
+    session.draft = TaskDraft(type="DELIVERY", title="送袜子", location_from="A", location_to="B",
+                              reward_cents=1000)
+    session.pending = {"message": "帮我取个快递，8块"}
+    service.store.save(session)
+
+    seen = {}
+
+    def fake_invoke(state):
+        seen["force_merge"] = state.get("force_merge")
+        return {**state, "draft": state["draft"], "missing": [], "status": "READY", "intent": None}
+
+    service.graph.invoke = fake_invoke
+    service._chat(session, "还是原来那单，我是想改金额", "tok")
+
+    assert seen["force_merge"] is True
+    assert service.store.get(session.id).pending is None
+
+
+def test_unrelated_answer_clears_pending():
+    """回一句不相关的话：待确认要清掉，不能一直挂着。"""
+    from app.agent.extractor import Extractor
+    from app.models import TaskDraft
+    from app.service import ChatService
+
+    class Other(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            return "OTHER"
+
+    service = ChatService(extractor=Other())
+    session = service.store.create(user_id="u-1", panel_id="p-1")
+    session.draft = TaskDraft(type="DELIVERY", title="送袜子", location_from="A", location_to="B",
+                              reward_cents=1000)
+    session.pending = {"message": "帮我取个快递，8块"}
+    service.store.save(session)
+
+    service.graph.invoke = lambda state: {**state, "draft": state["draft"], "missing": [],
+                                          "status": "READY", "intent": None}
+    service._chat(session, "先帮我看看广场有什么单", "tok")
+
+    assert service.store.get(session.id).pending is None
