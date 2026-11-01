@@ -59,7 +59,14 @@ class SessionStore:
         return None
 
     def ensure_session(self, panel_id: str, user_id: str | None = None) -> Session:
-        return self.get_active_session(panel_id) or self.create(user_id, panel_id)
+        session = self.get_active_session(panel_id)
+        if session is None:
+            return self.create(user_id, panel_id)
+        # 面板 id 不是凭证：别人拿到它也不能往这段对话里写
+        owner = getattr(session, "user_id", None)
+        if user_id and owner and owner != user_id:
+            raise PermissionError("panel belongs to another user")
+        return session
 
     def append_message(
         self,
@@ -257,11 +264,15 @@ class ChatService:
         return []
 
     def chat(
-        self, session_id: str, message: str, user_token: str | None = None
+        self, session_id: str, message: str, user_token: str | None = None,
+        user_id: str | None = None,
     ) -> AgentReply:
         session = self.store.get(session_id)
         if session is None:
             raise KeyError(session_id)
+        owner = getattr(session, "user_id", None)
+        if user_id and owner and owner != user_id:
+            raise PermissionError("session belongs to another user")
         return self._chat(session, message, user_token)
 
     def chat_panel(

@@ -406,3 +406,79 @@ def test_multi_step_tool_rounds_keep_tools_available():
 
     source = inspect.getsource(tool_loop.ToolLoop.run)
     assert "round_index == MAX_ROUNDS - 1" in source
+
+
+def test_other_users_panel_cannot_be_written():
+    """拿到别人的 panel_id 也写不进去：面板 id 不是凭证。"""
+    import pytest
+
+    from app.agent.extractor import Extractor
+    from app.service import ChatService
+
+    class Noop(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+    service = ChatService(extractor=Noop())
+    session = service.store.create(user_id="user-a", panel_id="p-a")
+    service.store.save(session)
+
+    with pytest.raises(PermissionError):
+        service.chat_panel("p-a", "帮我取快递", user_id="user-b", user_token="tok-b")
+
+
+def test_other_users_session_cannot_be_written():
+    import pytest
+
+    from app.agent.extractor import Extractor
+    from app.service import ChatService
+
+    class Noop(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+    service = ChatService(extractor=Noop())
+    session = service.store.create(user_id="user-a", panel_id="p-a")
+    service.store.save(session)
+
+    with pytest.raises(PermissionError):
+        service.chat(session.id, "帮我取快递", "tok-b", user_id="user-b")
+
+
+def test_owner_can_keep_talking():
+    from app.agent.extractor import Extractor
+    from app.service import ChatService
+
+    class Noop(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+    service = ChatService(extractor=Noop())
+    session = service.store.create(user_id="user-a", panel_id="p-a")
+    service.store.save(session)
+
+    reply = service.chat_panel("p-a", "帮我取快递", user_id="user-a", user_token="")
+    assert reply["status"] in ("ASKING", "READY")
+
+
+def test_model_cannot_override_user_token():
+    """模型即使"照抄"或伪造 user_token，也会被真实 token 覆盖。"""
+    from app.tools.mcp_client import MCPClient
+
+    payload = MCPClient.build_payload(
+        {"user_token": "attacker-token", "other_user_id": "u-2", "title": "x"},
+        "real-token",
+    )
+    assert payload["user_token"] == "real-token"
+    assert payload["title"] == "x"
+
+    # 工具 schema 里也不会暴露 user_token，模型根本不知道该填这个参数
+    schema = MCPClient._to_schema(
+        type("T", (), {"name": "publish_errand", "description": "",
+                       "inputSchema": {"type": "object",
+                                       "properties": {"user_token": {"type": "string"},
+                                                     "title": {"type": "string"}},
+                                       "required": ["user_token", "title"]}})()
+    )
+    assert "user_token" not in schema["function"]["parameters"]["properties"]
+    assert schema["function"]["parameters"]["required"] == ["title"]

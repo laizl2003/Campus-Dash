@@ -248,6 +248,7 @@ def publish(req: PublishRequest, authorization: str | None = Header(default=None
     """
     if not authorization:
         raise HTTPException(status_code=401, detail="缺少登录态")
+    caller = _current_user(authorization)
 
     # 防重复发单：会话一旦发布/取消就已结束，再点一次「确认发布」不能又建一单。
     # 前端如果还留着旧卡片（没刷新），这里必须挡住。
@@ -259,7 +260,11 @@ def publish(req: PublishRequest, authorization: str | None = Header(default=None
             target = service.store.get_active_session(req.panelId)
     except Exception:  # noqa: BLE001
         target = None
-    if target is None or getattr(target, "status", "ACTIVE") in ("CLOSED", "CANCELED"):
+    # 会话必须属于调用者：否则拿别人的 sessionId 也能把别人的单"发掉"
+    owner = getattr(target, "user_id", None) if target is not None else None
+    if target is None or (caller and owner and owner != caller):
+        raise HTTPException(status_code=404, detail="对话不存在")
+    if getattr(target, "status", "ACTIVE") in ("CLOSED", "CANCELED"):
         raise HTTPException(status_code=409, detail="这一单已经结束，请重新描述需求")
 
     backend = os.getenv("DASH_BACKEND_URL", "http://app:8080")
@@ -316,9 +321,14 @@ def chat(req: ChatRequest, authorization: str | None = Header(default=None)) -> 
                 req.panel_id, req.message, _current_user(authorization), token
             )
         elif req.session_id:
-            reply = service.chat(req.session_id, req.message, token)
+            reply = service.chat(
+                req.session_id, req.message, token, _current_user(authorization)
+            )
         else:
             raise HTTPException(status_code=400, detail="缺少 panel_id") from None
+    except PermissionError:
+        # 别人的对话：一律当成不存在，不泄露"这段对话确实存在"
+        raise HTTPException(status_code=404, detail="对话不存在") from None
     except KeyError:
         raise HTTPException(status_code=404, detail="session not found") from None
     draft = reply["draft"]

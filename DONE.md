@@ -3,6 +3,15 @@
 > 已完成需求的增量日志。每完成一条就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-11-01 · 安全加固：身份不可伪造，面板/session id 不再是凭证
+
+- **背景**：讨论"拿到别人 user_id 后让 agent 以他身份发单"是否可行。结论是**身份伪造走不通**（token 决定身份），但排查中发现相邻的真实漏洞——知道别人的 panel/session id 就能往他对话里写、能把他的单"发掉"。
+- **改动**：
+  - `MCPClient.build_payload` 显式覆盖 `user_token`：模型即使输出同名参数也会被真实 token 替换（原来只是隐式覆盖，现在抽成可单测的入口）
+  - `ensure_session`（内存版 + `MySQLSessionStore` 版）校验面板归属，跨用户抛 `PermissionError` → 接口 404；`chat(session_id)` 同样校验
+  - `POST /agent/publish` 增加归属校验：拿别人的 sessionId 发布返回 404（之前只校验状态）
+- **验证**：`197 passed, 1 skipped`（新增 4 例：跨用户 panel/session 写入被拒、本用户可继续对话、模型参数被真实 token 覆盖、schema 不暴露 user_token）；实测 B 拿 A 的 panelId 发消息/读消息/用 A 的 sessionId 发布，全部 404，A 自己操作正常
+
 ## 2026-11-01 · agent 新增取消订单工具 + 带条件查询
 
 - **目标**：让 agent 能按描述取消自己的待接单任务，并支持"进行中/已完成/某时间之前截止/最近几天接的单"这类条件查询。

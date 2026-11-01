@@ -90,11 +90,21 @@ class MCPClient:
         result = self._call(self._session.list_tools())
         return [self._to_schema(tool) for tool in result.tools]
 
+    @staticmethod
+    def build_payload(arguments: dict[str, Any] | None, token: str) -> dict[str, Any]:
+        """构造工具入参：**真实 token 永远覆盖**模型给的任何同名参数。
+
+        这是身份边界的最后一道闸：即使模型被诱导输出
+        {"user_token": "别人的token"}，也会在这里被替换掉。
+        """
+        payload = dict(arguments or {})
+        payload["user_token"] = token
+        return payload
+
     def call_tool(self, name: str, arguments: dict[str, Any], token: str) -> dict[str, Any]:
         """执行工具，并把 user_token 注入进去（模型看不到这个参数）。"""
         self.start()
-        payload = dict(arguments or {})
-        payload["user_token"] = token
+        payload = self.build_payload(arguments, token)
         result = self._call(self._session.call_tool(name, payload))
         return self._parse_result(result)
 

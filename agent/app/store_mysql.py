@@ -283,13 +283,22 @@ class MySQLSessionStore:
         """
         session = self.get_active_session(panel_id)
         if session is not None:
+            # 面板 id 不是凭证：别人拿到它也不能往这段对话里写
+            owner = getattr(session, "user_id", None)
+            if user_id and owner and owner != user_id:
+                raise PermissionError("panel belongs to another user")
             return session
         try:
             return self.create(user_id, panel_id)
+        except PermissionError:
+            raise
         except Exception:
             again = self.get_active_session(panel_id)
             if again is None:
                 raise
+            owner = getattr(again, "user_id", None)
+            if user_id and owner and owner != user_id:
+                raise PermissionError("panel belongs to another user") from None
             return again
 
     def save(self, session: "Session", status: str | None = None, last_message: str | None = None) -> None:
