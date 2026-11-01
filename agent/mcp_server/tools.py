@@ -81,26 +81,132 @@ def get_wallet(user_token: str) -> dict:
     }
 
 
-def list_my_errands(user_token: str, limit: int = 10) -> dict:
-    """查询我发布的任务：数量、逐单标题与金额。"""
-    result = _get("/api/errands/mine", user_token, params={"page": 0, "size": max(1, min(limit, 20))})
+# 状态分组：SETTLE 之前都算"进行中"，SETTLED/CLOSED 算"已完成"
+PHASE_STATUSES = {
+    "active": "PUBLISHED,LOCKED,ACCEPTED,PICKED_UP,DELIVERED,DISPUTED",
+    "done": "SETTLED,CLOSED",
+    "cancelled": "CANCELLED,EXPIRED,REFUNDED",
+    "published": "PUBLISHED",
+}
+
+
+def _local_time(value) -> str | None:
+    """把后端返回的 UTC 时间转成北京时间，直接给模型看，避免它按 UTC 解释。"""
+    if not value:
+        return None
+    text = str(value)
+    try:
+        from datetime import datetime, timedelta, timezone
+
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
+    except (TypeError, ValueError):
+        return text
+
+
+def _iso(value) -> str | None:
+    """把各种时间写法收敛成后端认识的 ISO-8601。"""
+    if value is None or value == "":
+        return None
+    if isinstance(value, str):
+        return value
+    try:
+        return value.isoformat()
+    except AttributeError:
+        return str(value)
+
+
+def list_my_errands(
+    user_token: str,
+    role: str = "published",
+    phase: str = "all",
+    expired_before: str | None = None,
+    expired_after: str | None = None,
+    created_after: str | None = None,
+    delivered_after: str | None = None,
+    limit: int = 10,
+) -> dict:
+    """查我发布的 / 我接的任务，可按状态与时间过滤。
+
+    role: published（我发布的）| grabbed（我接的）
+    phase: all | active（结算前）| done（已结算）| cancelled（取消/过期/退款）| published（仅待接单）
+    """
+    as_runner = str(role).lower() in ("grabbed", "runner", "accepted")
+    params = {
+        "role": "GRABBED_BY_ME" if as_runner else "PUBLISHED_BY_ME",
+        "page": 0,
+        "size": max(1, min(limit, 50)),
+    }
+    statuses = PHASE_STATUSES.get(str(phase).lower())
+    if statuses:
+        params["status"] = statuses
+    for key, value in (
+        ("expiredFrom", _iso(expired_after)),
+        ("expiredTo", _iso(expired_before)),
+        ("createdFrom", _iso(created_after)),
+        ("deliveredFrom", _iso(delivered_after)),
+    ):
+        if value:
+            params[key] = value
+
+    result = _get("/api/errands/mine", user_token, params=params)
     if not result["ok"]:
         return result
     data = result["data"]
     items = data if isinstance(data, list) else (data or {}).get("items") or []
     rows = [
         {
+            "errand_id": str(item.get("id")),
             "title": item.get("title"),
             "status": item.get("status"),
             "reward_yuan": _yuan(item.get("rewardCents")),
+            "expired_at": _local_time(item.get("expiredAt")),
+            "delivered_at": _local_time(item.get("deliveredAt")),
+            "from": item.get("locationFrom"),
+            "to": item.get("locationTo"),
         }
         for item in items
     ]
     return {
         "ok": True,
         "count": len(rows),
-        "total_reward_yuan": round(sum(row["reward_yuan"] for row in rows), 2),
+        "role": "grabbed" if as_runner else "published",
+        "phase": phase,
         "items": rows,
+    }
+
+
+def cancel_errand(user_token: str, errand_id: str) -> dict:
+    """取消我发布的、仍在 PUBLISHED 状态的任务（越界一律拒绝）。"""
+    detail = _get(f"/api/errands/{errand_id}", user_token)
+    if not detail.get("ok"):
+        return {"ok": False, "error": detail.get("error") or "任务不存在"}
+
+    errand = detail.get("data") or {}
+    me_id = _my_user_id(user_token)
+    publisher = str(errand.get("publisherId") or "")
+    status = str(errand.get("status") or "")
+
+    # 两道硬约束：只能取消自己的单，且只能是还没被接的 PUBLISHED
+    if me_id and publisher != me_id:
+        return {"ok": False, "error": "这不是你发布的任务，不能取消"}
+    if status != "PUBLISHED":
+        return {
+            "ok": False,
+            "error": f"只有待接单（PUBLISHED）的任务能取消，这一单当前是 {status}",
+        }
+
+    result = _post(f"/api/errands/{errand_id}/cancel", user_token)
+    if not result["ok"]:
+        return result
+    return {
+        "ok": True,
+        "errand_id": str(errand_id),
+        "title": errand.get("title"),
+        "reward_yuan": _yuan(errand.get("rewardCents")),
+        "refund": (result.get("data") or {}).get("result"),
     }
 
 

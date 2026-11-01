@@ -64,6 +64,32 @@ public class QueryErrandListUseCase {
         return queryPort.listByRunner(runnerId, Math.max(page, 0), Math.min(Math.max(size, 1), 50));
     }
 
+    /**
+     * 我的任务（带条件）：agent 的"我最近两天接的单""明天之前截止的任务"都走这里。
+     * 状态用字符串集合传，非法状态直接忽略（宁可少筛，不要 500）。
+     */
+    public List<Errand> myErrands(String userId, boolean asRunner, List<String> statuses,
+                                  Instant expiredFrom, Instant expiredTo,
+                                  Instant createdFrom, Instant createdTo,
+                                  Instant deliveredFrom, Instant deliveredTo,
+                                  int page, int size) {
+        List<String> normalized = statuses == null ? List.of() : statuses.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .map(s -> s.trim().toUpperCase())
+                .filter(s -> {
+                    try {
+                        ErrandStatus.valueOf(s);
+                        return true;
+                    } catch (IllegalArgumentException ex) {
+                        return false;
+                    }
+                })
+                .toList();
+        return queryPort.listMine(userId, asRunner, normalized, expiredFrom, expiredTo,
+                createdFrom, createdTo, deliveredFrom, deliveredTo,
+                Math.max(page, 0), Math.min(Math.max(size, 1), 50));
+    }
+
     public List<ErrandQueryPort.StatusChange> statusLog(long errandId) {
         Errand errand = errandRepository.findById(errandId)
                 .orElseThrow(() -> new BizException(ErrorCode.ERRAND_NOT_FOUND, "id=" + errandId));

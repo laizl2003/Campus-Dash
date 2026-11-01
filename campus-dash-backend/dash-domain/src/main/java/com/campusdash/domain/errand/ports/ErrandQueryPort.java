@@ -33,6 +33,18 @@ public interface ErrandQueryPort {
     /** 我抢中的（历史所有轮次都算）。走 grab_record.idx_runner 反查 */
     List<Errand> listByRunner(String runnerId, int page, int size);
 
+    /**
+     * 我的任务（带条件）：发布方或跑腿方二选一，可按状态集合与时间范围过滤。
+     *
+     * 为什么不在内存里筛：用户可能有上百单，分页取 20 条再过滤会把符合条件的单漏掉。
+     * 空集合表示不限状态；时间传 null 表示该端不限。
+     */
+    List<Errand> listMine(String userId, boolean asRunner, java.util.List<String> statuses,
+                          java.time.Instant expiredFrom, java.time.Instant expiredTo,
+                          java.time.Instant createdFrom, java.time.Instant createdTo,
+                          java.time.Instant deliveredFrom, java.time.Instant deliveredTo,
+                          int page, int size);
+
     /** 状态时间线：事件溯源的展示面 */
     List<StatusChange> statusLog(long campusId, long errandId);
 

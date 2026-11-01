@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一条就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-11-01 · agent 新增取消订单工具 + 带条件查询
+
+- **目标**：让 agent 能按描述取消自己的待接单任务，并支持"进行中/已完成/某时间之前截止/最近几天接的单"这类条件查询。
+- **改动**：
+  - 后端 `GET /api/errands/mine` 增加 `status`(CSV) / `expiredFrom·To` / `createdFrom·To` / `deliveredFrom·To` 参数；新增 `ErrandQueryPort.listMine` 用动态 SQL 过滤（不在内存里筛，避免分页漏单）
+  - MCP 新增 `cancel_errand`：先查详情，**必须是本人发布的、状态仍为 PUBLISHED**，否则直接拒绝、不调取消接口
+  - `list_my_errands` 扩展为 role(published/grabbed) + phase(all/active/done/cancelled/published) + 三种时间范围；时间统一转北京时间返回
+  - 路由新增 `cancel`：只有"取消 + 明确指向已发布的单"才走工具，草稿阶段的"取消"仍归发单链路
+  - 工具循环修正：ReAct 需要"先查再取消"两步，之前第二轮就把 tools 摘掉，导致模型把调用写成 DeepSeek 的 DSML 文本；现在只最后一轮强制回答，并加了 DSML 解析兜底
+- **验证**：`193 passed, 1 skipped`（新增 6 例：路由区分取消语义、非 PUBLISHED 拒取消、他人单拒取消、phase/时间参数映射、DSML 解析、多轮保留工具）；实测"取消西区东门菜鸟驿站那一单"→ list+cancel 两步，DB 变 CANCELLED、8 元退回；"我明天之前截止的任务"→ 只回 1 单；"我最近两天接了哪些单"→ 按 delivered_at 判断为空
+
 ## 2026-11-01 · 修复：消息中心红点永远消不掉（未读在分页之外）
 
 - **目标**：红点有多少未读就该能读到、能清掉，不能让用户看到"有红点但没未读"。

@@ -93,6 +93,54 @@ public class JdbcErrandQueryAdapter implements ErrandQueryPort {
     }
 
     @Override
+    public List<Errand> listMine(String userId, boolean asRunner, java.util.List<String> statuses,
+                                 java.time.Instant expiredFrom, java.time.Instant expiredTo,
+                                 java.time.Instant createdFrom, java.time.Instant createdTo,
+                                 java.time.Instant deliveredFrom, java.time.Instant deliveredTo,
+                                 int page, int size) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM errand WHERE ");
+        java.util.List<Object> args = new java.util.ArrayList<>();
+        sql.append(asRunner ? "grabber_id = ?" : "publisher_id = ?");
+        args.add(userId);
+
+        if (statuses != null && !statuses.isEmpty()) {
+            sql.append(" AND status IN (")
+               .append(String.join(",", java.util.Collections.nCopies(statuses.size(), "?")))
+               .append(")");
+            args.addAll(statuses);
+        }
+        if (expiredFrom != null) {
+            sql.append(" AND expired_at >= ?");
+            args.add(java.sql.Timestamp.from(expiredFrom));
+        }
+        if (expiredTo != null) {
+            sql.append(" AND expired_at <= ?");
+            args.add(java.sql.Timestamp.from(expiredTo));
+        }
+        if (createdFrom != null) {
+            sql.append(" AND created_at >= ?");
+            args.add(java.sql.Timestamp.from(createdFrom));
+        }
+        if (createdTo != null) {
+            sql.append(" AND created_at <= ?");
+            args.add(java.sql.Timestamp.from(createdTo));
+        }
+        // 跑腿视角常用：我最近几天送达的单
+        if (deliveredFrom != null) {
+            sql.append(" AND delivered_at >= ?");
+            args.add(java.sql.Timestamp.from(deliveredFrom));
+        }
+        if (deliveredTo != null) {
+            sql.append(" AND delivered_at <= ?");
+            args.add(java.sql.Timestamp.from(deliveredTo));
+        }
+        sql.append(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
+        args.add(size);
+        args.add(page * size);
+        return jdbc.query(sql.toString(), MAPPER, args.toArray());
+    }
+
+    @Override
     public List<StatusChange> statusLog(long campusId, long errandId) {
         return jdbc.query("""
                 SELECT created_at, from_status, to_status, round, operator_id

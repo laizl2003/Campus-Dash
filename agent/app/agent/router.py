@@ -15,6 +15,7 @@ class Route(str, Enum):
     QUERY = "query"    # 查数据
     GRAB = "grab"      # 接单
     COUPON = "coupon"  # 领券
+    CANCEL = "cancel"  # 取消已发布的任务
 
 
 # 领券：必须同时出现"券"和领取动作
@@ -22,6 +23,9 @@ _COUPON_ACTION = ("领", "领取", "收了", "薅")
 # 接单：出现接/抢 + 单
 _GRAB_WORDS = ("接单", "接个单", "接一单", "接两单", "接单吧", "抢单", "帮我接", "去接")
 _GRAB_PATTERN = re.compile(r"(接|抢)\s*[一两二三四五12345]?\s*单")
+# 取消：既要出现"取消"，又要指向某个已发布的任务（避免和"取消这一单草稿"混淆）
+_CANCEL_WORDS = ("取消", "撤销", "退掉")
+_CANCEL_TARGETS = ("订单", "那一单", "这单", "单子", "发布过", "已发布", "发过的", "任务")
 # 查询：出现这些词就问数据，而不是发单
 _QUERY_WORDS = (
     "余额", "钱包", "多少钱", "信用", "排名", "排行榜", "我的任务", "我发了",
@@ -37,6 +41,8 @@ def guess_route(message: str) -> Route | None:
     if not text:
         return None
 
+    if any(word in text for word in _CANCEL_WORDS) and any(t in text for t in _CANCEL_TARGETS):
+        return Route.CANCEL
     if "券" in text and any(word in text for word in _COUPON_ACTION):
         return Route.COUPON
     if any(word in text for word in _GRAB_WORDS) or _GRAB_PATTERN.search(text):
@@ -103,6 +109,16 @@ _ACCOUNT_WORDS = (
 
 def _draft_aware(route: Route, message: str, draft) -> Route:
     """草稿已经就绪时，模糊的问句优先理解成"看当前这一单"，而不是查账户。"""
+    if draft is not None and route is Route.CANCEL:
+        # 手上这一单还没发出去，"取消"就是丢掉草稿，别去动已发布的单
+        try:
+            from ..models import required_slots
+            pending = draft.model_dump(exclude_none=True)
+        except Exception:  # noqa: BLE001
+            pending = {}
+        if any(value not in (None, "", [], {}) for key, value in pending.items() if key != "title"):
+            return Route.TASK
+        return route
     if route is not Route.QUERY or draft is None:
         return route
     from ..models import required_slots

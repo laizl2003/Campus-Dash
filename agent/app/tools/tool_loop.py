@@ -29,16 +29,70 @@ TOOL_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿平台的助手，可以�
 2. 一次可以调用多个工具，但不要重复调用同一工具同一参数；
 3. 拿到结果后用简洁口语化的中文回答，金额带"元"，不要输出 JSON 或工具名；
 4. 工具返回 ok=false 时如实说明失败原因，不要编造成功；
-5. 与校园跑腿无关的问题，直接说明你只处理跑腿相关事务。"""
+5. 与校园跑腿无关的问题，直接说明你只处理跑腿相关事务。
+
+查条件时：
+6. 用户提到时间范围（"明天之前""最近两天"）、状态（"进行中""已完成"）时，
+   必须把条件放进工具参数（expired_before / expired_after / delivered_after / phase），
+   不要把全部结果拉回来自己筛——容易漏，也容易算错时区。
+
+取消任务时：
+7. 必须先调 list_my_errands（带上用户说的条件）拿到 errand_id，再调 cancel_errand；
+8. 只能取消自己发布的、状态仍为 PUBLISHED 的任务，别的状态或被接走的单要如实告知不能取消；
+9. 条件匹配到多单时，先问用户要取消哪一单，不要自己挑。"""
 
 # 按路由只暴露相关工具：schema 越少模型越快
 ROUTE_TOOLS: dict[str, tuple[str, ...]] = {
     "query": ("get_wallet", "get_credit", "get_ranking", "list_my_vouchers",
               "list_my_errands", "list_square_errands"),
-    "grab": ("list_square_errands", "grab_best"),
+    "grab": ("list_square_errands", "grab_best", "list_my_errands"),
+    # 取消要两步：先查（拿到 errand_id），再取消
+    "cancel": ("list_my_errands", "cancel_errand"),
     "coupon": ("list_claimable_vouchers", "claim_all_vouchers"),
     "task": ("get_wallet",),
 }
+
+
+# 有些部署不会把 tool_calls 解析出来，模型就把调用写进正文。
+# DeepSeek 的格式长这样：
+#   <｜｜DSML｜｜invoke name="cancel_errand">
+#   <｜｜DSML｜｜parameter name="errand_id" string="true">123</｜｜DSML｜ parameter>
+#   </｜｜DSML｜ invoke>
+_DSML_INVOKE = re.compile(r"<\uff5c[^>]*?invoke\s+name=\"([^\"]+)\"\s*>")
+_DSML_PARAM = re.compile(
+    r"<\uff5c[^>]*?parameter\s+name=\"([^\"]+)\"[^>]*>(.*?)</\uff5c[^>]*?parameter\s*>",
+    re.S,
+)
+_DSML_ANY = re.compile(r"</?\uff5c[^>]*>")
+
+
+def _parse_dsml(content: str) -> list[dict[str, Any]]:
+    """把正文里的伪工具调用捞成标准 tool_calls。"""
+    calls: list[dict[str, Any]] = []
+    blocks = _DSML_INVOKE.split(content)
+    # split 后形如 [前文, name1, 片段1, name2, 片段2, ...]
+    for index in range(1, len(blocks) - 1, 2):
+        name = blocks[index].strip()
+        body = blocks[index + 1]
+        args: dict[str, Any] = {}
+        for key, value in _DSML_PARAM.findall(body):
+            args[key.strip()] = value.strip()
+        calls.append({
+            "id": f"dsml-{index}",
+            "type": "function",
+            "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)},
+        })
+    return calls
+
+
+_DSML_BLOCK = re.compile(
+    r"<｜[^>]*?invoke[^>]*>.*?(?:</｜[^>]*?invoke>|$)", re.S
+)
+
+
+def _strip_dsml(content: str) -> str:
+    """去掉正文里的这些标记（连同参数值），别把内部格式甩给用户。"""
+    return _DSML_ANY.sub("", _DSML_BLOCK.sub("", content)).strip()
 
 
 def parse_grab_count(message: str) -> int:
@@ -57,6 +111,9 @@ def parse_grab_count(message: str) -> int:
 def fallback_plan(route: str, message: str) -> list[tuple[str, dict[str, Any]]]:
     """模型不可用时的确定性计划：按路由和关键词直接选工具。"""
     text = message or ""
+    if route == "cancel":
+        # 兜底只查不取消：写操作宁可让用户确认，也不能按关键词猜着删
+        return [("list_my_errands", {"role": "published", "phase": "published"})]
     if route == "coupon":
         return [("claim_all_vouchers", {})]
     if route == "grab":
@@ -118,9 +175,12 @@ class ToolLoop:
         calls: list[dict[str, Any]] = []
         executed: set[str] = set()
 
-        for _ in range(MAX_ROUNDS):
+        for round_index in range(MAX_ROUNDS):
+            # 只有最后一轮才禁止再调工具：ReAct 需要"先查、再取消"两步，
+            # 第一轮就摘掉 tools，模型只能把调用写成文本吐出来。
+            force_answer = bool(calls) and round_index == MAX_ROUNDS - 1
             try:
-                data = self._chat(messages, tools, force_answer=bool(calls))
+                data = self._chat(messages, tools, force_answer=force_answer)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("模型调用失败: %s", exc)
                 if calls:
@@ -129,6 +189,14 @@ class ToolLoop:
 
             reply_message = ((data.get("choices") or [{}])[0].get("message") or {})
             tool_calls = reply_message.get("tool_calls") or []
+            content_now = (reply_message.get("content") or "").strip()
+
+            # 有些部署没把 tool_calls 解析出来，模型会把调用写在正文里
+            # （DeepSeek 的 <｜｜DSML｜｜invoke ...> 格式）。这里自己捞出来执行，
+            # 否则用户会看到一串奇怪的标记，而工具一次都没跑。
+            if not tool_calls and _DSML_INVOKE.search(content_now):
+                tool_calls = _parse_dsml(content_now)
+                reply_message = {**reply_message, "content": _strip_dsml(content_now)}
 
             if not tool_calls:
                 content = (reply_message.get("content") or "").strip()
@@ -244,7 +312,17 @@ class ToolLoop:
             elif name == "list_my_vouchers":
                 lines.append(f"· 可用优惠券 {result.get('count')} 张")
             elif name == "list_my_errands":
-                lines.append(f"· 我发布的任务 {result.get('count')} 单，合计 {result.get('total_reward_yuan')} 元")
+                where = "我接的" if result.get("role") == "grabbed" else "我发布的"
+                lines.append(f"· {where}任务 {result.get('count')} 单（{result.get('phase')}）：")
+                for row in (result.get("items") or [])[:5]:
+                    lines.append(
+                        f"  - #{row.get('errand_id')} {row.get('title')} · {row.get('status')} · {row.get('reward_yuan')} 元"
+                    )
+            elif name == "cancel_errand":
+                if result.get("ok"):
+                    lines.append(f"· 已取消「{result.get('title')}」，{result.get('reward_yuan')} 元将退回")
+                else:
+                    lines.append(f"· 取消失败：{result.get('error')}")
             elif name == "claim_all_vouchers":
                 text = f"· 本次领到 {result.get('claimed_count')} 张券"
                 if result.get("skipped_count"):

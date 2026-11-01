@@ -27,9 +27,40 @@ def get_wallet(user_token: str) -> str:
 
 
 @mcp.tool()
-def list_my_errands(user_token: str, limit: int = 10) -> str:
-    """查询我发布的任务列表：数量、每单标题与悬赏金额。"""
-    return json.dumps(tools.list_my_errands(user_token, limit), ensure_ascii=False)
+def list_my_errands(
+    user_token: str,
+    role: str = "published",
+    phase: str = "all",
+    expired_before: str | None = None,
+    expired_after: str | None = None,
+    delivered_after: str | None = None,
+    limit: int = 10,
+) -> str:
+    """查我发布(published)或我接(grabbed)的任务，可按状态与时间过滤。
+
+    phase: all | active（结算前，含待接单/进行中）| done（已结算）|
+           cancelled（已取消/过期/退款）| published（仅待接单）
+    expired_before/after: ISO-8601 时间，按任务截止时间过滤。
+    delivered_after: ISO-8601 时间，按送达时间过滤（"我最近两天接了哪些单"用这个）。
+    """
+    return json.dumps(
+        tools.list_my_errands(
+            user_token,
+            role=role,
+            phase=phase,
+            expired_before=expired_before,
+            expired_after=expired_after,
+            delivered_after=delivered_after,
+            limit=limit,
+        ),
+        ensure_ascii=False,
+    )
+
+
+@mcp.tool()
+def cancel_errand(user_token: str, errand_id: str) -> str:
+    """取消我发布的、仍待接单（PUBLISHED）的任务；其他状态或别人的单一律拒绝。"""
+    return json.dumps(tools.cancel_errand(user_token, errand_id), ensure_ascii=False)
 
 
 @mcp.tool()

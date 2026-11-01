@@ -134,6 +134,11 @@ class GrabErrandUseCaseTest {
         @Override public List<CursorItem> listByCursor(long campusId, String status, java.time.Instant beforeCreatedAt, Long beforeId, int size) { return List.of(); }
         @Override public List<Errand> listByPublisher(String publisherId, int page, int size) { return List.of(); }
         @Override public List<Errand> listByRunner(String runnerId, int page, int size) { return List.of(); }
+    @Override public List<Errand> listMine(String userId, boolean asRunner, List<String> statuses,
+                                           java.time.Instant expiredFrom, java.time.Instant expiredTo,
+                                           java.time.Instant createdFrom, java.time.Instant createdTo,
+                                           java.time.Instant deliveredFrom, java.time.Instant deliveredTo,
+                                           int page, int size) { return List.of(); }
         @Override public List<StatusChange> statusLog(long campusId, long errandId) { return List.of(); }
         @Override public List<Long> sampleIds(int limit) { return List.of(); }
         @Override public int countOngoingByRunner(String runnerId) { return 0; }

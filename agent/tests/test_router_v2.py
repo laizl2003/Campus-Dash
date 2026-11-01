@@ -266,3 +266,143 @@ def test_history_query_is_scoped_to_panel_and_user():
 
     mine = service.panel_messages("p-1", user_id="u-1")
     assert [row["content"] for row in mine] == ["我的"]
+
+
+def test_router_distinguishes_cancel_order_from_draft():
+    """只有"取消某个已发布的单"才走取消链路；草稿阶段的"取消"仍归发单。"""
+    from app.agent.router import Route, route_message
+    from app.models import TaskDraft
+
+    empty = TaskDraft()
+    assert route_message("取消西区东门菜鸟驿站那一单", draft=empty) is Route.CANCEL
+    assert route_message("把我昨天发的订单取消掉", draft=empty) is Route.CANCEL
+
+    # 草稿里有内容时，"取消"是丢草稿，不是删已发布的单
+    drafting = TaskDraft(type="DELIVERY", reward_cents=800, location_from="东门")
+    assert route_message("取消", draft=drafting) is Route.TASK
+
+
+def test_cancel_errand_refuses_wrong_status(monkeypatch):
+    """硬约束：只有 PUBLISHED 能取消，被接走/已完成一律拒绝。"""
+    from mcp_server import tools
+
+    monkeypatch.setattr(tools, "get_me", lambda token: {"ok": True, "user_id": "me-1"})
+    monkeypatch.setattr(
+        tools,
+        "_get",
+        lambda path, token, params=None: {
+            "ok": True,
+            "data": {"publisherId": "me-1", "status": "LOCKED", "title": "取快递"},
+        },
+    )
+    called = []
+    monkeypatch.setattr(tools, "_post", lambda *a, **k: called.append(a) or {"ok": True})
+
+    result = tools.cancel_errand("tok", "123")
+
+    assert result["ok"] is False
+    assert "PUBLISHED" in result["error"]
+    assert called == [], "不该调用取消接口"
+
+
+def test_cancel_errand_refuses_others_order(monkeypatch):
+    """别人的单不能取消。"""
+    from mcp_server import tools
+
+    monkeypatch.setattr(tools, "get_me", lambda token: {"ok": True, "user_id": "me-1"})
+    monkeypatch.setattr(
+        tools,
+        "_get",
+        lambda path, token, params=None: {
+            "ok": True,
+            "data": {"publisherId": "other", "status": "PUBLISHED", "title": "取快递"},
+        },
+    )
+    called = []
+    monkeypatch.setattr(tools, "_post", lambda *a, **k: called.append(a) or {"ok": True})
+
+    result = tools.cancel_errand("tok", "123")
+
+    assert result["ok"] is False
+    assert "不是你发布" in result["error"]
+    assert called == []
+
+
+def test_cancel_errand_success(monkeypatch):
+    from mcp_server import tools
+
+    monkeypatch.setattr(tools, "get_me", lambda token: {"ok": True, "user_id": "me-1"})
+    monkeypatch.setattr(
+        tools,
+        "_get",
+        lambda path, token, params=None: {
+            "ok": True,
+            "data": {"publisherId": "me-1", "status": "PUBLISHED", "title": "取快递", "rewardCents": "800"},
+        },
+    )
+    monkeypatch.setattr(tools, "_post", lambda *a, **k: {"ok": True, "data": {"result": "REFUNDED"}})
+
+    result = tools.cancel_errand("tok", "123")
+
+    assert result["ok"] is True
+    assert result["refund"] == "REFUNDED"
+    assert result["reward_yuan"] == 8.0
+
+
+def test_list_my_errands_maps_phase_and_time(monkeypatch):
+    """phase/时间条件要变成后端认识的 status 与 ISO 参数。"""
+    from mcp_server import tools
+
+    seen = {}
+
+    def fake_get(path, token, params=None):
+        seen.update(params or {})
+        return {"ok": True, "data": []}
+
+    monkeypatch.setattr(tools, "_get", fake_get)
+    tools.list_my_errands("tok", role="grabbed", phase="active", expired_before="2026-11-02T00:00:00Z")
+
+    assert seen["role"] == "GRABBED_BY_ME"
+    assert "PUBLISHED" in seen["status"] and "DELIVERED" in seen["status"]
+    assert "SETTLED" not in seen["status"]
+    assert seen["expiredTo"] == "2026-11-02T00:00:00Z"
+
+
+def test_phase_sets_cover_before_and_after_settle():
+    from mcp_server.tools import PHASE_STATUSES
+
+    active = set(PHASE_STATUSES["active"].split(","))
+    done = set(PHASE_STATUSES["done"].split(","))
+    assert "SETTLED" not in active and "SETTLED" in done
+    assert {"PUBLISHED", "LOCKED", "ACCEPTED", "PICKED_UP"} <= active
+
+
+def test_parse_dsml_tool_calls():
+    """模型没走 tool_calls、把调用写进正文时，要能自己捞出来执行。"""
+    from app.tools.tool_loop import _parse_dsml, _strip_dsml
+
+    B = "\uff5c\uff5cDSML\uff5c\uff5c"
+    sample = (
+        f"<{B} calls>\n"
+        f"<{B} invoke name=\"cancel_errand\">\n"
+        f"<{B} parameter name=\"errand_id\" string=\"true\">242618605273878528</{B} parameter>\n"
+        f"</{B} invoke>\n"
+        f"</{B} calls>"
+    )
+
+    calls = _parse_dsml(sample)
+    assert len(calls) == 1
+    assert calls[0]["function"]["name"] == "cancel_errand"
+    assert "242618605273878528" in calls[0]["function"]["arguments"]
+    # 正文不能把内部标记和参数值漏给用户
+    assert _strip_dsml(sample) == ""
+
+
+def test_multi_step_tool_rounds_keep_tools_available():
+    """ReAct 两步（先查再取消）：除最后一轮外都要继续带 tools。"""
+    import inspect
+
+    from app.tools import tool_loop
+
+    source = inspect.getsource(tool_loop.ToolLoop.run)
+    assert "round_index == MAX_ROUNDS - 1" in source

@@ -145,13 +145,54 @@ public class ErrandController {
     /** 我的任务：我发布的 / 我抢的 */
     @GetMapping("/mine")
     public Result<List<Map<String, Object>>> mine(@RequestParam(defaultValue = "PUBLISHED_BY_ME") String role,
+                                                  @RequestParam(required = false) String status,
+                                                  @RequestParam(required = false) String expiredFrom,
+                                                  @RequestParam(required = false) String expiredTo,
+                                                  @RequestParam(required = false) String createdFrom,
+                                                  @RequestParam(required = false) String createdTo,
+                                                  @RequestParam(required = false) String deliveredFrom,
+                                                  @RequestParam(required = false) String deliveredTo,
                                                   @RequestParam(defaultValue = "0") int page,
                                                   @RequestParam(defaultValue = "20") int size) {
         String userId = CurrentUser.get();
-        List<Errand> list = "GRABBED_BY_ME".equals(role)
-                ? queryUseCase.myGrabbed(userId, page, size)
-                : queryUseCase.myPublished(userId, page, size);
+        boolean asRunner = "GRABBED_BY_ME".equals(role);
+
+        // 不带任何筛选时走原来的查询，保持老行为与老索引
+        boolean filtered = (status != null && !status.isBlank())
+                || expiredFrom != null || expiredTo != null
+                || createdFrom != null || createdTo != null
+                || deliveredFrom != null || deliveredTo != null;
+        List<Errand> list;
+        if (!filtered) {
+            list = asRunner
+                    ? queryUseCase.myGrabbed(userId, page, size)
+                    : queryUseCase.myPublished(userId, page, size);
+        } else {
+            List<String> statuses = status == null || status.isBlank()
+                    ? List.of()
+                    : java.util.Arrays.stream(status.split(",")).toList();
+            list = queryUseCase.myErrands(userId, asRunner, statuses,
+                    parseInstant(expiredFrom), parseInstant(expiredTo),
+                    parseInstant(createdFrom), parseInstant(createdTo),
+                    parseInstant(deliveredFrom), parseInstant(deliveredTo), page, size);
+        }
         return Result.ok(list.stream().map(e -> toCard(e, userId)).toList());
+    }
+
+    /** 时间参数统一按 ISO-8601 解析；解析不了就当没传，避免 500。 */
+    private static java.time.Instant parseInstant(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.Instant.parse(text.trim());
+        } catch (java.time.format.DateTimeParseException ex) {
+            try {
+                return java.time.OffsetDateTime.parse(text.trim()).toInstant();
+            } catch (java.time.format.DateTimeParseException ignored) {
+                return null;
+            }
+        }
     }
 
     /**
