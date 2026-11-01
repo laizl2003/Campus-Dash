@@ -135,3 +135,78 @@ def test_claim_all_counts_already_claimed_as_skipped(monkeypatch):
     assert result["claimed_count"] == 1
     assert result["skipped_count"] == 1
     assert result["failed"] == []
+
+
+def test_list_square_skips_own_errands(monkeypatch):
+    """广场列表要过滤掉自己发布的单，否则 agent 会接自己的单。"""
+    from mcp_server import tools
+
+    monkeypatch.setattr(tools, "get_me", lambda token: {"ok": True, "user_id": "me-1"})
+    monkeypatch.setattr(
+        tools,
+        "_get",
+        lambda path, token, params=None: {
+            "ok": True,
+            "data": [
+                {"id": "1", "title": "别人的单", "rewardCents": "2000", "status": "PUBLISHED", "publisherId": "other"},
+                {"id": "2", "title": "我的单", "rewardCents": "5000", "status": "PUBLISHED", "publisherId": "me-1"},
+                {"id": "3", "title": "已接走", "rewardCents": "9000", "status": "TAKEN", "publisherId": "other"},
+            ],
+        },
+    )
+
+    result = tools.list_square_errands("tok")
+
+    assert result["count"] == 1
+    assert result["items"][0]["title"] == "别人的单"
+    assert result["skipped_own"] == 1
+
+
+def test_grab_refuses_own_errand(monkeypatch):
+    """即使模型直接点单，也不能接自己的单。"""
+    from mcp_server import tools
+
+    monkeypatch.setattr(tools, "get_me", lambda token: {"ok": True, "user_id": "me-1"})
+    monkeypatch.setattr(
+        tools,
+        "_get",
+        lambda path, token, params=None: {"ok": True, "data": {"publisherId": "me-1"}},
+    )
+    called = []
+    monkeypatch.setattr(tools, "_post", lambda *a, **k: called.append(a) or {"ok": True})
+
+    result = tools.grab_errand("tok", "2")
+
+    assert result["ok"] is False
+    assert "自己" in result["error"]
+    assert called == [], "不应该真的调用接单接口"
+
+
+def test_grab_best_only_picks_others(monkeypatch):
+    """批量接单按实付降序，但只接别人的。"""
+    from mcp_server import tools
+
+    monkeypatch.setattr(tools, "get_me", lambda token: {"ok": True, "user_id": "me-1"})
+    monkeypatch.setattr(
+        tools,
+        "_get",
+        lambda path, token, params=None: {
+            "ok": True,
+            "data": [
+                {"id": "a", "title": "我的大单", "rewardCents": "9000", "status": "PUBLISHED", "publisherId": "me-1"},
+                {"id": "b", "title": "别人的小单", "rewardCents": "1000", "status": "PUBLISHED", "publisherId": "other"},
+            ],
+        },
+    )
+    grabbed = []
+
+    def fake_grab(token, errand_id):
+        detail = {"ok": True, "data": {"publisherId": "other"}}
+        return {"ok": True, "data": {}}
+
+    monkeypatch.setattr(tools, "grab_errand", fake_grab)
+    result = tools.grab_best("tok", 2)
+
+    assert result["grabbed_count"] == 1
+    assert result["grabbed"][0]["title"] == "别人的小单"
+    assert result["skipped_own"] == 1

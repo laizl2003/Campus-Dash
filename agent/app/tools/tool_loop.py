@@ -255,10 +255,16 @@ class ToolLoop:
             elif name == "list_claimable_vouchers":
                 lines.append(f"· 当前可领 {result.get('count')} 种券")
             elif name == "grab_best":
-                lines.append(f"· 接了 {result.get('grabbed_count')} 单" +
-                             (f"，{len(result.get('failed') or [])} 单没抢到" if result.get("failed") else ""))
+                if result.get("grabbed_count"):
+                    lines.append(f"· 接了 {result.get('grabbed_count')} 单")
+                else:
+                    lines.append("· 广场上没有可接的单（自己的单不能接）")
+                if result.get("skipped_own"):
+                    lines.append(f"· 跳过了 {result['skipped_own']} 单自己发布的")
+                if result.get("failed"):
+                    lines.append(f"· {len(result['failed'])} 单没抢到")
             elif name == "list_square_errands":
-                lines.append(f"· 广场可接 {result.get('count')} 单")
+                lines.append(f"· 广场可接 {result.get('count')} 单（不含自己的）")
         if not lines:
             return "我没有拿到可用结果，稍后再试试。"
         return "我查到这些：\n" + "\n".join(lines)

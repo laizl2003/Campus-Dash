@@ -219,8 +219,16 @@ def claim_all_vouchers(user_token: str) -> dict:
 
 # ------------------------------------------------------------------ 接单
 
+def _my_user_id(user_token: str) -> str | None:
+    me = get_me(user_token)
+    return str(me.get("user_id")) if me.get("ok") and me.get("user_id") else None
+
+
 def list_square_errands(user_token: str, limit: int = 20) -> dict:
-    """列出广场上可接的任务，按实付金额从大到小。"""
+    """列出广场上"别人发的"可接任务，按实付金额从大到小。
+
+    自己的单不能接，这里直接过滤掉，免得模型选中后再被后端拒绝。
+    """
     result = _get(
         "/api/errands",
         user_token,
@@ -228,24 +236,36 @@ def list_square_errands(user_token: str, limit: int = 20) -> dict:
     )
     if not result["ok"]:
         return result
+    me_id = _my_user_id(user_token)
     data = result["data"]
     items = data if isinstance(data, list) else (data or {}).get("items") or []
-    rows = [
-        {
+
+    rows, own = [], 0
+    for item in items:
+        if item.get("status") != "PUBLISHED":
+            continue
+        publisher = str(item.get("publisherId") or "")
+        if me_id and publisher == me_id:
+            own += 1
+            continue
+        rows.append({
             "errand_id": str(item.get("id")),
             "title": item.get("title"),
             "paid_yuan": _yuan(item.get("rewardCents")),
             "net_yuan": _yuan(item.get("netRewardCents")),
-        }
-        for item in items
-        if item.get("status") == "PUBLISHED"
-    ]
+        })
     rows.sort(key=lambda row: row["paid_yuan"], reverse=True)
-    return {"ok": True, "count": len(rows), "items": rows}
+    return {"ok": True, "count": len(rows), "items": rows, "skipped_own": own}
 
 
 def grab_errand(user_token: str, errand_id: str) -> dict:
-    """接一个任务。"""
+    """接一个任务；自己的单直接拒绝。"""
+    detail = _get(f"/api/errands/{errand_id}", user_token)
+    if detail.get("ok"):
+        publisher = str((detail.get("data") or {}).get("publisherId") or "")
+        me_id = _my_user_id(user_token)
+        if me_id and publisher == me_id:
+            return {"ok": False, "error": "这是你自己发布的单，不能接"}
     return _post(f"/api/errands/{errand_id}/grab", user_token)
 
 
@@ -277,6 +297,7 @@ def grab_best(user_token: str, count: Any = 1) -> dict:
         "grabbed_count": len(grabbed),
         "grabbed": grabbed,
         "failed": failed,
+        "skipped_own": listed.get("skipped_own", 0),
     }
 
 
