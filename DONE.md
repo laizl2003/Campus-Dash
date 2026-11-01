@@ -3,6 +3,264 @@
 > 已完成需求的增量日志。每完成一条就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-11-02 · Agent v2 版本总结（学习用：功能增量 / 代码位置 / 实现逻辑）
+
+> 适用范围：`agent/` 目录（Python 服务）+ 少量后端与前端配合改动。
+> 阅读顺序建议：先看「一、能力清单」→「二、整体架构」→ 再按兴趣读「三、逐个功能」。
+
+### 一、v2 相对 v1 的能力增量
+
+| 能力 | v1 | v2 |
+| --- | --- | --- |
+| 做什么 | 只会发单（填槽 → 出卡片 → 点按钮发布） | 发单之外，**查数据 / 接单 / 领券 / 取消订单 / 一键结算 / 直接发单** |
+| 工具 | 无，全部硬编码在 Python 里 | **MCP 工具层**，12 个工具，进程间解耦 |
+| 决策 | 固定的 4 节点 DAG（extract → check → ask/ready） | 前面加 **意图路由**，后面加 **function call 循环（ReAct）** |
+| 多轮 | 会话内填槽 | 还能「先查再改」，短期记忆扩大到整个 panel，并能识别「这是新的一单」 |
+| 资金 | 点按钮发布 | agent 能自己发布，且**自动挑最优优惠券** |
+| 安全 | 无 | token 只由服务端注入、面板/会话校验归属、历史按用户隔离 |
+
+### 二、整体架构
+
+```
+用户消息
+  ↓
+route（意图路由：task / query / grab / coupon / cancel / settle）
+  ├─ task   → extract → check ─┬→ ask_user → END      （v1 原样，只多了新单确认）
+  │                            └→ ready    → END
+  └─ 其余   → tool（模型选工具）→ MCP 执行 → 组织回答 → END
+                    ↑                ↓
+                    └── 最多 3 轮 ←──┘（ReAct：先查、再改）
+```
+
+新增文件：
+
+| 文件 | 作用 |
+| --- | --- |
+| `agent/mcp_server/server.py` | MCP server，用 FastMCP 把工具暴露成 stdio 服务 |
+| `agent/mcp_server/tools.py` | 工具实现，只负责调后端接口 |
+| `agent/app/tools/mcp_client.py` | MCP 客户端：常驻线程持有会话，`tools/list` → schema，`tools/call` → 执行 |
+| `agent/app/tools/tool_loop.py` | 模型 ↔ 工具的循环（ReAct）、按路由挂工具、降级计划、DSML 兜底 |
+| `agent/app/tools/actions.py` | 发单链路里直接调的工具封装（发布、选券） |
+| `agent/app/agent/router.py` | 入口意图路由（规则优先，必要时问模型） |
+
+### 三、逐个功能与实现逻辑
+
+#### 1. 意图路由 `app/agent/router.py`
+
+```python
+class Route(str, Enum):
+    TASK / QUERY / GRAB / COUPON / CANCEL / SETTLE
+```
+
+判断顺序：**关键词规则优先**，拿不准才问模型。
+
+- 领券：出现「券」+ 领取动作
+- 取消：出现「取消/撤销」+ 指向对象（订单/那一单/发布过）
+- 结算：出现「结算/确认收货」+ 对象
+- 接单：`接/抢 + 数字 + 单`（`_GRAB_PATTERN`）
+- 查询：钱包/余额/信用/排名/任务/券
+
+两个关键细节：
+
+```python
+# ① 草稿还没发出去时，「取消」是丢草稿，不是取消已发布的单
+if draft is not None and route is Route.CANCEL and _draft_has_content(draft):
+    return Route.TASK
+
+# ② 没有提问标记的句子不值得问一次模型（否则「取消」要多等几十秒）
+if not any(mark in text for mark in _NEEDS_LLM):
+    return Route.TASK
+```
+
+#### 2. MCP 工具层
+
+**server 端**（`mcp_server/server.py`）：
+
+```python
+mcp = FastMCP("campus-dash")
+
+@mcp.tool()
+def get_wallet(user_token: str) -> str:
+    """查询钱包余额。"""
+    return json.dumps(tools.get_wallet(user_token), ensure_ascii=False)
+```
+
+**client 端**（`app/tools/mcp_client.py`）：FastAPI 是同步的、MCP SDK 是 asyncio 的，所以用一个常驻线程持有一条 stdio 连接：
+
+```
+thread → asyncio loop → stdio_client → ClientSession（一直开着）
+调用方用 run_coroutine_threadsafe 投递请求、同步等结果
+```
+
+身份边界（**最重要的一段**）：
+
+```python
+@staticmethod
+def build_payload(arguments, token):
+    payload = dict(arguments or {})
+    payload["user_token"] = token        # 真实 token 覆盖模型给的任何同名参数
+    return payload
+
+@staticmethod
+def _to_schema(tool):
+    properties.pop("user_token", None)   # 模型看不到这个参数
+```
+
+#### 3. function call 循环 `app/tools/tool_loop.py`
+
+```python
+for round_index in range(MAX_ROUNDS):            # 最多 3 轮
+    force_answer = bool(calls) and round_index == MAX_ROUNDS - 1
+    data = self._chat(messages, tools, force_answer=force_answer)
+    tool_calls = message.get("tool_calls") or []
+    if not tool_calls:
+        return 文本回答
+    for call in tool_calls:
+        执行 → 以 role="tool" 回填 → 继续下一轮
+```
+
+四个工程细节：
+
+1. **按路由只挂相关工具**：实测工具越多模型越慢（1 个 23s / 5 个 83s），所以 `ROUTE_TOOLS` 做映射。
+2. **只有最后一轮才禁止再调工具**：第一轮就摘掉 `tools`，模型会把调用写成文本（见下条）。
+3. **DSML 兜底**：部分部署不解析 `tool_calls`，模型会把调用写在正文里（`<｜｜DSML｜｜invoke name="...">`），这里自己捞出来执行。
+4. **确定性降级**：模型超时/不可用时，按路由执行固定计划（`fallback_plan`），并把工具返回的事实拼成一句话。
+
+#### 4. 发单链路接入工具 `app/agent/graph.py` + `app/tools/actions.py`
+
+```python
+if intent == Intent.PUBLISH:
+    published = _publish(token, current)      # 有登录态才直接发
+    return {..., "published": published}
+
+# _publish 里：
+voucher = best_voucher(token, draft.reward_cents)   # 挑抵扣最大的自有券
+publish_draft(token, draft)                          # 带 voucher_id 发单
+```
+
+发布成功后 `service.record_published()` 收尾：会话置 CLOSED、卡片标 `publishedId`、补两条提示消息。
+
+#### 5. 取消订单（`mcp_server/tools.py::cancel_errand`）
+
+两道硬约束，**都在调取消接口之前**：
+
+```python
+if publisher != me_id:   return {"ok": False, "error": "这不是你发布的任务，不能取消"}
+if status != "PUBLISHED": return {"ok": False, "error": f"只有待接单（PUBLISHED）的任务能取消，当前是 {status}"}
+```
+
+ReAct 两步：`list_my_errands`（带条件）拿到 `errand_id` → `cancel_errand`。
+
+#### 6. 一键结算（`settle_my_errands`）
+
+先查 `role=published & phase=active`，再**只挑 `status == DELIVERED`** 逐单 `POST /settle`：
+
+```python
+targets = [r for r in items if r.get("status") == "DELIVERED"]
+```
+
+待接单/进行中的单不会被跳过流程直接结算。
+
+#### 7. 条件查询
+
+后端 `GET /api/errands/mine` 增加参数（`ErrandQueryPort.listMine` 用动态 SQL，不在内存筛）：
+
+| 参数 | 用途 |
+| --- | --- |
+| `status`（CSV） | 状态集合过滤 |
+| `expiredFrom/To` | 「明天之前截止的」 |
+| `createdFrom/To` | 按发布时间 |
+| `deliveredFrom/To` | 「最近两天接的单」 |
+
+工具侧把 `phase` 映射成状态集合：
+
+```python
+PHASE_STATUSES = {
+    "active":    "PUBLISHED,LOCKED,ACCEPTED,PICKED_UP,DELIVERED,DISPUTED",  # SETTLE 之前
+    "done":      "SETTLED,CLOSED",
+    "cancelled": "CANCELLED,EXPIRED,REFUNDED",
+}
+```
+
+#### 8. 接单（`grab_best`）
+
+按实付金额降序、`min(count, 5)`、未给数量默认 1；**先过滤掉自己发布的单**，`grab_errand` 里再兜一道。
+
+#### 9. 新单确认（v2 最后一个改动）
+
+问题：READY 后用户描述另一件事，会被 `merge_draft` 增量合并成「旧地点 + 新金额」的缝合单。
+
+解决：新增意图 `NEW_TASK`，**不合并、先问一句**：
+
+```
+这看起来是新的一单，不是要改当前这一单。
+· 回「是」，我就把它当成新任务单独建一单
+· 回「不」，我就当成对当前这一单的修改
+```
+
+状态要跨轮保存，所以 `agent_session` 加了 `pending_json` 列：
+
+```python
+session.pending = {"message": "帮我取个快递，8块"}      # 暂存原话
+# 下一轮：
+if parse_confirmation(message) is True:  session.draft = TaskDraft()  # 清空，用原话重来
+elif ... is False:                       保持原草稿，把原话当修改合并
+```
+
+兜底规则：模型没判 `NEW_TASK`，但取货点和送达点**同时**被换成另一组，也按新单处理（`_looks_like_new_task`）。
+
+#### 10. 截止时间兜底（`models.normalize_expired_at`）
+
+模型会把「一小时以内」算成「1 点钟」。三层兜底：
+
+```python
+# ① 写草稿：唯一入口 merge_draft 里归一化
+未来 → 保留；过去 24h 内 → 顺延一天；更早 → 丢弃
+# ② 告诉用户
+「你说的 11月01日 01:00 已经过去了，我按 11月02日 01:00 记的」
+# ③ 发布前 & 后端再挡一次
+PublishErrandUseCase: expiredAt 必须晚于 now，否则 INVALID_EXPIRED_AT
+```
+
+#### 11. 短期记忆
+
+每轮把同一 panel 最近 10 组问答（20 条、每条 120 字）拼进 prompt，system prompt 约定：
+
+> 冲突以后面的说法为准；补充则合并。
+
+历史从数据库取（`panel_messages`），所以刷新/重启后仍能接上。
+
+#### 12. 安全边界
+
+| 边界 | 做法 |
+| --- | --- |
+| 身份不可伪造 | token 由服务端注入工具参数，schema 里剔除；发单工具没有 publisher 参数 |
+| 面板不可越权 | `ensure_session` / `chat` / `panels/{id}/messages` 都校验 `user_id`，越权一律 404 |
+| 历史隔离 | `agent_message` 冗余 `user_id`，查询按用户过滤 |
+
+#### 13. 前端配合（`agent/agent-frontend/src/AgentAssistant.tsx`）
+
+- 卡片按 **session_id** 判定新卡片（发布/取消会换会话）
+- `reply.published_id` → 把卡片冻结成「已发布」，防止重复发布
+- 卡片展示最优优惠券（`meta.voucher`）
+- 面板 404 时自动换新对话（`PanelGoneError` 不能被自己的 catch 吞掉）
+
+### 四、踩过的坑（值得记住）
+
+| 现象 | 根因 | 结论 |
+| --- | --- | --- |
+| 助手「听不懂」整句话 | 容器里是失效的旧 API key，401 被静默降级成规则抽取 | 失败要留痕（`/agent/status` 的 `last_llm_error`） |
+| 取消功能写了却不生效 | 熔断器包装层转发时丢了新参数 | **包装器必须透传所有参数** |
+| 工具调用变成一堆 `<｜｜DSML｜｜>` 文本 | 第二轮就摘掉了 `tools` | ReAct 要保留工具，只在最后一轮强制回答 |
+| 红点永远消不掉 | 未读在第 2 页，而「已读」靠 hover 触发 | 一眼看不到的状态要有「全部已读」出口 |
+| 新用户总是「对话不存在」 | `PanelGoneError` 被同一个 catch 吞掉 | 区分「空」与「失效」 |
+
+### 五、v3 规划
+
+RAG：周边商铺信息、校园宿舍楼信息、项目说明书等知识库。
+
+---
+
 ## 2026-11-01 · 修复：截止时间被算到过去，单一发就自动截止
 
 - **目标**：不管模型怎么算，落进草稿/发出去的截止时间必须在未来。

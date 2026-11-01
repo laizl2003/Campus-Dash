@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS agent_session (
   status       VARCHAR(16)  NULL,
   active_key   VARCHAR(36)  GENERATED ALWAYS AS (IF(status IN ('CLOSED', 'CANCELED'), NULL, panel_id)) STORED,
   last_message VARCHAR(500) NULL,
+  pending_json JSON         NULL,
   created_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (session_id),
@@ -169,6 +170,9 @@ class MySQLSessionStore:
         # 老会话没有面板概念：各自独立成一个面板，历史仍然能按条看
         self._run("UPDATE agent_session SET panel_id = UUID() WHERE panel_id IS NULL")
 
+        if "pending_json" not in self._columns("agent_session"):
+            self._run("ALTER TABLE agent_session ADD COLUMN pending_json JSON NULL AFTER last_message")
+
         message_cols = self._columns("agent_message")
         if "meta_json" not in message_cols:
             self._run("ALTER TABLE agent_message ADD COLUMN meta_json JSON NULL AFTER content")
@@ -254,11 +258,12 @@ class MySQLSessionStore:
             turns=int(row[3] or 0),
             status=str(row[4] or "ACTIVE") if len(row) > 4 else "ACTIVE",
             user_id=row[5] if len(row) > 5 else None,
+            pending=_load_meta(row[6]) if len(row) > 6 else None,
         )
 
     def get(self, session_id: str) -> "Session | None":
         row = self._run(
-            "SELECT session_id, draft_json, panel_id, turns, status, user_id FROM agent_session WHERE session_id = %s",
+            "SELECT session_id, draft_json, panel_id, turns, status, user_id, pending_json FROM agent_session WHERE session_id = %s",
             (session_id,),
             fetch="one",
         )
@@ -267,7 +272,7 @@ class MySQLSessionStore:
     def get_active_session(self, panel_id: str) -> "Session | None":
         """面板下还没结束的那个会话；没有说明该开新会话了。"""
         row = self._run(
-            "SELECT session_id, draft_json, panel_id, turns, status, user_id FROM agent_session "
+            "SELECT session_id, draft_json, panel_id, turns, status, user_id, pending_json FROM agent_session "
             "WHERE panel_id = %s AND (status IS NULL OR status NOT IN ('CLOSED', 'CANCELED')) "
             "ORDER BY created_at DESC LIMIT 1",
             (panel_id,),
@@ -307,13 +312,14 @@ class MySQLSessionStore:
         self._run(
             "UPDATE agent_session"
             "   SET draft_json = %s, turns = %s, status = COALESCE(%s, status),"
-            "       last_message = COALESCE(%s, last_message)"
+            "       last_message = COALESCE(%s, last_message), pending_json = %s"
             " WHERE session_id = %s",
             (
                 json.dumps(session.draft.model_dump(mode="json"), ensure_ascii=False),
                 session.turns,
                 status,
                 (last_message or "")[:500] or None,
+                json.dumps(session.pending, ensure_ascii=False) if session.pending else None,
                 session.id,
             ),
         )

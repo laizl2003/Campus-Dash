@@ -614,3 +614,104 @@ def test_guard_deadline_tells_user_about_roll():
 
     assert note and "已经过去" in note
     assert patch["expired_at"] > datetime.now()
+
+
+def test_parse_confirmation():
+    from app.service import parse_confirmation
+
+    assert parse_confirmation("是") is True
+    assert parse_confirmation("对，是新的一单") is True
+    assert parse_confirmation("不是") is False
+    assert parse_confirmation("不用，就是改一下") is False
+    assert parse_confirmation("帮我取快递") is None
+
+
+def _service_with_ready_draft():
+    from app.agent.extractor import Extractor
+    from app.models import TaskDraft
+    from app.service import ChatService
+
+    class Noop(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+    service = ChatService(extractor=Noop())
+    session = service.store.create(user_id="u-1", panel_id="p-1")
+    session.draft = TaskDraft(
+        type="DELIVERY", title="女生宿舍311送袜子到男生宿舍311",
+        location_from="女生宿舍311", location_to="男生宿舍311", reward_cents=1000,
+    )
+    service.store.save(session)
+    return service, session
+
+
+def test_new_task_asks_before_merging():
+    """READY 时描述另一件事：不合并，先问一句。"""
+    service, session = _service_with_ready_draft()
+    service.graph.invoke = lambda state: {
+        **state, "draft": state["draft"], "missing": [], "status": "READY",
+        "intent": __import__("app.agent.intent", fromlist=["Intent"]).Intent.NEW_TASK,
+        "new_task_hint": "帮我取个快递，8块",
+    }
+
+    reply = service._chat(session, "帮我取个快递，8块", "tok")
+
+    assert reply["pending_new_task"] is True
+    assert "新的一单" in reply["message"]
+    # 草稿一点没动
+    assert reply["draft"]["location_from"] == "女生宿舍311"
+    assert reply["draft"]["reward_cents"] == 1000
+    assert service.store.get(session.id).pending["message"] == "帮我取个快递，8块"
+
+
+def test_confirmation_yes_starts_fresh_draft():
+    """回"是"：清空草稿，用当时那句描述重来。"""
+    service, session = _service_with_ready_draft()
+    session.pending = {"message": "帮我取个快递，8块"}
+    service.store.save(session)
+
+    seen = {}
+
+    def fake_invoke(state):
+        seen["draft"] = state["draft"]
+        return {**state, "draft": state["draft"], "missing": [], "status": "ASKING",
+                "intent": None, "question": "从哪里取货？"}
+
+    service.graph.invoke = fake_invoke
+    service._chat(session, "是", "tok")
+
+    # 传给图的是空草稿
+    assert seen["draft"].location_from is None
+    assert seen["draft"].reward_cents is None
+    assert service.store.get(session.id).pending is None
+
+
+def test_confirmation_no_keeps_draft():
+    """回"不"：保留原草稿，把它当成修改。"""
+    service, session = _service_with_ready_draft()
+    session.pending = {"message": "帮我取个快递，8块"}
+    service.store.save(session)
+
+    seen = {}
+
+    def fake_invoke(state):
+        seen["draft"] = state["draft"]
+        return {**state, "draft": state["draft"], "missing": [], "status": "READY",
+                "intent": None}
+
+    service.graph.invoke = fake_invoke
+    service._chat(session, "不是", "tok")
+
+    assert seen["draft"].location_from == "女生宿舍311"
+    assert seen["draft"].reward_cents == 1000
+
+
+def test_heuristic_new_task_when_both_locations_change():
+    """模型没判新单时的兜底：取货+送达同时换成另一组，就当新单。"""
+    from app.agent.graph import _looks_like_new_task
+    from app.models import TaskDraft
+
+    draft = TaskDraft(type="DELIVERY", location_from="女生宿舍311", location_to="男生宿舍311")
+    assert _looks_like_new_task(draft, {"location_from": "一食堂", "location_to": "5号楼201"})
+    # 只改一个地点不算换单
+    assert not _looks_like_new_task(draft, {"location_to": "5号楼201"})

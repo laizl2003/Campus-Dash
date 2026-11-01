@@ -44,6 +44,8 @@ class Intent(str, Enum):
     SHOW_DRAFT = "SHOW_DRAFT"
     # 无法确定用户想做什么：不猜，回固定引导
     UNCLEAR = "UNCLEAR"
+    # 草稿已就绪，但用户又描述了一个"不一样的任务"：要确认是否新建
+    NEW_TASK = "NEW_TASK"
 
 
 INTENT_LABELS: dict[Intent, str] = {
@@ -57,6 +59,7 @@ INTENT_LABELS: dict[Intent, str] = {
     Intent.CLEAR_DESCRIPTION: "清空任务内容",
     Intent.SHOW_DRAFT: "重新展示任务卡片",
     Intent.UNCLEAR: "意图不明确",
+    Intent.NEW_TASK: "想开新的一单",
 }
 
 # 意图不明确时回复的固定文案：不猜、不改草稿，把可选项摆出来
@@ -87,9 +90,13 @@ INTENT_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿助手的意图分类器
 - CLEAR_DESCRIPTION 要求清空任务内容（如"把任务内容删掉""清空备注""不要任务内容了""去掉刚才那些说明"）
 - SHOW_DRAFT 要求再看一次任务卡片（如"再给我看下任务""卡片呢""刚才那个单子再发一遍""重新展示一下""看看现在长什么样"）
 - UNCLEAR   你无法确定用户想做什么（如只有一个名词"外卖"、指代不明的"第三个"、含糊的"行随便吧"）
+- NEW_TASK  用户又描述了一个**不一样的任务**（如当前是"送袜子到男生宿舍"，用户说"帮我取个快递，8块"），
+            而不是在改当前这一单
 
 判断原则：
 1. 只要是在描述任务相关的细节，就是 APPEND；
+1.1 如果用户描述的是**另一件要办的事**（事情本身变了，比如从"送袜子"变成"取快递"），
+    即使顺带给了金额或时间，也是 NEW_TASK，不是 APPEND；
 2. 明确表达"提交/发布/确认"是 PUBLISH；
 3. 指出某个字段要改是 EDIT；
 4. 明确要求删除/清空任务内容（不是删除整个任务）是 CLEAR_DESCRIPTION；

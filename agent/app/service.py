@@ -35,6 +35,8 @@ class Session:
     history: list[dict[str, object]] = field(default_factory=list)
     # 归属用户：历史消息只给本人看
     user_id: str | None = None
+    # 待确认的"新任务"：{"message": 原话}，等用户回"是/不"再决定新建还是修改
+    pending: dict | None = None
     # ACTIVE / CLOSED（已发布）/ CANCELED（已取消）。发布或取消后这一单就结束了
     status: str = "ACTIVE"
 
@@ -127,6 +129,33 @@ def default_store() -> "SessionStore | MySQLSessionStore":
     except Exception as exc:  # noqa: BLE001
         logging.getLogger(__name__).warning("MySQL 会话存储不可用，降级为内存: %s", exc)
         return SessionStore()
+
+
+# 确认"是不是新的一单"时的回话
+_YES_WORDS = ("是", "对", "嗯", "好", "可以", "新建", "新的", "新单", "另一单", "是的", "对对")
+_NO_WORDS = ("不", "不是", "改", "别", "不用", "算了", "还是")
+
+
+def parse_confirmation(message: str) -> bool | None:
+    """把"是/不"解析成 True/False；不是明确的确认就返回 None。"""
+    text = (message or "").strip().strip("。.!！~ ")
+    if not text or len(text) > 8:
+        return None
+    if any(word in text for word in ("不是", "不新", "不用", "不要")):
+        return False
+    if text in _NO_WORDS or text.startswith(("不", "别")):
+        return False
+    if text in _YES_WORDS or text.startswith(("是", "对", "嗯", "好", "可以")):
+        return True
+    return None
+
+
+NEW_TASK_QUESTION = (
+    "这看起来是新的一单，不是要改当前这一单。\n"
+    "· 回「是」，我就把它当成新任务单独建一单\n"
+    "· 回「不」，我就当成对当前这一单的修改"
+)
+
 
 
 class ChatService:
@@ -331,6 +360,22 @@ class ChatService:
         return value
 
     def _chat(self, session, message: str, user_token: str | None = None) -> AgentReply:
+        # 上一轮问了"这是新的一单吗"，这一轮先把"是/不"翻译成实际动作
+        prefix = ""
+        pending = getattr(session, "pending", None)
+        if pending and pending.get("message"):
+            answer = parse_confirmation(message)
+            if answer is not None:
+                if answer:
+                    # 新的一单：清空草稿，用当时那句描述重新抽取
+                    session.draft = TaskDraft()
+                    prefix = "好的，按新的一单处理。\n"
+                else:
+                    # 当成对当前这一单的修改：在原草稿上合并
+                    prefix = "好的，按对当前这一单的修改处理。\n"
+                message = pending["message"]
+                session.pending = None
+                self.store.save(session)
 
         missing = required_slots(session.draft)
         # 短期记忆：把本次会话最近几轮喂给抽取器，便于理解"就那个"这类省略；
@@ -394,6 +439,34 @@ class ChatService:
                 "panel_id": session.panel_id,
             }
 
+        if intent == Intent.NEW_TASK:
+            # 不动草稿，先把这句话记下来，等用户回"是/不"
+            session.pending = {"message": message}
+            self.store.save(session)
+            if hasattr(self.store, "append_message"):
+                self.store.append_message(
+                    session.id, "user", message, user_id=session.user_id
+                )
+                self.store.append_message(
+                    session.id, "assistant", NEW_TASK_QUESTION, user_id=session.user_id
+                )
+            return {
+                "status": status,
+                "message": (prefix or "") + NEW_TASK_QUESTION,
+                "draft": draft.model_dump(mode="json"),
+                "missing": [slot.value for slot in missing],
+                "question": None,
+                "intent": Intent.NEW_TASK.value,
+                "can_publish": False,
+                "cleared": False,
+                "show_draft": True,
+                "unclear": False,
+                "updated_fields": [],
+                "session_id": session.id,
+                "panel_id": session.panel_id,
+                "pending_new_task": True,
+            }
+
         reply = draft_to_reply(status, draft, missing, question, appended, intent,
                                list(state.get("updated_fields") or []),
                                bool(state.get("rejected_location")),
@@ -403,6 +476,8 @@ class ChatService:
         if note:
             reply["deadline_note"] = note
             reply["message"] = f"{note}\n{reply.get('message') or question or ''}"
+        if prefix:
+            reply["message"] = f"{prefix}{reply.get('message') or ''}"
         reply_text = reply.get("message") or question or ""
 
         session.history.append({"role": "user", "content": message})

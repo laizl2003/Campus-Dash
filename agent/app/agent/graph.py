@@ -85,6 +85,8 @@ class AgentState(TypedDict, total=False):
     published: dict
     # 截止时间被纠正过时，要顺带告诉用户一句话
     deadline_note: str | None
+    # 疑似新任务时，暂存用户这句话，等确认
+    new_task_hint: str
 
 
 class AgentReply(TypedDict, total=False):
@@ -159,6 +161,15 @@ def build_graph(extractor: Extractor, tool_loop=None):
                 # 这几类不改草稿，只回话。
                 # UNCLEAR 尤其重要：宁可回固定引导，也不把看不懂的内容写进任务。
                 return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
+            if intent == Intent.NEW_TASK:
+                # 用户又描述了一件不一样的事：先不合并，交给 service 问一句
+                return {
+                    "draft": current,
+                    "extracted": {},
+                    "appended": False,
+                    "intent": intent,
+                    "new_task_hint": message,
+                }
             if intent == Intent.SHOW_DRAFT:
                 # 要求再看一次卡片：不改草稿，只让前端重新插一张卡片
                 return {
@@ -189,6 +200,15 @@ def build_graph(extractor: Extractor, tool_loop=None):
                 for key in ("location_from", "location_to")
             )
             deadline_note = _guard_deadline(patch)
+            if _looks_like_new_task(current, patch):
+                intent = Intent.NEW_TASK
+                return {
+                    "draft": current,
+                    "extracted": {},
+                    "appended": False,
+                    "intent": intent,
+                    "new_task_hint": message,
+                }
             field_patch = {key: value for key, value in patch.items() if key in EDITABLE_FIELDS}
             content = patch.get("description")
             # 模型只给了字段、没给 description，且这句话里没有字段可改时，
@@ -383,6 +403,22 @@ def _summarize(extractor: Extractor, existing: str | None, message: str) -> str 
 
 # 这些意图边界清晰，关键词判断已经足够，不必等模型（模型慢时每轮要多等数十秒）
 _UNAMBIGUOUS = (Intent.CANCEL, Intent.PUBLISH)
+
+
+def _looks_like_new_task(draft: TaskDraft, patch: dict) -> bool:
+    """模型没判成新单时的兜底：取货点和送达点**同时**被换成另一组，基本就是换了一单。"""
+    if not patch:
+        return False
+    new_from = patch.get("location_from")
+    new_to = patch.get("location_to")
+    if not (new_from and new_to):
+        return False
+    old_from = draft.location_from
+    old_to = draft.location_to
+    if not (old_from and old_to):
+        return False
+    return str(new_from).strip() != str(old_from).strip() and str(new_to).strip() != str(old_to).strip()
+
 
 
 def _guard_deadline(patch: dict) -> str | None:
