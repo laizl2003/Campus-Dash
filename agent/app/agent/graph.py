@@ -475,6 +475,22 @@ def _deadline_fallback(message: str) -> dict[str, object]:
     return {"expired_at": guessed} if guessed is not None else {}
 
 
+# 最近一次模型调用失败的原因。/agent/status 会读它，
+# 免得"key 失效"这种问题表现成"助手听不懂人话"。
+_LAST_LLM_ERROR: dict[str, str] = {}
+
+
+def record_llm_error(message: str) -> None:
+    from datetime import datetime, timezone
+
+    _LAST_LLM_ERROR.clear()
+    _LAST_LLM_ERROR["error"] = message[:300]
+    _LAST_LLM_ERROR["at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def last_llm_error() -> dict[str, str]:
+    return dict(_LAST_LLM_ERROR)
+
 def _extract(
     extractor: Extractor, message: str, draft: TaskDraft, history: list[dict] | None = None
 ) -> dict[str, object]:
@@ -485,7 +501,13 @@ def _extract(
     """
     try:
         patch = extractor.extract(message, draft, history)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001
+        # 以前这里静默返回空 patch，表现是"模型挂了，agent 假装没听懂"，
+        # 只能靠追问地点才看出异常。至少要把真实原因留痕。
+        import logging
+
+        logging.getLogger("app.agent.graph").warning("抽取失败，降级为空 patch: %s", exc)
+        record_llm_error(str(exc))
         return {}
     # 模型漏掉时间时用规则补一次，避免"明天下午三点"被当成任务内容
     if not patch.get("expired_at"):

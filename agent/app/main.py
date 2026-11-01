@@ -92,8 +92,11 @@ def status() -> dict[str, object]:
         extractor_name = type(extractor.primary).__name__
     else:
         extractor_name = type(extractor).__name__
+    from .agent.graph import last_llm_error
+
     return {
         "version": AGENT_VERSION,
+        "last_llm_error": last_llm_error(),
         "extractor": extractor_name,
         "llm_enabled": settings.enabled,
         "llm_usable": settings.usable(),
@@ -220,6 +223,19 @@ def publish(req: PublishRequest, authorization: str | None = Header(default=None
     """
     if not authorization:
         raise HTTPException(status_code=401, detail="缺少登录态")
+
+    # 防重复发单：会话一旦发布/取消就已结束，再点一次「确认发布」不能又建一单。
+    # 前端如果还留着旧卡片（没刷新），这里必须挡住。
+    target = None
+    try:
+        if req.sessionId:
+            target = service.store.get(req.sessionId)
+        elif req.panelId:
+            target = service.store.get_active_session(req.panelId)
+    except Exception:  # noqa: BLE001
+        target = None
+    if target is None or getattr(target, "status", "ACTIVE") in ("CLOSED", "CANCELED"):
+        raise HTTPException(status_code=409, detail="这一单已经结束，请重新描述需求")
 
     backend = os.getenv("DASH_BACKEND_URL", "http://app:8080")
     try:

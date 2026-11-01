@@ -33,6 +33,8 @@ class Session:
     turns: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     history: list[dict[str, object]] = field(default_factory=list)
+    # ACTIVE / CLOSED（已发布）/ CANCELED（已取消）。发布或取消后这一单就结束了
+    status: str = "ACTIVE"
 
 
 class SessionStore:
@@ -79,7 +81,9 @@ class SessionStore:
     def get(self, session_id: str) -> Session | None:
         return self._sessions.get(session_id)
 
-    def save(self, session: Session) -> None:
+    def save(self, session: Session, status: str | None = None, last_message: str | None = None) -> None:
+        if status:
+            session.status = status
         self._sessions[session.id] = session
 
 
@@ -356,8 +360,11 @@ class ChatService:
             self.store.save(session)
 
         # 卡片状态跟着消息一起存：刷新页面才能把草稿卡片画回来
+        published = state.get("published") or {}
         card_meta = None
-        if status == "READY":
+        # 已经通过工具发出去了：这一条只是状态播报，不再挂草稿卡，
+        # 否则前端会多出一张"可再次发布"的卡片（一单发两次的根源）
+        if status == "READY" and not published.get("ok"):
             card_meta = {
                 "draft": draft.model_dump(mode="json"),
                 "type_label": TYPE_LABELS.get(str(draft.type), None) if draft.type else None,
@@ -367,12 +374,13 @@ class ChatService:
                 card_meta["voucher"] = voucher
                 # 同步给前端：卡片上要显示"可用券 -X 元，实付 Y 元"
                 reply["voucher"] = voucher
+        if published.get("ok"):
+            reply["published_id"] = str(published.get("errand_id") or "")
         if hasattr(self.store, "append_message"):
             self.store.append_message(session.id, "user", message)
             self.store.append_message(session.id, "assistant", reply_text, card_meta)
 
         # 工具已经把单发出去了：复用发布收尾（置 CLOSED、卡片标记、补两条消息）
-        published = state.get("published") or {}
         if published.get("ok"):
             self.record_published(str(published.get("errand_id") or ""), session_id=session.id)
 

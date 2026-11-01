@@ -234,11 +234,12 @@ class MySQLSessionStore:
             panel_id=row[2],
             draft=TaskDraft.model_validate(json.loads(draft_data)),
             turns=int(row[3] or 0),
+            status=str(row[4] or "ACTIVE") if len(row) > 4 else "ACTIVE",
         )
 
     def get(self, session_id: str) -> "Session | None":
         row = self._run(
-            "SELECT session_id, draft_json, panel_id, turns FROM agent_session WHERE session_id = %s",
+            "SELECT session_id, draft_json, panel_id, turns, status FROM agent_session WHERE session_id = %s",
             (session_id,),
             fetch="one",
         )
@@ -247,7 +248,7 @@ class MySQLSessionStore:
     def get_active_session(self, panel_id: str) -> "Session | None":
         """面板下还没结束的那个会话；没有说明该开新会话了。"""
         row = self._run(
-            "SELECT session_id, draft_json, panel_id, turns FROM agent_session "
+            "SELECT session_id, draft_json, panel_id, turns, status FROM agent_session "
             "WHERE panel_id = %s AND (status IS NULL OR status NOT IN ('CLOSED', 'CANCELED')) "
             "ORDER BY created_at DESC LIMIT 1",
             (panel_id,),
@@ -273,6 +274,8 @@ class MySQLSessionStore:
             return again
 
     def save(self, session: "Session", status: str | None = None, last_message: str | None = None) -> None:
+        if status:
+            session.status = status
         self._run(
             "UPDATE agent_session"
             "   SET draft_json = %s, turns = %s, status = COALESCE(%s, status),"

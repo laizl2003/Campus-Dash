@@ -47,6 +47,8 @@ interface ApiReply {
   cleared?: boolean;
   /** 这轮落在哪个会话上：发布/取消后会换新会话 */
   session_id?: string;
+  /** 本轮工具直接建单成功时的任务编号：前端据此把卡片冻结成"已发布" */
+  published_id?: string;
   /** 本轮用到的工具（排障用） */
   tool_calls?: { name: string; arguments: Record<string, unknown> }[];
   /** 当前悬赏金额下最优的优惠券 */
@@ -668,6 +670,21 @@ export default function AgentAssistant() {
 
       // 已经出过草稿时，后续补充只更新那张卡片，不重复插入新卡片。
       // 否则用户会看到多张描述不同的草稿，点「修改」「发布」时容易操作错对象。
+      if (reply.status === 'READY' && reply.published_id) {
+        // agent 通过工具把单发出去了：这一轮只是回执，
+        // 要把最后一张草稿卡冻结成「已发布」，否则用户还能再点一次发布（一单发两次）
+        setMessages(prev => {
+          const lastDraftIndex = prev.map(item => Boolean(item.draft)).lastIndexOf(true);
+          if (lastDraftIndex === -1) return [...prev, assistant];
+          const next = prev.map((item, index) => index === lastDraftIndex
+            ? { ...item, publishedId: reply.published_id, draft: assistant.draft ?? item.draft }
+            : item);
+          return [...next, { ...assistant, draft: undefined }];
+        });
+        void refreshHistory();
+        return;
+      }
+
       if (reply.status === 'READY') {
         setMessages(prev => {
           // 只认"还没发布"的卡片。已发布的那张属于上一单，是历史记录，

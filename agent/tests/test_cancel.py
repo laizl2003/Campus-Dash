@@ -136,3 +136,109 @@ def test_cancel_clears_draft():
     reloaded = service.store.get(session.id)
     assert reloaded.draft.reward_cents is None
     assert reloaded.draft.location_from is None
+
+
+class RecordingStore:
+    """够用的内存 store：和 MySQL 一样会存消息与卡片 meta。"""
+
+    def __init__(self):
+        self.sessions = {}
+        self.rows = {}
+        self.status = {}
+
+    def create(self, user_id=None, panel_id=None):
+        import uuid
+        from app.service import Session
+
+        session = Session(id=str(uuid.uuid4()), panel_id=panel_id or str(uuid.uuid4()))
+        self.sessions[session.id] = session
+        return session
+
+    def get(self, session_id):
+        return self.sessions.get(session_id)
+
+    def save(self, session, status=None, last_message=None):
+        self.sessions[session.id] = session
+        if status:
+            self.status[session.id] = status
+
+    def get_active_session(self, panel_id):
+        for session in self.sessions.values():
+            if session.panel_id == panel_id and self.status.get(session.id) not in ("CLOSED", "CANCELED"):
+                return session
+        return None
+
+    def append_message(self, session_id, role, content, meta=None):
+        self.rows.setdefault(session_id, []).append({"role": role, "content": content, "meta": meta or {}})
+
+    def messages(self, session_id):
+        return self.rows.get(session_id, [])
+
+    def panel_messages(self, panel_id, limit=200, before_id=None):
+        rows = []
+        for session in self.sessions.values():
+            if session.panel_id == panel_id:
+                rows.extend(self.rows.get(session.id, []))
+        return rows[-limit:]
+
+    def mark_card_published(self, session_id, errand_id):
+        for row in reversed(self.rows.get(session_id, [])):
+            if (row.get("meta") or {}).get("draft"):
+                row["meta"]["publishedId"] = errand_id
+                return 1
+        return 0
+
+    def mark_card_cancelled(self, session_id):
+        for row in reversed(self.rows.get(session_id, [])):
+            if (row.get("meta") or {}).get("draft"):
+                row["meta"]["cancelled"] = True
+                return 1
+        return 0
+
+
+def test_tool_publish_marks_reply_and_skips_card(monkeypatch):
+    """工具发单成功后：回复带 published_id，且不再新增草稿卡（否则能再点一次发布）。"""
+    from app.agent.extractor import Extractor
+    from app.models import TaskDraft
+    from app.service import ChatService
+    from app.tools import actions
+
+    class ReadyExtractor(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+    monkeypatch.setattr(
+        actions,
+        "publish_draft",
+        lambda token, draft: {"ok": True, "errand_id": "999", "paid_yuan": 8.0},
+    )
+
+    service = ChatService(extractor=ReadyExtractor(), store=RecordingStore())
+    monkeypatch.setattr(service, "_voucher_for", lambda *args, **kwargs: None)
+
+    session = service.store.create()
+    session.draft = TaskDraft(
+        type="DELIVERY", title="取快递", location_from="A楼", location_to="B楼", reward_cents=800
+    )
+    service.store.save(session)
+
+    # 先产生一张草稿卡
+    service._chat(session, "再看看", "tok")
+    cards_before = [r for r in service.store.messages(session.id) if (r.get("meta") or {}).get("draft")]
+    assert len(cards_before) == 1
+
+    # 这一轮被判成"发布"
+    import app.agent.graph as graph_module
+    from app.agent.intent import Intent
+
+    monkeypatch.setattr(
+        graph_module, "_classify", lambda extractor, message, draft: Intent.PUBLISH
+    )
+    reply = service._chat(session, "发布吧", "tok")
+
+    assert reply["status"] == "READY"
+    assert reply["published_id"] == "999"
+
+    cards_after = [r for r in service.store.messages(session.id) if (r.get("meta") or {}).get("draft")]
+    assert len(cards_after) == 1, "工具发布后不应再新增草稿卡"
+    assert cards_after[0]["meta"]["publishedId"] == "999"
