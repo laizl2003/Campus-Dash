@@ -33,6 +33,8 @@ class Session:
     turns: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     history: list[dict[str, object]] = field(default_factory=list)
+    # 归属用户：历史消息只给本人看
+    user_id: str | None = None
     # ACTIVE / CLOSED（已发布）/ CANCELED（已取消）。发布或取消后这一单就结束了
     status: str = "ACTIVE"
 
@@ -44,7 +46,9 @@ class SessionStore:
         self._sessions: dict[str, Session] = {}
 
     def create(self, user_id: str | None = None, panel_id: str | None = None) -> Session:
-        session = Session(id=str(uuid.uuid4()), panel_id=panel_id or str(uuid.uuid4()))
+        session = Session(
+            id=str(uuid.uuid4()), panel_id=panel_id or str(uuid.uuid4()), user_id=user_id
+        )
         self._sessions[session.id] = session
         return session
 
@@ -58,7 +62,12 @@ class SessionStore:
         return self.get_active_session(panel_id) or self.create(user_id, panel_id)
 
     def append_message(
-        self, session_id: str, role: str, content: str, meta: dict | None = None
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        meta: dict | None = None,
+        user_id: str | None = None,
     ) -> None:
         # 内存版不存消息表，历史只在进程内有意义
         return None
@@ -66,7 +75,13 @@ class SessionStore:
     def messages(self, session_id: str) -> list[dict[str, object]]:
         return []
 
-    def panel_messages(self, panel_id: str, limit: int = 200, before_id: int | None = None) -> list[dict[str, object]]:
+    def panel_messages(
+        self,
+        panel_id: str,
+        limit: int = 200,
+        before_id: int | None = None,
+        user_id: str | None = None,
+    ) -> list[dict[str, object]]:
         return []
 
     def list_panels(self, user_id: str, limit: int = 20) -> list[dict[str, object]]:
@@ -170,13 +185,16 @@ class ChatService:
         if mark_card is not None:
             mark_card(target)
         if announce and hasattr(self.store, "append_message"):
+            owner = getattr(session, "user_id", None) if session else None
             self.store.append_message(
                 target, "assistant",
                 "任务已取消，这一单不会发布。",
+                user_id=owner,
             )
             self.store.append_message(
                 target, "assistant",
                 "接下来想发什么任务？直接告诉我就行。",
+                user_id=owner,
             )
 
     def record_published(self, errand_id: str, panel_id: str | None = None,
@@ -193,18 +211,22 @@ class ChatService:
         if target is None:
             return
 
+        session = self.store.get(target)
         self.mark_published(target)
         mark_card = getattr(self.store, "mark_card_published", None)
         if mark_card is not None:
             mark_card(target, errand_id)
         if hasattr(self.store, "append_message"):
+            owner = getattr(session, "user_id", None) if session else None
             self.store.append_message(
                 target, "assistant",
                 f"任务已发布，编号 {errand_id}。可以在「我的任务」里查看进度。",
+                user_id=owner,
             )
             self.store.append_message(
                 target, "assistant",
                 "这一单已经结束，接下来想发什么任务？直接告诉我就行。",
+                user_id=owner,
             )
 
     def mark_published_panel(self, panel_id: str | None) -> None:
@@ -260,8 +282,20 @@ class ChatService:
         self.store.ensure_session(panel_id, user_id)
         return {"panel_id": panel_id}
 
-    def panel_messages(self, panel_id: str, limit: int = 200, before_id: int | None = None):
-        return self.store.panel_messages(panel_id, limit=limit, before_id=before_id)
+    def panel_messages(
+        self,
+        panel_id: str,
+        limit: int = 200,
+        before_id: int | None = None,
+        user_id: str | None = None,
+    ):
+        return self.store.panel_messages(
+            panel_id, limit=limit, before_id=before_id, user_id=user_id
+        )
+
+    def panel_owner(self, panel_id: str) -> str | None:
+        owner = getattr(self.store, "panel_owner", None)
+        return owner(panel_id) if owner else None
 
     def list_panels(self, user_id: str, limit: int = 20):
         return self.store.list_panels(user_id, limit)
@@ -326,8 +360,12 @@ class ChatService:
         if status == "ANSWER":
             # 工具链路的回答也要落库：否则刷新面板，问过的查询会消失
             if hasattr(self.store, "append_message"):
-                self.store.append_message(session.id, "user", message)
-                self.store.append_message(session.id, "assistant", state.get("answer") or "")
+                self.store.append_message(
+                    session.id, "user", message, user_id=session.user_id
+                )
+                self.store.append_message(
+                    session.id, "assistant", state.get("answer") or "", user_id=session.user_id
+                )
             return {
                 "status": "ANSWER",
                 "message": state.get("answer") or "我没有得到可用的结果。",
@@ -377,8 +415,10 @@ class ChatService:
         if published.get("ok"):
             reply["published_id"] = str(published.get("errand_id") or "")
         if hasattr(self.store, "append_message"):
-            self.store.append_message(session.id, "user", message)
-            self.store.append_message(session.id, "assistant", reply_text, card_meta)
+            self.store.append_message(session.id, "user", message, user_id=session.user_id)
+            self.store.append_message(
+                session.id, "assistant", reply_text, card_meta, user_id=session.user_id
+            )
 
         # 工具已经把单发出去了：复用发布收尾（置 CLOSED、卡片标记、补两条消息）
         if published.get("ok"):

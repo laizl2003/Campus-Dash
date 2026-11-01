@@ -41,12 +41,15 @@ MESSAGE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS agent_message (
   message_id BIGINT      NOT NULL,
   session_id VARCHAR(64) NOT NULL,
+  -- 冗余存一份 user_id：按用户查历史时不必每次 JOIN agent_session
+  user_id    VARCHAR(36) NULL,
   role       VARCHAR(16) NOT NULL,
   content    TEXT        NOT NULL,
   meta_json  JSON        NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (message_id),
-  KEY idx_session (session_id, message_id)
+  KEY idx_session (session_id, message_id),
+  KEY idx_user (user_id, message_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 """
 
@@ -172,6 +175,19 @@ class MySQLSessionStore:
         if "id" in message_cols and "message_id" not in message_cols:
             # 只改名 + 去掉自增，老数据原样保留（老 id 都比雪花小，顺序不会乱）
             self._run("ALTER TABLE agent_message CHANGE COLUMN id message_id BIGINT NOT NULL")
+        if "user_id" not in message_cols:
+            self._run("ALTER TABLE agent_message ADD COLUMN user_id VARCHAR(36) NULL AFTER session_id")
+        # 老消息没有 user_id：从所属会话补齐，否则按用户查历史会漏掉它们
+        self._run(
+            "UPDATE agent_message m JOIN agent_session s ON s.session_id = m.session_id "
+            "   SET m.user_id = s.user_id "
+            " WHERE m.user_id IS NULL"
+        )
+        try:
+            self._run("ALTER TABLE agent_message ADD KEY idx_user (user_id, message_id)")
+        except Exception:  # noqa: BLE001
+            # 索引已存在就算迁移完成
+            pass
 
     def _rebuild_active_key_if_needed(self) -> None:
         """保证 active_key 把 CLOSED 和 CANCELED 都当作"已结束"。
@@ -211,7 +227,9 @@ class MySQLSessionStore:
     def create(self, user_id: str | None = None, panel_id: str | None = None) -> "Session":
         from .service import Session
 
-        session = Session(id=str(uuid.uuid4()), panel_id=panel_id or str(uuid.uuid4()))
+        session = Session(
+            id=str(uuid.uuid4()), panel_id=panel_id or str(uuid.uuid4()), user_id=user_id
+        )
         self._run(
             "INSERT INTO agent_session (session_id, panel_id, user_id, draft_json) VALUES (%s, %s, %s, %s)",
             (
@@ -235,11 +253,12 @@ class MySQLSessionStore:
             draft=TaskDraft.model_validate(json.loads(draft_data)),
             turns=int(row[3] or 0),
             status=str(row[4] or "ACTIVE") if len(row) > 4 else "ACTIVE",
+            user_id=row[5] if len(row) > 5 else None,
         )
 
     def get(self, session_id: str) -> "Session | None":
         row = self._run(
-            "SELECT session_id, draft_json, panel_id, turns, status FROM agent_session WHERE session_id = %s",
+            "SELECT session_id, draft_json, panel_id, turns, status, user_id FROM agent_session WHERE session_id = %s",
             (session_id,),
             fetch="one",
         )
@@ -248,7 +267,7 @@ class MySQLSessionStore:
     def get_active_session(self, panel_id: str) -> "Session | None":
         """面板下还没结束的那个会话；没有说明该开新会话了。"""
         row = self._run(
-            "SELECT session_id, draft_json, panel_id, turns, status FROM agent_session "
+            "SELECT session_id, draft_json, panel_id, turns, status, user_id FROM agent_session "
             "WHERE panel_id = %s AND (status IS NULL OR status NOT IN ('CLOSED', 'CANCELED')) "
             "ORDER BY created_at DESC LIMIT 1",
             (panel_id,),
@@ -293,19 +312,31 @@ class MySQLSessionStore:
     # ------------------------------------------------------------ 消息读写
 
     def append_message(
-        self, session_id: str, role: str, content: str, meta: dict | None = None
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        meta: dict | None = None,
+        user_id: str | None = None,
     ) -> int:
         """插入一条消息，id 用雪花（插入前就确定，重试也幂等）。
 
         meta 存草稿卡片等展示状态：刷新页面时靠它把卡片画回来。
+        user_id 冗余一份，按用户查历史时不用 JOIN。
         """
+        if not user_id:
+            row = self._run(
+                "SELECT user_id FROM agent_session WHERE session_id = %s", (session_id,), fetch="one"
+            )
+            user_id = row[0] if row else None
         message_id = next_id()
         self._run(
-            "INSERT INTO agent_message (message_id, session_id, role, content, meta_json) "
-            "VALUES (%s, %s, %s, %s, %s)",
+            "INSERT INTO agent_message (message_id, session_id, user_id, role, content, meta_json) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
             (
                 message_id,
                 session_id,
+                user_id,
                 role,
                 content,
                 json.dumps(meta, ensure_ascii=False) if meta else None,
@@ -333,11 +364,17 @@ class MySQLSessionStore:
         ]
 
     def panel_messages(
-        self, panel_id: str, limit: int = 200, before_id: int | None = None
+        self,
+        panel_id: str,
+        limit: int = 200,
+        before_id: int | None = None,
+        user_id: str | None = None,
     ) -> list[dict[str, object]]:
         """整个面板的消息，按雪花 id 排序即真实时间顺序。
 
         返回里带 session_id：前端要靠它画出"这一单已发布"的分隔。
+        user_id 不为空时只返回该用户的：面板 id 存在浏览器 localStorage 里，
+        换个人登录不能直接读到上一个人的对话。
         """
         sql = (
             "SELECT m.message_id, m.session_id, m.role, m.content, m.created_at, m.meta_json "
@@ -346,6 +383,10 @@ class MySQLSessionStore:
             " WHERE s.panel_id = %s"
         )
         params: list[object] = [panel_id]
+        if user_id:
+            # COALESCE 兼容还没回填 user_id 的老消息
+            sql += " AND COALESCE(m.user_id, s.user_id) = %s"
+            params.append(user_id)
         if before_id is not None:
             sql += " AND m.message_id < %s"
             params.append(before_id)
@@ -467,6 +508,15 @@ class MySQLSessionStore:
             self._conn.rollback()
             raise
         return bool(removed and removed > 0)
+
+    def panel_owner(self, panel_id: str) -> str | None:
+        """面板属于谁：接口鉴权用，拿不到返回 None。"""
+        row = self._run(
+            "SELECT user_id FROM agent_session WHERE panel_id = %s LIMIT 1",
+            (panel_id,),
+            fetch="one",
+        )
+        return row[0] if row else None
 
     def delete_panel(self, panel_id: str) -> bool:
         """删除整段对话：面板下所有会话和消息一起删。

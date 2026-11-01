@@ -210,3 +210,59 @@ def test_grab_best_only_picks_others(monkeypatch):
     assert result["grabbed_count"] == 1
     assert result["grabbed"][0]["title"] == "别人的小单"
     assert result["skipped_own"] == 1
+
+
+def test_panel_messages_requires_owner(monkeypatch):
+    """别的用户拿着 panel_id 也不能读，一律 404。"""
+    from fastapi import HTTPException
+
+    import app.main as main
+
+    monkeypatch.setattr(main, "_current_user", lambda authorization: "u-1")
+    monkeypatch.setattr(main.service, "panel_owner", lambda panel_id: "u-2")
+
+    try:
+        main._require_panel("p-other", "Bearer x")
+    except HTTPException as exc:
+        assert exc.status_code == 404
+    else:
+        raise AssertionError("应当拒绝非本人面板")
+
+
+def test_panel_messages_passes_user_to_store():
+    """查询时把 user_id 传下去，SQL 层按用户过滤。"""
+    from app.service import ChatService
+
+    seen = {}
+
+    class Store:
+        def panel_messages(self, panel_id, limit=200, before_id=None, user_id=None):
+            seen["user_id"] = user_id
+            seen["panel_id"] = panel_id
+            return []
+
+    service = ChatService(store=Store())
+    service.panel_messages("p-1", user_id="u-1")
+    assert seen == {"user_id": "u-1", "panel_id": "p-1"}
+
+
+def test_history_query_is_scoped_to_panel_and_user():
+    """历史只按当前用户 + 当前面板取，不会串到别人的对话。"""
+    from app.service import ChatService
+
+    class Store:
+        def __init__(self):
+            self.rows = []
+
+        def panel_messages(self, panel_id, limit=200, before_id=None, user_id=None):
+            return [row for row in self.rows if row["user"] == user_id and row["panel"] == panel_id]
+
+    store = Store()
+    store.rows = [
+        {"user": "u-1", "panel": "p-1", "content": "我的"},
+        {"user": "u-2", "panel": "p-1", "content": "别人的"},
+    ]
+    service = ChatService(store=store)
+
+    mine = service.panel_messages("p-1", user_id="u-1")
+    assert [row["content"] for row in mine] == ["我的"]

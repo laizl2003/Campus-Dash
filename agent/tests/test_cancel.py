@@ -47,7 +47,7 @@ class PanelStore:
         if status:
             self.status[session.id] = status
 
-    def append_message(self, session_id, role, content, meta=None) -> None:
+    def append_message(self, session_id, role, content, meta=None, user_id=None) -> None:
         self.messages.append({"session": session_id, "role": role, "content": content})
 
     def mark_card_cancelled(self, session_id: str) -> int:
@@ -168,13 +168,13 @@ class RecordingStore:
                 return session
         return None
 
-    def append_message(self, session_id, role, content, meta=None):
+    def append_message(self, session_id, role, content, meta=None, user_id=None):
         self.rows.setdefault(session_id, []).append({"role": role, "content": content, "meta": meta or {}})
 
     def messages(self, session_id):
         return self.rows.get(session_id, [])
 
-    def panel_messages(self, panel_id, limit=200, before_id=None):
+    def panel_messages(self, panel_id, limit = 200, before_id = None, user_id=None):
         rows = []
         for session in self.sessions.values():
             if session.panel_id == panel_id:

@@ -151,21 +151,46 @@ def list_panels(limit: int = 20, authorization: str | None = Header(default=None
     return {"panels": service.list_panels(user_id, limit)}
 
 
+def _require_panel(panel_id: str, authorization: str | None) -> str:
+    """面板必须属于当前用户，否则一律当成不存在（不泄露别人有没有这段对话）。"""
+    user_id = _current_user(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="缺少登录态")
+    owner = service.panel_owner(panel_id)
+    if owner is None or owner != user_id:
+        raise HTTPException(status_code=404, detail="对话不存在")
+    return user_id
+
+
 @app.get("/panels/{panel_id}/messages")
-def panel_messages(panel_id: str, limit: int = 200, before_id: int | None = None) -> dict[str, object]:
-    """整段对话的消息，按雪花 id 排序即真实顺序。"""
-    return {"messages": service.panel_messages(panel_id, limit=limit, before_id=before_id)}
+def panel_messages(
+    panel_id: str,
+    limit: int = 200,
+    before_id: int | None = None,
+    authorization: str | None = Header(default=None),
+) -> dict[str, object]:
+    """整段对话的消息，按雪花 id 排序即真实顺序。只返回当前用户自己的。"""
+    user_id = _require_panel(panel_id, authorization)
+    return {
+        "messages": service.panel_messages(
+            panel_id, limit=limit, before_id=before_id, user_id=user_id
+        )
+    }
 
 
 @app.post("/panels/{panel_id}/cancel")
-def cancel_panel_task(panel_id: str) -> dict[str, bool]:
+def cancel_panel_task(
+    panel_id: str, authorization: str | None = Header(default=None)
+) -> dict[str, bool]:
     """取消当前这一单：会话置 CANCELED，卡片标记已取消，面板本身继续可用。"""
+    _require_panel(panel_id, authorization)
     service.record_cancelled(panel_id=panel_id)
     return {"cancelled": True}
 
 
 @app.delete("/panels/{panel_id}")
-def delete_panel(panel_id: str) -> dict[str, bool]:
+def delete_panel(panel_id: str, authorization: str | None = Header(default=None)) -> dict[str, bool]:
+    _require_panel(panel_id, authorization)
     return {"deleted": service.delete_panel(panel_id)}
 
 

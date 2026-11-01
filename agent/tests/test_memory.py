@@ -91,7 +91,7 @@ class MemoryStore:
     def messages(self, session_id: str):
         return self.rows.get(session_id, [])
 
-    def append_message(self, session_id, role, content, meta=None):
+    def append_message(self, session_id, role, content, meta=None, user_id=None):
         self.rows.setdefault(session_id, []).append({"role": role, "content": content})
 
 
@@ -113,7 +113,7 @@ def test_service_passes_history_to_extractor():
 class PanelMemoryStore(MemoryStore):
     """按面板返回历史，模拟"跨会话也能接上上下文"。"""
 
-    def panel_messages(self, panel_id: str, limit: int = 200, before_id=None):
+    def panel_messages(self, panel_id: str, limit: int = 200, before_id = None, user_id=None):
         rows: list[dict] = []
         for session in self.sessions:
             if session.panel_id == panel_id:

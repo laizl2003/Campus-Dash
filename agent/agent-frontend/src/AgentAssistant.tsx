@@ -243,9 +243,17 @@ async function fetchPanels(): Promise<HistoryItem[]> {
 }
 
 /** 打开历史对话：整个面板的消息一次拉回来，跨会话也完整。 */
+/** 这段对话不属于当前用户（换人登录后会残留上一个人的 panel id）。 */
+class PanelGoneError extends Error {}
+
 async function fetchPanelMessages(panelId: string): Promise<ChatMessage[]> {
   try {
-    const resp = await fetch(AGENT_BASE + '/panels/' + panelId + '/messages');
+    const token = localStorage.getItem('dash_token');
+    const resp = await fetch(AGENT_BASE + '/panels/' + panelId + '/messages', {
+      // 必须带登录态：服务端按 user_id 校验面板归属，否则读不到（也读不到别人的）
+      headers: token ? { Authorization: 'Bearer ' + token } : {},
+    });
+    if (resp.status === 404) throw new PanelGoneError('对话不存在');
     if (!resp.ok) return [];
     const data = await resp.json() as {
       messages?: {
@@ -299,7 +307,12 @@ function metaToDraft(
 
 async function deleteRemotePanel(panelId: string): Promise<void> {
   try {
-    await fetch(AGENT_BASE + '/panels/' + panelId, { method: 'DELETE' });
+    const token = localStorage.getItem('dash_token');
+    await fetch(AGENT_BASE + '/panels/' + panelId, {
+      method: 'DELETE',
+      // 服务端会校验面板归属，必须带登录态
+      headers: token ? { Authorization: 'Bearer ' + token } : {},
+    });
   } catch { /* 删除失败时本地仍会移除，下次刷新会重新出现 */ }
 }
 interface Point { x: number; y: number }
@@ -559,7 +572,18 @@ export default function AgentAssistant() {
         if (!active) return;
         setPanelId(id);
         // 刷新后自动把这段对话的消息和卡片补回来（还没开始聊才回填）
-        const loaded = await fetchPanelMessages(id);
+        let loaded: ChatMessage[] = [];
+        try {
+          loaded = await fetchPanelMessages(id);
+        } catch (err) {
+          if (!(err instanceof PanelGoneError)) throw err;
+          // 本地存的 panel 是别人的/已删除：清掉，换一段新对话
+          localStorage.removeItem(PANEL_KEY);
+          const fresh = await createPanel();
+          if (!active) return;
+          setPanelId(fresh);
+          return;
+        }
         if (!active || loaded.length === 0) return;
         setMessages(prev => (prev.length <= 1 ? loaded : prev));
       })
@@ -875,7 +899,14 @@ export default function AgentAssistant() {
     setHistoryOpen(false);
     setDeletingId(null);
     // 消息一律从后端按 panel 拉：跨会话也完整，不依赖本地快照
-    const loaded = await fetchPanelMessages(item.id);
+    let loaded: ChatMessage[] = [];
+    try {
+      loaded = await fetchPanelMessages(item.id);
+    } catch {
+      setNotice('这段对话已经不存在了');
+      void refreshHistory();
+      return;
+    }
     setMessages(loaded.length > 0 ? loaded : [welcomeMessage]);
     // 之后的发言都落在这个面板下；面板里若有"进行中"的会话，服务端会复用
     setPanelId(item.id);

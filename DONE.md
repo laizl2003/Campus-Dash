@@ -3,6 +3,17 @@
 > 已完成需求的增量日志。每完成一条就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-11-01 · 修复：agent 历史对话跨用户泄露
+
+- **目标**：历史消息只能属于当前用户；换个人登录（同一浏览器残留 panel id）也读不到上一个人的对话。
+- **根因**：`/agent/panels/{id}/messages`、`/cancel`、`DELETE /panels/{id}` 三个接口**完全没鉴权**，知道 panel_id 就能读、能删；前端又把 panel id 存在 localStorage，换人登录后照旧用旧 id 去拉 → 直接读到别人对话。
+- **改动**：
+  - `agent_message` 增加冗余列 `user_id`（+ `idx_user` 索引），`_migrate` 建列并从 `agent_session` 回填历史消息
+  - `append_message(..., user_id=)`、`panel_messages(..., user_id=)`（SQL 用 `COALESCE(m.user_id, s.user_id)` 兼容未回填的老数据）
+  - 三个面板接口统一走 `_require_panel`：无登录态 401，面板不属于自己 404（不暴露"这段对话存不存在"）
+  - 前端 `fetchPanelMessages` / `deleteRemotePanel` 补上 `Authorization`，收到 404 就清掉本地 panel id 并新建对话
+- **验证**：`185 passed, 1 skipped`；实测 A(stu-02000) 建面板发消息，B(stu-00001) 读该面板返回 404、删/取消同样 404、无 token 401、B 的历史里不含 A 的面板；数据库 `agent_message` 已有 `user_id` 与 `idx_user`，历史消息回填后仅 4 条老数据为空（其所属会话本就无 user_id）；浏览器刷新后历史仍能正常恢复
+
 ## 2026-11-01 · 修复：agent 接单不能接自己发布的单
 
 - **目标**：接单工具只能接别人的单，自己发布的必须跳过，否则等于自买自卖刷信用。

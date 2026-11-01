@@ -49,7 +49,12 @@ class PanelStore:
             self.status[session.id] = status
 
     def append_message(
-        self, session_id: str, role: str, content: str, meta: dict | None = None
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        meta: dict | None = None,
+        user_id: str | None = None,
     ) -> None:
         self.messages.setdefault(session_id, []).append({"role": role, "content": content})
 
