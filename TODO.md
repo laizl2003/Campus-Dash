@@ -432,3 +432,180 @@
 - `campus-dash-frontend/src/components/SquareChat.tsx`
 - `campus-dash-backend/dash-bench`
 
+
+## 10. v2 意图路由：发单 / 查询 / 接单 / 领券（未完成）
+
+**目标**：一条消息进来先判定走哪条链路——发单进现有状态机，查询/接单/领券进工具循环；路由判定可用单测覆盖。
+
+### 现状与差距
+
+- 已有：\`agent/app/agent/intent.py\` 的 \`Intent\` 只覆盖发单（APPEND/EDIT/PUBLISH/CANCEL/QUERY 等，其中 QUERY 是"查看草稿"不是查数据）；\`agent/app/agent/graph.py\` 的 \`_classify\` 调模型 + 规则兜底
+- 缺口：没有"查数据/接单/领券"三类意图；图里只有 \`check\` 一个分支点，没有入口路由；两套分类会重复调用模型
+
+### 实现步骤
+
+1. \`Intent\` 增加 \`QUERY_DATA\`、\`GRAB\`、\`COUPON\`（保留现有值不动，v1 行为不受影响）
+2. \`AgentState\` 增加 \`route\`、\`tool_calls\`、\`tool_result\`
+3. \`build_graph\` 在 \`extract\` 之前加 \`route_node\`，输出 \`route\`；新增 \`add_conditional_edges("route", route_after_route, {"task": "extract", "tool": "tool_node"})\`
+4. 路由用一份独立的短 system prompt（5 类 + 各 2 个例子），命中不了时规则兜底（余额/几单/接单/领券关键词）
+5. 未命中任何类别 → 默认 \`task\`，保持 v1 体验
+
+### 验收标准
+
+- [ ] "我钱包还有多少钱" → \`route=query\`
+- [ ] "帮我接两单" → \`route=grab\`
+- [ ] "把能领的券都领了" → \`route=coupon\`
+- [ ] "帮我取个快递" → \`route=task\`
+- [ ] \`tests/test_router.py\` 覆盖 8 条样例且全绿
+
+### 参考文件
+
+- \`agent/app/agent/graph.py\`：图定义与条件边
+- \`agent/app/agent/intent.py\`：意图枚举与规则兜底
+- \`agent/app/agent/prompts.py\`：提示词模板
+
+## 11. MCP 工具层 + function call 循环（未完成）
+
+**目标**：agent 能通过 MCP 发现并调用工具，模型用原生 \`tool_calls\` 决策；工具实现与 agent 进程解耦。
+
+### 现状与差距
+
+- 已有：\`extractor._call_llm\` 只发 \`messages\`，不传 \`tools\`；\`pyproject.toml\` 里没有 \`mcp\` 依赖；实测当前模型（deepseek-v4-flash-ascend1）**支持** OpenAI 兼容的 tool_calls
+- 缺口：没有 MCP server/client，没有工具循环，没有把用户 token 安全传给工具的机制
+
+### 实现步骤
+
+1. \`pyproject.toml\` 增加 \`mcp>=1.0\`
+2. 新建 \`agent/mcp_server/server.py\`，用 \`FastMCP\` 暴露工具（先放一个 \`ping\` 打通链路）
+3. 新建 \`agent/app/tools/mcp_client.py\`：stdio 启动子进程 → \`initialize\` → \`tools/list\` 转 OpenAI tools schema → \`tools/call\` 执行
+4. \`_call_llm\` 增加 \`tools\` / \`tool_choice\` 入参并解析 \`tool_calls\`（注意与 \`response_format\` 的兼容，必要时关掉 json_mode）
+5. 新建 \`tool_node\`：模型返回 \`tool_calls\` → 逐个执行 → 以 \`role="tool"\` 回填 → 再请求，最多 3 轮防死循环
+6. 鉴权：用户 token 由服务端注入工具参数（不让模型生成），工具内用 \`httpx\` 调后端
+
+### 验收标准
+
+- [ ] \`python -m agent.mcp_server.server\` 能启动，\`tools/list\` 返回 \`ping\`
+- [ ] 单测：假 MCP server + 假 LLM 返回 tool_calls，循环 2 轮后收敛
+- [ ] 日志可看到 tools schema 与实际调用参数
+- [ ] 连续两轮工具调用不会重复执行写操作（幂等键）
+
+### 参考文件
+
+- \`agent/app/agent/extractor.py\`：\`_call_llm\` 与 JSON 解析
+- \`agent/app/agent/graph.py\`：图与节点组织方式
+- \`agent/pyproject.toml\`：依赖
+
+## 12. 发单工具化 + 最优优惠券（未完成）
+
+**目标**：READY 后说"发布吧"直接建单；任何状态说"取消"清空草稿并换新会话；每次给出悬赏金额后卡片展示当前可用的最大优惠券并自动使用。
+
+### 现状与差距
+
+- 已有：\`POST /api/errands\` 建单、前端"确认发布"按钮；\`service.record_published()\` 收尾（置 CLOSED + 卡片标记 + 补消息）；\`service.record_cancelled()\` 置 CANCELED 但**不清空 draft**
+- 缺口：模型不能自己发单；取消后草稿仍在；没有券查询与"最优券"计算
+
+### 实现步骤
+
+1. MCP 工具 \`publish_errand\`：从 draft 取字段 + \`voucherId\`，透传 token 调 \`POST /api/errands\`
+2. READY 状态下识别到 PUBLISH → 调用 \`publish_errand\` → 成功后复用 \`record_published\`
+3. 新增工具 \`cancel_draft\`：\`session.draft = TaskDraft()\`、置 CANCELED、开新会话（历史卡片保留）
+4. 新增工具 \`best_voucher(reward_cents)\`：调 \`GET /api/vouchers\`，筛 \`minAmountCents <= reward\`，按抵扣金额降序取第一张
+5. \`reward_cents\` 每次变化后调用一次，结果写进消息 \`meta.voucher\`，卡片展示"可用券 -X 元，实付 Y"
+6. 发布时带上 \`voucherId\`
+
+### 验收标准
+
+- [ ] 说"帮我取快递 8 块，菜鸟驿站到 3 号楼 502" → 卡片显示可用券与实付
+- [ ] 说"发布吧" → 真实建单，session 变 CLOSED
+- [ ] 任意状态说"取消" → draft 清空、session CANCELED、卡片保留
+- [ ] 连说两次"发布吧"不会建两单
+
+### 参考文件
+
+- \`agent/app/service.py\`：\`record_published\` / \`record_cancelled\`
+- \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/ErrandController.java\`：建单、取消
+- \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/VoucherController.java\`：券列表与领取
+
+## 13. 查询意图：个人数据 + 平台数据（未完成）
+
+**目标**：一句话查钱包余额、我的任务、信用分与排名、我的优惠券。
+
+### 现状与差距
+
+- 已有：\`GET /api/wallet\`、\`GET /api/errands/mine\`、\`GET /api/credit/self\`、\`GET /api/credit/ranking\`、\`GET /api/vouchers/mine\`
+- 缺口：agent 没有任何查询工具；也没有把多工具结果组织成自然语言的逻辑
+
+### 实现步骤
+
+1. 工具 \`get_wallet\` → \`GET /api/wallet\`
+2. 工具 \`list_my_errands\` → \`GET /api/errands/mine\`（返回单数、各单标题与金额）
+3. 工具 \`get_credit\` → \`GET /api/credit/self\`
+4. 工具 \`get_ranking\` → \`GET /api/credit/ranking\`
+5. 工具 \`list_my_vouchers\` → \`GET /api/vouchers/mine\`
+6. 结果由模型组织成口语化回答，金额统一"元"，查不到时给明确原因
+
+### 验收标准
+
+- [ ] "我还有多少钱" → 返回余额
+- [ ] "我发了哪些单" → 列表 + 合计金额
+- [ ] "我的信用分和排名" → 分数与名次
+- [ ] "余额和信用分分别多少" → 并行调两个工具
+
+### 参考文件
+
+- \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/WalletController.java\`
+- \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/CreditController.java\`
+- \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/ErrandController.java\`
+
+## 14. 接单意图：批量自动接单（未完成）
+
+**目标**：说"接两单"就自动挑单并接单；单轮最多 5 单，未给数量默认 1 单，按实付金额从大到小。
+
+### 现状与差距
+
+- 已有：\`GET /api/errands\`（广场列表）、\`POST /api/errands/{errandId}/grab\`（接单）
+- 缺口：没有排序/截断/并发失败的补偿逻辑；agent 不能发写请求
+
+### 实现步骤
+
+1. 工具 \`list_square_errands\` → \`GET /api/errands\` 过滤 PUBLISHED，带实付金额
+2. 工具 \`grab_errand(errandId)\` → \`POST /api/errands/{errandId}/grab\`
+3. 组合工具 \`grab_best(count)\`：按实付降序 → 截断 \`min(count, 5)\` → 逐单调用，收集成功/失败
+4. 409（已被抢）时顺延下一单，并在回答里说明
+
+### 验收标准
+
+- [ ] "接一单" → 接到金额最高的 1 单
+- [ ] "接 3 单" → 3 单且金额降序
+- [ ] "接 10 单" → 最多 5 单并提示上限
+- [ ] 部分单被抢时顺延并如实汇报
+
+### 参考文件
+
+- \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/ErrandController.java\`
+
+## 15. 领券意图：一键领取（未完成）
+
+**目标**：一次把当前用户所有可领优惠券领完。
+
+### 现状与差距
+
+- 已有：\`GET /api/vouchers\`（可领列表）、\`POST /api/vouchers/{type}/claim\`（领取）
+- 缺口：没有"查询可领 → 逐个领取 → 汇总"的组合工具
+
+### 实现步骤
+
+1. 工具 \`list_claimable_vouchers\` → \`GET /api/vouchers\`，过滤仍有库存且未领过的
+2. 工具 \`claim_voucher(type)\` → \`POST /api/vouchers/{type}/claim\`
+3. 组合工具 \`claim_all_vouchers\`：查询 → 逐个领取 → 汇总成功/失败与新增张数
+4. 幂等：已领过的不重复领，再问时提示"暂无可领"
+
+### 验收标准
+
+- [ ] "把能领的券都领了" → 领取数等于可领数
+- [ ] 紧接着再问一次 → 提示暂无可领
+- [ ] 部分失败时如实汇报失败原因
+
+### 参考文件
+
+- \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/VoucherController.java\`
