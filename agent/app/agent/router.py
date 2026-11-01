@@ -16,6 +16,7 @@ class Route(str, Enum):
     GRAB = "grab"      # 接单
     COUPON = "coupon"  # 领券
     CANCEL = "cancel"  # 取消已发布的任务
+    SETTLE = "settle"  # 确认结算已送达的任务
 
 
 # 领券：必须同时出现"券"和领取动作
@@ -26,6 +27,9 @@ _GRAB_PATTERN = re.compile(r"(接|抢)\s*[一两二三四五12345]?\s*单")
 # 取消：既要出现"取消"，又要指向某个已发布的任务（避免和"取消这一单草稿"混淆）
 _CANCEL_WORDS = ("取消", "撤销", "退掉")
 _CANCEL_TARGETS = ("订单", "那一单", "这单", "单子", "发布过", "已发布", "发过的", "任务")
+# 结算：确认收货/结算，只针对"我发布的、已送达"的单
+_SETTLE_WORDS = ("结算", "确认收货", "确认完成", "收货", "结账", "确认一下")
+_SETTLE_TARGETS = ("订单", "任务", "单", "送达", "送到")
 # 查询：出现这些词就问数据，而不是发单
 _QUERY_WORDS = (
     "余额", "钱包", "多少钱", "信用", "排名", "排行榜", "我的任务", "我发了",
@@ -43,6 +47,8 @@ def guess_route(message: str) -> Route | None:
 
     if any(word in text for word in _CANCEL_WORDS) and any(t in text for t in _CANCEL_TARGETS):
         return Route.CANCEL
+    if any(word in text for word in _SETTLE_WORDS) and any(t in text for t in _SETTLE_TARGETS):
+        return Route.SETTLE
     if "券" in text and any(word in text for word in _COUPON_ACTION):
         return Route.COUPON
     if any(word in text for word in _GRAB_WORDS) or _GRAB_PATTERN.search(text):

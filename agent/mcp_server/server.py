@@ -58,6 +58,12 @@ def list_my_errands(
 
 
 @mcp.tool()
+def settle_my_errands(user_token: str) -> str:
+    """一键结算：把我发布的、跑腿已送达的任务全部确认完成（DELIVERED -> SETTLED）。"""
+    return json.dumps(tools.settle_my_errands(user_token), ensure_ascii=False)
+
+
+@mcp.tool()
 def cancel_errand(user_token: str, errand_id: str) -> str:
     """取消我发布的、仍待接单（PUBLISHED）的任务；其他状态或别人的单一律拒绝。"""
     return json.dumps(tools.cancel_errand(user_token, errand_id), ensure_ascii=False)

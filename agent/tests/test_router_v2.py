@@ -482,3 +482,87 @@ def test_model_cannot_override_user_token():
     )
     assert "user_token" not in schema["function"]["parameters"]["properties"]
     assert schema["function"]["parameters"]["required"] == ["title"]
+
+
+def test_router_detects_settle_intent():
+    from app.agent.router import Route, route_message
+
+    assert route_message("帮我结算订单") is Route.SETTLE
+    assert route_message("把送达的单都确认收货吧") is Route.SETTLE
+    # 发单说法不能误判
+    assert route_message("帮我取个快递") is not Route.SETTLE
+
+
+def test_settle_only_touches_delivered(monkeypatch):
+    """只结算自己发布的、状态为 DELIVERED 的单；待接单/进行中的单不能碰。"""
+    from mcp_server import tools
+
+    monkeypatch.setattr(
+        tools,
+        "list_my_errands",
+        lambda token, **kw: {
+            "ok": True,
+            "items": [
+                {"errand_id": "a", "title": "已送达", "status": "DELIVERED", "reward_yuan": 8.0},
+                {"errand_id": "b", "title": "待接单", "status": "PUBLISHED", "reward_yuan": 5.0},
+                {"errand_id": "c", "title": "进行中", "status": "PICKED_UP", "reward_yuan": 6.0},
+            ],
+        },
+    )
+    settled = []
+
+    def fake_post(path, token, body=None):
+        settled.append(path)
+        return {"ok": True, "data": {"result": "SETTLED"}}
+
+    monkeypatch.setattr(tools, "_post", fake_post)
+    result = tools.settle_my_errands("tok")
+
+    assert result["settled_count"] == 1
+    assert result["settled"][0]["errand_id"] == "a"
+    assert settled == ["/api/errands/a/settle"]
+
+
+def test_settle_reports_nothing_to_do(monkeypatch):
+    from mcp_server import tools
+
+    monkeypatch.setattr(
+        tools,
+        "list_my_errands",
+        lambda token, **kw: {"ok": True, "items": [
+            {"errand_id": "b", "title": "待接单", "status": "PUBLISHED", "reward_yuan": 5.0},
+        ]},
+    )
+    called = []
+    monkeypatch.setattr(tools, "_post", lambda *a, **k: called.append(a) or {"ok": True})
+
+    result = tools.settle_my_errands("tok")
+
+    assert result["settled_count"] == 0
+    assert "没有待确认" in result["note"]
+    assert called == []
+
+
+def test_settle_reports_partial_failure(monkeypatch):
+    from mcp_server import tools
+
+    monkeypatch.setattr(
+        tools,
+        "list_my_errands",
+        lambda token, **kw: {"ok": True, "items": [
+            {"errand_id": "a", "title": "好单", "status": "DELIVERED", "reward_yuan": 8.0},
+            {"errand_id": "b", "title": "坏单", "status": "DELIVERED", "reward_yuan": 9.0},
+        ]},
+    )
+
+    def fake_post(path, token, body=None):
+        if "/a/" in path:
+            return {"ok": True, "data": {}}
+        return {"ok": False, "error": "资金不足"}
+
+    monkeypatch.setattr(tools, "_post", fake_post)
+    result = tools.settle_my_errands("tok")
+
+    assert result["settled_count"] == 1
+    assert len(result["failed"]) == 1
+    assert result["failed"][0]["error"] == "资金不足"

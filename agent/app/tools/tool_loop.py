@@ -36,6 +36,10 @@ TOOL_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿平台的助手，可以�
    必须把条件放进工具参数（expired_before / expired_after / delivered_after / phase），
    不要把全部结果拉回来自己筛——容易漏，也容易算错时区。
 
+结算任务时：
+5. 用户说"结算/确认收货/确认完成"时，直接调 settle_my_errands，它只结算"跑腿已送达"的单；
+6. 结算成功要说明结算了几单、金额多少；失败要说明原因。
+
 取消任务时：
 7. 必须先调 list_my_errands（带上用户说的条件）拿到 errand_id，再调 cancel_errand；
 8. 只能取消自己发布的、状态仍为 PUBLISHED 的任务，别的状态或被接走的单要如实告知不能取消；
@@ -48,6 +52,7 @@ ROUTE_TOOLS: dict[str, tuple[str, ...]] = {
     "grab": ("list_square_errands", "grab_best", "list_my_errands"),
     # 取消要两步：先查（拿到 errand_id），再取消
     "cancel": ("list_my_errands", "cancel_errand"),
+    "settle": ("settle_my_errands", "list_my_errands"),
     "coupon": ("list_claimable_vouchers", "claim_all_vouchers"),
     "task": ("get_wallet",),
 }
@@ -111,6 +116,8 @@ def parse_grab_count(message: str) -> int:
 def fallback_plan(route: str, message: str) -> list[tuple[str, dict[str, Any]]]:
     """模型不可用时的确定性计划：按路由和关键词直接选工具。"""
     text = message or ""
+    if route == "settle":
+        return [("settle_my_errands", {})]
     if route == "cancel":
         # 兜底只查不取消：写操作宁可让用户确认，也不能按关键词猜着删
         return [("list_my_errands", {"role": "published", "phase": "published"})]
@@ -318,6 +325,15 @@ class ToolLoop:
                     lines.append(
                         f"  - #{row.get('errand_id')} {row.get('title')} · {row.get('status')} · {row.get('reward_yuan')} 元"
                     )
+            elif name == "settle_my_errands":
+                if result.get("settled_count"):
+                    lines.append(f"· 已结算 {result.get('settled_count')} 单：")
+                    for row in result.get("settled") or []:
+                        lines.append(f"  - {row.get('title')} · {row.get('reward_yuan')} 元")
+                else:
+                    lines.append(f"· 没有可结算的任务：{result.get('note') or ''}")
+                if result.get("failed"):
+                    lines.append(f"· {len(result['failed'])} 单结算失败")
             elif name == "cancel_errand":
                 if result.get("ok"):
                     lines.append(f"· 已取消「{result.get('title')}」，{result.get('reward_yuan')} 元将退回")

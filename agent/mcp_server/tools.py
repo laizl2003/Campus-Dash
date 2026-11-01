@@ -178,6 +178,49 @@ def list_my_errands(
     }
 
 
+def settle_my_errands(user_token: str, limit: int = 20) -> dict:
+    """把我发布的、跑腿已送达（DELIVERED）的任务全部确认结算。
+
+    只认自己发布的单，且只认 DELIVERED：其它状态说明还没送到，不能跳过流程。
+    """
+    listed = list_my_errands(user_token, role="published", phase="active", limit=50)
+    if not listed.get("ok"):
+        return listed
+
+    targets = [row for row in listed.get("items") or [] if row.get("status") == "DELIVERED"]
+    if not targets:
+        return {
+            "ok": True,
+            "settled_count": 0,
+            "settled": [],
+            "failed": [],
+            "note": "没有待确认的任务（只有跑腿已送达的单才能结算）",
+        }
+
+    settled, failed = [], []
+    for row in targets[: max(1, min(limit, 20))]:
+        result = _post(f"/api/errands/{row['errand_id']}/settle", user_token)
+        if result.get("ok"):
+            settled.append({
+                "errand_id": row["errand_id"],
+                "title": row.get("title"),
+                "reward_yuan": row.get("reward_yuan"),
+            })
+        else:
+            failed.append({
+                "errand_id": row["errand_id"],
+                "title": row.get("title"),
+                "error": result.get("error"),
+            })
+
+    return {
+        "ok": True,
+        "settled_count": len(settled),
+        "settled": settled,
+        "failed": failed,
+    }
+
+
 def cancel_errand(user_token: str, errand_id: str) -> dict:
     """取消我发布的、仍在 PUBLISHED 状态的任务（越界一律拒绝）。"""
     detail = _get(f"/api/errands/{errand_id}", user_token)
