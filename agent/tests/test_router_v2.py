@@ -838,3 +838,43 @@ def test_unrelated_answer_clears_pending():
     service._chat(session, "先帮我看看广场有什么单", "tok")
 
     assert service.store.get(session.id).pending is None
+
+
+def test_platform_query_works_mid_draft():
+    """草稿就绪时也要能问广场/优惠券，只有"多少钱"这种才压回发单。"""
+    from app.agent.router import Route, route_message
+    from app.models import TaskDraft
+
+    ready = TaskDraft(type="DELIVERY", title="送袜子", location_from="A", location_to="B",
+                      reward_cents=1000)
+
+    assert route_message("看看现在广场有什么单", draft=ready) is Route.QUERY
+    assert route_message("看看我的优惠券", draft=ready) is Route.QUERY
+    assert route_message("有什么单可以接", draft=ready) is Route.QUERY
+    # 指代当前草稿的问句仍然走发单
+    assert route_message("现在多少钱", draft=ready) is Route.TASK
+
+
+def test_answer_mid_draft_reminds_draft_alive():
+    """查询回答后提醒"草稿还在"，别让用户以为这一单丢了。"""
+    from app.agent.extractor import Extractor
+    from app.models import TaskDraft
+    from app.service import ChatService
+
+    class Noop(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+    service = ChatService(extractor=Noop())
+    session = service.store.create(user_id="u-1", panel_id="p-1")
+    session.draft = TaskDraft(type="DELIVERY", title="送袜子", location_from="A", location_to="B",
+                              reward_cents=1000)
+    service.store.save(session)
+
+    service.graph.invoke = lambda state: {"status": "ANSWER", "answer": "广场有 3 单",
+                                          "draft": state["draft"], "missing": [],
+                                          "tool_calls": []}
+    reply = service._chat(session, "看看现在广场有什么单", "tok")
+
+    assert "广场有 3 单" in reply["message"]
+    assert "草稿还在" in reply["message"]

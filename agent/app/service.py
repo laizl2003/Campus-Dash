@@ -489,9 +489,19 @@ class ChatService:
                 self.store.append_message(
                     session.id, "assistant", state.get("answer") or "", user_id=session.user_id
                 )
+            # 手上有草稿时顺手提醒一句：查完还能接着做这一单，
+            # 免得用户以为刚才那一单没了
+            answer = state.get("answer") or "我没有得到可用的结果。"
+            if any(
+                value not in (None, "", [], {})
+                for key, value in draft.model_dump().items()
+                if key not in ("title", "title_base")
+            ):
+                answer = f"{answer}\n\n（当前这一单的草稿还在，继续说需求或回复「发布」即可）"
+
             return {
                 "status": "ANSWER",
-                "message": state.get("answer") or "我没有得到可用的结果。",
+                "message": answer,
                 "draft": draft.model_dump(mode="json"),
                 "missing": [],
                 "question": None,
