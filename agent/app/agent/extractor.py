@@ -50,6 +50,18 @@ class Extractor(ABC):
     ) -> dict[str, object]:
         raise NotImplementedError
 
+    def classify_text(self, system_prompt: str, user_text: str) -> str | None:
+        """通用的"给一句话分类"调用，基类不接模型时返回 None。"""
+        return None
+
+    def classify_text(self, system_prompt: str, user_text: str) -> str | None:
+        if time.time() < self._open_until:
+            return self.fallback.classify_text(system_prompt, user_text)
+        try:
+            return self.primary.classify_text(system_prompt, user_text)
+        except Exception:
+            return self.fallback.classify_text(system_prompt, user_text)
+
     def classify_intent(self, message: str, draft: TaskDraft) -> "Intent | None":
         """判断用户意图。默认返回 None，表示"没有模型判断，走规则兜底"。
 
@@ -255,6 +267,14 @@ class LLMExtractor(Extractor):
         return self.fallback.extract(text, draft)
 
     # ------------------------------------------------------------ 意图识别
+
+    def classify_text(self, system_prompt: str, user_text: str) -> str | None:
+        """一句话分类：只要一个词，所以关掉 JSON 模式。"""
+        try:
+            result = self._call_llm(system_prompt, user_text, json_mode=False)
+            return (result.content or "").strip()
+        except Exception:
+            return None
 
     def classify_intent(self, message: str, draft: TaskDraft) -> Intent | None:
         """让模型判断这句话的意图。

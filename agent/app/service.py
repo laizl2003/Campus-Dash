@@ -108,6 +108,8 @@ class ChatService:
         self.extractor = extractor or default_extractor()
         self.store = store if store is not None else default_store()
         self.graph = build_graph(self.extractor)
+        # 优惠券查询有网络开销，按（会话, 金额）缓存，避免每轮都查
+        self._voucher_cache: dict[tuple[str, int], dict | None] = {}
 
     def create_session(self, user_id: str | None = None) -> Session:
         try:
@@ -150,6 +152,12 @@ class ChatService:
 
         session = self.store.get(target)
         if session is not None:
+            # 取消 = 这一单作废：草稿一并清空，下一句话从空白开始
+            # （卡片仍留在历史里，带"已取消"标记）
+            try:
+                session.draft = TaskDraft()
+            except Exception:  # noqa: BLE001
+                pass
             try:
                 self.store.save(session, status="CANCELED")
             except TypeError:
@@ -222,18 +230,23 @@ class ChatService:
             return self.store.messages(session_id)
         return []
 
-    def chat(self, session_id: str, message: str) -> AgentReply:
+    def chat(
+        self, session_id: str, message: str, user_token: str | None = None
+    ) -> AgentReply:
         session = self.store.get(session_id)
         if session is None:
             raise KeyError(session_id)
-        return self._chat(session, message)
+        return self._chat(session, message, user_token)
 
-    def chat_panel(self, panel_id: str, message: str, user_id: str | None = None) -> AgentReply:
+    def chat_panel(
+        self, panel_id: str, message: str, user_id: str | None = None,
+        user_token: str | None = None,
+    ) -> AgentReply:
         # 面板入口：自动挑进行中的会话，没有就开一个。
         # 前端只记 panel_id，就不用再操心"该用哪个 session"，
         # 也不会出现发布后还往旧草稿里写的问题。
         session = self.store.ensure_session(panel_id, user_id)
-        return self._chat(session, message)
+        return self._chat(session, message, user_token)
 
     def create_panel(self, user_id: str | None = None) -> dict[str, str]:
         # 新建一段对话：此刻只发一个 panel_id，真正开 session 等第一条消息。
@@ -252,7 +265,23 @@ class ChatService:
     def delete_panel(self, panel_id: str) -> bool:
         return bool(self.store.delete_panel(panel_id))
 
-    def _chat(self, session, message: str) -> AgentReply:
+    def _voucher_for(self, session, draft: TaskDraft, token: str | None) -> dict | None:
+        """当前金额下最优的那张券；查不到或没登录态就返回 None。"""
+        if not token or not draft.reward_cents:
+            return None
+        key = (session.id, int(draft.reward_cents))
+        if key in self._voucher_cache:
+            return self._voucher_cache[key]
+        from .tools.actions import best_voucher
+
+        try:
+            value = best_voucher(token, int(draft.reward_cents))
+        except Exception:  # noqa: BLE001
+            value = None
+        self._voucher_cache[key] = value
+        return value
+
+    def _chat(self, session, message: str, user_token: str | None = None) -> AgentReply:
 
         missing = required_slots(session.draft)
         # 短期记忆：把本次会话最近几轮喂给抽取器，便于理解"就那个"这类省略；
@@ -272,6 +301,7 @@ class ChatService:
                 "draft": session.draft,
                 "missing": missing,
                 "history": history,
+                "user_token": user_token or "",
             }
         )
         draft: TaskDraft = state["draft"]
@@ -289,9 +319,32 @@ class ChatService:
         # 先把回复算出来，再落库。
         # 之前这里用的是 state["message"]——那是**用户输入**，
         # 结果 assistant 消息存成了用户原话的复读，刷新后整段历史都是废的。
+        if status == "ANSWER":
+            # 工具链路的回答也要落库：否则刷新面板，问过的查询会消失
+            if hasattr(self.store, "append_message"):
+                self.store.append_message(session.id, "user", message)
+                self.store.append_message(session.id, "assistant", state.get("answer") or "")
+            return {
+                "status": "ANSWER",
+                "message": state.get("answer") or "我没有得到可用的结果。",
+                "draft": draft.model_dump(mode="json"),
+                "missing": [],
+                "question": None,
+                "intent": None,
+                "can_publish": False,
+                "cleared": False,
+                "show_draft": False,
+                "unclear": False,
+                "updated_fields": [],
+                "tool_calls": state.get("tool_calls") or [],
+                "session_id": session.id,
+                "panel_id": session.panel_id,
+            }
+
         reply = draft_to_reply(status, draft, missing, question, appended, intent,
                                list(state.get("updated_fields") or []),
-                               bool(state.get("rejected_location")))
+                               bool(state.get("rejected_location")),
+                               state.get("published"))
         reply_text = reply.get("message") or question or ""
 
         session.history.append({"role": "user", "content": message})
@@ -309,9 +362,19 @@ class ChatService:
                 "draft": draft.model_dump(mode="json"),
                 "type_label": TYPE_LABELS.get(str(draft.type), None) if draft.type else None,
             }
+            voucher = self._voucher_for(session, draft, user_token)
+            if voucher:
+                card_meta["voucher"] = voucher
+                # 同步给前端：卡片上要显示"可用券 -X 元，实付 Y 元"
+                reply["voucher"] = voucher
         if hasattr(self.store, "append_message"):
             self.store.append_message(session.id, "user", message)
             self.store.append_message(session.id, "assistant", reply_text, card_meta)
+
+        # 工具已经把单发出去了：复用发布收尾（置 CLOSED、卡片标记、补两条消息）
+        published = state.get("published") or {}
+        if published.get("ok"):
+            self.record_published(str(published.get("errand_id") or ""), session_id=session.id)
 
         # 用户在对话里说"取消"：和点卡片取消一样收尾，但不再重复播报
         if status == "READY" and intent == Intent.CANCEL:

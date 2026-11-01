@@ -112,3 +112,27 @@ def test_chat_cancel_intent_marks_cancelled_without_extra_broadcast():
     assert store.status[session.id] == "CANCELED"
     # 对话里取消只回一句话，不再多播两条
     assert len(store.messages) - before == 2
+
+
+def test_cancel_clears_draft():
+    """取消 = 这一单作废：草稿被清空，会话置 CANCELED。"""
+    from app.agent.extractor import Extractor
+    from app.service import ChatService
+    from app.models import TaskDraft
+
+    class EmptyExtractor(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+    service = ChatService(extractor=EmptyExtractor())
+    session = service.store.create()
+    session.draft = TaskDraft(
+        type="DELIVERY", title="取快递", location_from="A", location_to="B", reward_cents=500
+    )
+    service.store.save(session)
+
+    service.record_cancelled(session_id=session.id)
+
+    reloaded = service.store.get(session.id)
+    assert reloaded.draft.reward_cents is None
+    assert reloaded.draft.location_from is None

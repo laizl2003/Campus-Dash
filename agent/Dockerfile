@@ -10,9 +10,11 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
  && pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
-      fastapi "uvicorn[standard]" pydantic "langgraph>=0.2" pymysql
+      fastapi "uvicorn[standard]" pydantic "langgraph>=0.2" pymysql "mcp>=1.0,<2"
 
 COPY app ./app
+# MCP server 以子进程方式启动（python -m mcp_server.server），必须一起进镜像
+COPY mcp_server ./mcp_server
 
 # 构建期清掉宿主带进来的 __pycache__。
 # 旧 .pyc 的 mtime 若比 .py 新，Python 会直接加载字节码，

@@ -31,6 +31,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .extractor import TYPE_KEYWORDS, Extractor, guess_expired_at, guess_reward_cents
 from .intent import UNCLEAR_REPLY, Intent, guess_intent_by_rules
+from .router import route_message
 from ..models import (
     READY_HINT,
     SLOT_QUESTIONS,
@@ -72,6 +73,15 @@ class AgentState(TypedDict, total=False):
     rejected_location: bool
     # 当前会话最近几轮（短期记忆），由 service 注入
     history: list[dict]
+    # 本轮走哪条链路：task / query / grab / coupon
+    route: str
+    # 工具链路使用的用户 token，由 service 注入（不进模型提示）
+    user_token: str
+    # 工具链路的最终回答与调用记录
+    answer: str
+    tool_calls: list[dict]
+    # 本轮是否真的通过工具发出了任务
+    published: dict
 
 
 class AgentReply(TypedDict, total=False):
@@ -88,8 +98,37 @@ class AgentReply(TypedDict, total=False):
     updated_fields: list[str]
 
 
-def build_graph(extractor: Extractor):
-    """编译后的图可以直接 invoke(state)，也可以在测试里逐步驱动。"""
+def build_graph(extractor: Extractor, tool_loop=None):
+    """编译后的图可以直接 invoke(state)，也可以在测试里逐步驱动。
+
+    tool_loop 为空时按需创建真实实现（MCP + 模型），测试可以传假对象。
+    """
+
+    def route_node(state: AgentState) -> AgentState:
+        """入口分流：发单进状态机，其余进工具循环。"""
+        route = route_message(state.get("message", ""), extractor, state.get("draft"))
+        return {"route": route.value}
+
+    def tool_node(state: AgentState) -> AgentState:
+        """工具链路：模型选工具 → MCP 执行 → 组织回答。"""
+        loop = tool_loop if tool_loop is not None else _default_tool_loop()
+        outcome = loop.run(
+            state.get("message", ""),
+            state.get("user_token") or "",
+            state.get("history") or [],
+            route=state.get("route") or "query",
+        )
+        return {
+            "status": "ANSWER",
+            "answer": outcome.get("reply") or "我没有得到可用的结果。",
+            "tool_calls": outcome.get("calls") or [],
+            "missing": [],
+            "question": None,
+        }
+
+    def route_after_route(state: AgentState) -> str:
+        return "tool" if state.get("route") != "task" else "extract"
+
 
     def extract_node(state: AgentState) -> AgentState:
         current = state["draft"]
@@ -103,8 +142,16 @@ def build_graph(extractor: Extractor):
             if intent == Intent.FINISH:
                 return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
             if intent == Intent.PUBLISH:
-                # 只标记"用户想发布"，真正调用发布接口由前端按钮或后续工具执行
-                return {"draft": current, "extracted": {}, "appended": False, "intent": intent}
+                # v2：直接通过 MCP 调发单工具；没有登录态时仍交给前端按钮
+                token = state.get("user_token")
+                published = _publish(token, current) if token else None
+                return {
+                    "draft": current,
+                    "extracted": {},
+                    "appended": False,
+                    "intent": intent,
+                    "published": published,
+                }
             if intent in (Intent.QUERY, Intent.CHITCHAT, Intent.CANCEL, Intent.UNCLEAR):
                 # 这几类不改草稿，只回话。
                 # UNCLEAR 尤其重要：宁可回固定引导，也不把看不懂的内容写进任务。
@@ -273,12 +320,34 @@ def build_graph(extractor: Extractor):
     graph.add_node("ask_user", ask_node)
     graph.add_node("ready", ready_node)
 
-    graph.add_edge(START, "extract")
+    graph.add_node("route", route_node)
+    graph.add_node("tool", tool_node)
+
+    graph.add_edge(START, "route")
+    graph.add_conditional_edges("route", route_after_route, {"extract": "extract", "tool": "tool"})
+    graph.add_edge("tool", END)
     graph.add_edge("extract", "check")
     graph.add_conditional_edges("check", route_after_check, {"ask": "ask_user", "ready": "ready"})
     graph.add_edge("ask_user", END)
     graph.add_edge("ready", END)
     return graph.compile()
+
+
+
+
+def _publish(token: str, draft: TaskDraft) -> dict:
+    """通过 MCP 发布；任何异常都收敛成 {ok: False}，不让图崩掉。"""
+    from ..tools.actions import publish_draft
+
+    try:
+        return publish_draft(token, draft)
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+def _default_tool_loop() -> "object":
+    """延迟导入：没装 mcp 或没配模型时，不至于连发单链路都起不来。"""
+    from ..tools.tool_loop import ToolLoop
+
+    return ToolLoop()
 
 
 def _summarize(extractor: Extractor, existing: str | None, message: str) -> str | None:
@@ -293,19 +362,26 @@ def _summarize(extractor: Extractor, existing: str | None, message: str) -> str 
         return None
 
 
+# 这些意图边界清晰，关键词判断已经足够，不必等模型（模型慢时每轮要多等数十秒）
+_UNAMBIGUOUS = (Intent.CANCEL, Intent.PUBLISH)
+
+
 def _classify(extractor: Extractor, message: str, draft: TaskDraft) -> Intent:
-    """识别意图：优先用模型，拿不到就用关键词兜底。
+    """识别意图：明显的情形先用关键词，模糊时再问模型。
 
     模型只负责"这是哪类意图"，不负责执行，所以即使模型判错，
     最坏结果也只是把一句话归错类，不会破坏草稿数据。
     """
+    by_rules = guess_intent_by_rules(message)
+    if by_rules in _UNAMBIGUOUS:
+        return by_rules
     try:
         intent = extractor.classify_intent(message, draft)
         if intent is not None:
             return intent
     except Exception:
         pass
-    return guess_intent_by_rules(message)
+    return by_rules
 
 
 def _is_type_answer(text: str) -> bool:
@@ -512,9 +588,22 @@ def draft_to_reply(
     intent: Intent | None = None,
     updated_fields: list[str] | None = None,
     rejected_location: bool = False,
+    published: dict | None = None,
 ) -> AgentReply:
     if status == "READY":
-        if intent in (Intent.PUBLISH, Intent.QUERY, Intent.CANCEL,
+        if intent == Intent.PUBLISH and published is not None:
+            # v2：工具已经真的把单发出去了，回话要带上编号与实付
+            if published.get("ok"):
+                text = (
+                    f"已发布，任务编号 {published.get('errand_id')}，"
+                    f"实付 {published.get('paid_yuan')} 元"
+                )
+                if (published.get("voucher") or {}).get("description"):
+                    text += f"（已使用优惠券：{published['voucher']['description']}）"
+                text += "。可以在「我的任务」里查看进度。"
+            else:
+                text = f"发布没有成功：{published.get('error') or '未知原因'}"
+        elif intent in (Intent.PUBLISH, Intent.QUERY, Intent.CANCEL,
                       Intent.CHITCHAT, Intent.CLEAR_DESCRIPTION, Intent.SHOW_DRAFT,
                       Intent.UNCLEAR):
             text = INTENT_MESSAGES[intent]

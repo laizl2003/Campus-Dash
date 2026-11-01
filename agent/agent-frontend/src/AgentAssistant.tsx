@@ -32,7 +32,7 @@ interface ApiDraft {
 }
 
 interface ApiReply {
-  status: 'ASKING' | 'READY';
+  status: 'ASKING' | 'READY' | 'ANSWER';
   message: string;
   draft: ApiDraft;
   missing: string[];
@@ -47,6 +47,10 @@ interface ApiReply {
   cleared?: boolean;
   /** 这轮落在哪个会话上：发布/取消后会换新会话 */
   session_id?: string;
+  /** 本轮用到的工具（排障用） */
+  tool_calls?: { name: string; arguments: Record<string, unknown> }[];
+  /** 当前悬赏金额下最优的优惠券 */
+  voucher?: { description?: string; discount_yuan?: number; payable_yuan?: number } | null;
 }
 
 interface DraftPayload {
@@ -59,6 +63,8 @@ interface DraftPayload {
   description?: string;
   /** 后端原始草稿：发布时要用分值和 ISO 时间，不能用展示用的字符串 */
   raw: ApiDraft;
+  /** 可用优惠券信息（金额变化后由后端算出） */
+  voucher?: { description?: string; discount_yuan?: number; payable_yuan?: number } | null;
 }
 
 /** 可逐项编辑的字段 */
@@ -120,6 +126,7 @@ function toDraftPayload(reply: ApiReply): DraftPayload {
     deadline: formatDateTime(d.expired_at),
     description: d.description || undefined,
     raw: d,
+    voucher: reply.voucher ?? undefined,
   };
 }
 
@@ -270,7 +277,11 @@ async function fetchPanelMessages(panelId: string): Promise<ChatMessage[]> {
 
 /** 把消息 meta 还原成卡片展示结构，复用 toDraftPayload 的展示规则 */
 function metaToDraft(
-  meta?: { draft?: ApiDraft; type_label?: string | null } | null,
+  meta?: {
+    draft?: ApiDraft;
+    type_label?: string | null;
+    voucher?: { description?: string; discount_yuan?: number; payable_yuan?: number } | null;
+  } | null,
 ): DraftPayload | undefined {
   if (!meta?.draft) return undefined;
   return toDraftPayload({
@@ -280,6 +291,7 @@ function metaToDraft(
     missing: [],
     question: null,
     type_label: meta.type_label ?? null,
+    voucher: meta.voucher ?? null,
   });
 }
 
@@ -383,6 +395,12 @@ function DraftCard({
 
     <dl className="agent-draft-fields">
       {field('悬赏', 'reward', draft.reward, 'agent-draft-reward')}
+      {draft.voucher && (
+        <div className="agent-draft-voucher">
+          <Icon name="ticket" size={13}/>
+          <span>{draft.voucher.description || '优惠券'}，实付 {draft.voucher.payable_yuan ?? '—'} 元</span>
+        </div>
+      )}
       {/* 代排队只有一个排队地点（存在 location_from），没有送达地 */}
       {structured && (draft.raw.type === 'QUEUE'
         ? field('排队地点', 'pickup', draft.pickup)

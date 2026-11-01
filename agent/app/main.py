@@ -101,6 +101,16 @@ def status() -> dict[str, object]:
     }
 
 
+def _bearer(authorization: str | None) -> str | None:
+    """从 Authorization 头里取出裸 token，交给工具链路调用后端。"""
+    if not authorization:
+        return None
+    parts = authorization.split(None, 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip()
+    return authorization.strip()
+
+
 def _current_user(authorization: str | None) -> str | None:
     """从主项目会话里取当前用户 id。
 
@@ -257,11 +267,14 @@ def ping(req: PingRequest) -> dict[str, bool]:
 @app.post("/chat")
 def chat(req: ChatRequest, authorization: str | None = Header(default=None)) -> dict[str, object]:
     try:
+        token = _bearer(authorization)
         if req.panel_id:
             # 前端只记 panel：服务端自动挑"进行中"的会话，发布后自然换新会话
-            reply = service.chat_panel(req.panel_id, req.message, _current_user(authorization))
+            reply = service.chat_panel(
+                req.panel_id, req.message, _current_user(authorization), token
+            )
         elif req.session_id:
-            reply = service.chat(req.session_id, req.message)
+            reply = service.chat(req.session_id, req.message, token)
         else:
             raise HTTPException(status_code=400, detail="缺少 panel_id") from None
     except KeyError:

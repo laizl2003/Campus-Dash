@@ -405,3 +405,5 @@
 @media (prefers-reduced-motion: reduce) {
   .agent-fab, .agent-panel, .agent-typing i, .agent-fab-glow { animation: none !important; transition: none !important; }
 }
+
+.agent-draft-voucher { display: flex; align-items: center; gap: 5px; margin-top: 6px; padding: 5px 8px; border-radius: 6px; background: #fff7e0; color: #9a6b12; font-size: 10px; }

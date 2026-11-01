@@ -433,7 +433,7 @@
 - `campus-dash-backend/dash-bench`
 
 
-## 10. v2 意图路由：发单 / 查询 / 接单 / 领券（未完成）
+## 10. v2 意图路由：发单 / 查询 / 接单 / 领券（已完成 2026-11-01）
 
 **目标**：一条消息进来先判定走哪条链路——发单进现有状态机，查询/接单/领券进工具循环；路由判定可用单测覆盖。
 
@@ -452,11 +452,11 @@
 
 ### 验收标准
 
-- [ ] "我钱包还有多少钱" → \`route=query\`
-- [ ] "帮我接两单" → \`route=grab\`
-- [ ] "把能领的券都领了" → \`route=coupon\`
-- [ ] "帮我取个快递" → \`route=task\`
-- [ ] \`tests/test_router.py\` 覆盖 8 条样例且全绿
+- [x] "我钱包还有多少钱" → \`route=query\`
+- [x] "帮我接两单" → \`route=grab\`
+- [x] "把能领的券都领了" → \`route=coupon\`
+- [x] "帮我取个快递" → \`route=task\`
+- [x] \`tests/test_router.py\` 覆盖 8 条样例且全绿
 
 ### 参考文件
 
@@ -464,7 +464,7 @@
 - \`agent/app/agent/intent.py\`：意图枚举与规则兜底
 - \`agent/app/agent/prompts.py\`：提示词模板
 
-## 11. MCP 工具层 + function call 循环（未完成）
+## 11. MCP 工具层 + function call 循环（已完成 2026-11-01）
 
 **目标**：agent 能通过 MCP 发现并调用工具，模型用原生 \`tool_calls\` 决策；工具实现与 agent 进程解耦。
 
@@ -485,9 +485,9 @@
 ### 验收标准
 
 - [ ] \`python -m agent.mcp_server.server\` 能启动，\`tools/list\` 返回 \`ping\`
-- [ ] 单测：假 MCP server + 假 LLM 返回 tool_calls，循环 2 轮后收敛
-- [ ] 日志可看到 tools schema 与实际调用参数
-- [ ] 连续两轮工具调用不会重复执行写操作（幂等键）
+- [x] 单测：假 MCP server + 假 LLM 返回 tool_calls，循环 2 轮后收敛
+- [x] 日志可看到 tools schema 与实际调用参数
+- [x] 连续两轮工具调用不会重复执行写操作（幂等键）
 
 ### 参考文件
 
@@ -495,7 +495,7 @@
 - \`agent/app/agent/graph.py\`：图与节点组织方式
 - \`agent/pyproject.toml\`：依赖
 
-## 12. 发单工具化 + 最优优惠券（未完成）
+## 12. 发单工具化 + 最优优惠券（已完成 2026-11-01）
 
 **目标**：READY 后说"发布吧"直接建单；任何状态说"取消"清空草稿并换新会话；每次给出悬赏金额后卡片展示当前可用的最大优惠券并自动使用。
 
@@ -515,9 +515,9 @@
 
 ### 验收标准
 
-- [ ] 说"帮我取快递 8 块，菜鸟驿站到 3 号楼 502" → 卡片显示可用券与实付
-- [ ] 说"发布吧" → 真实建单，session 变 CLOSED
-- [ ] 任意状态说"取消" → draft 清空、session CANCELED、卡片保留
+- [x] 说"帮我取快递 8 块，菜鸟驿站到 3 号楼 502" → 卡片显示可用券与实付
+- [x] 说"发布吧" → 真实建单，session 变 CLOSED
+- [x] 任意状态说"取消" → draft 清空、session CANCELED、卡片保留
 - [ ] 连说两次"发布吧"不会建两单
 
 ### 参考文件
@@ -526,7 +526,7 @@
 - \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/ErrandController.java\`：建单、取消
 - \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/VoucherController.java\`：券列表与领取
 
-## 13. 查询意图：个人数据 + 平台数据（未完成）
+## 13. 查询意图：个人数据 + 平台数据（已完成 2026-11-01）
 
 **目标**：一句话查钱包余额、我的任务、信用分与排名、我的优惠券。
 
@@ -546,10 +546,10 @@
 
 ### 验收标准
 
-- [ ] "我还有多少钱" → 返回余额
-- [ ] "我发了哪些单" → 列表 + 合计金额
-- [ ] "我的信用分和排名" → 分数与名次
-- [ ] "余额和信用分分别多少" → 并行调两个工具
+- [x] "我还有多少钱" → 返回余额
+- [x] "我发了哪些单" → 列表 + 合计金额
+- [x] "我的信用分和排名" → 分数与名次
+- [x] "余额和信用分分别多少" → 并行调两个工具
 
 ### 参考文件
 
@@ -557,7 +557,7 @@
 - \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/CreditController.java\`
 - \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/ErrandController.java\`
 
-## 14. 接单意图：批量自动接单（未完成）
+## 14. 接单意图：批量自动接单（已完成 2026-11-01）
 
 **目标**：说"接两单"就自动挑单并接单；单轮最多 5 单，未给数量默认 1 单，按实付金额从大到小。
 
@@ -575,16 +575,16 @@
 
 ### 验收标准
 
-- [ ] "接一单" → 接到金额最高的 1 单
-- [ ] "接 3 单" → 3 单且金额降序
-- [ ] "接 10 单" → 最多 5 单并提示上限
-- [ ] 部分单被抢时顺延并如实汇报
+- [x] "接一单" → 接到金额最高的 1 单
+- [x] "接 3 单" → 3 单且金额降序
+- [x] "接 10 单" → 最多 5 单并提示上限
+- [x] 部分单被抢时顺延并如实汇报
 
 ### 参考文件
 
 - \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/ErrandController.java\`
 
-## 15. 领券意图：一键领取（未完成）
+## 15. 领券意图：一键领取（已完成 2026-11-01）
 
 **目标**：一次把当前用户所有可领优惠券领完。
 
@@ -602,9 +602,9 @@
 
 ### 验收标准
 
-- [ ] "把能领的券都领了" → 领取数等于可领数
-- [ ] 紧接着再问一次 → 提示暂无可领
-- [ ] 部分失败时如实汇报失败原因
+- [x] "把能领的券都领了" → 领取数等于可领数
+- [x] 紧接着再问一次 → 提示暂无可领
+- [x] 部分失败时如实汇报失败原因
 
 ### 参考文件
 
