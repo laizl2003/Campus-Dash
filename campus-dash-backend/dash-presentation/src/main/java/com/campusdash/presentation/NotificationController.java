@@ -36,6 +36,13 @@ public class NotificationController {
         return Result.ok(Map.of("changed", changed));
     }
 
+    /** 一键已读：前端一次清掉红点 */
+    @PostMapping("/read-all")
+    public Result<Map<String, Object>> markAllRead() {
+        int changed = queryUseCase.markAllRead(CurrentUser.get());
+        return Result.ok(Map.of("changed", changed));
+    }
+
     @GetMapping("/unread")
     public Result<Map<String, Object>> unread() {
         return Result.ok(Map.of("count", queryUseCase.unread(CurrentUser.get())));

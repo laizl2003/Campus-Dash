@@ -38,6 +38,12 @@ public class JdbcNotificationQueryAdapter implements NotificationQueryPort {
     }
 
     @Override
+    public int markAllRead(String userId) {
+        return jdbc.update(
+                "UPDATE notification SET read_flag = 1 WHERE user_id = ? AND read_flag = 0", userId);
+    }
+
+    @Override
     public int unreadCount(String userId) {
         Integer n = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM notification WHERE user_id = ? AND read_flag = 0",

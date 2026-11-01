@@ -370,3 +370,5 @@
 .errand-card.is-highlight { background: #fff9e4; border-color: #efdfa8; }
 .errand-card.is-highlight:hover { background: #fff6d6; border-color: #e7d28a; }
 .account-mine-switch .tab .account-heading-count { margin-left: 5px; }
+
+.account-head-actions { display: flex; align-items: center; gap: 8px; }

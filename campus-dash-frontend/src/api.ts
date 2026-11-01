@@ -533,6 +533,9 @@ export const api = {
   }[]>(`/api/notifications?page=${page}&size=${size}`),
   markNotificationRead: (id: string) =>
     request<{ changed: number }>(`/api/notifications/${id}/read`, 'POST'),
+  // 未读可能散落在分页之外，单条标记够不着，所以要有"一键已读"
+  markAllNotificationsRead: () =>
+    request<{ changed: number }>('/api/notifications/read-all', 'POST'),
   vouchers: () => request<{
     items: { type: number; stock: number; description: string; thresholdCents: number; discountCents: number }[];
   }>('/api/vouchers'),
