@@ -56,10 +56,11 @@ async def lifespan(_: FastAPI):
             await task
 
 
-# v1：只做发单（意图识别 / 追问填槽 / 标题总结 / 草稿卡片 / 补充与修改识别）
-AGENT_VERSION = "v1"
+# v2：发单（意图识别 / 追问填槽 / 标题总结 / 草稿卡片）+ 意图路由 + MCP 工具调用
+#     （查询 / 接单 / 领券 / 直接发单 / 最优优惠券）
+AGENT_VERSION = "v2"
 
-app = FastAPI(title="CampusDash Agent", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="CampusDash Agent", version="2.0.0", lifespan=lifespan)
 service = ChatService()
 
 
