@@ -1008,5 +1008,13 @@ def test_knowledge_questions_route_to_query():
     ]:
         assert route_message(question) is Route.QUERY, question
 
+    # 推荐/餐厅类问句也要走工具
+    for question in ["有没有东区推荐的餐厅", "有没有学校东区推荐的餐厅", "附近有什么好吃的"]:
+        assert route_message(question) is Route.QUERY, question
+
     # 带任务动词的仍然按发单处理
     assert route_message("帮我去食堂带份饭") is Route.TASK
+    assert route_message("帮我带一份食堂的饭") is Route.TASK
+
+    # 我接的单靠关键词就能判，不必依赖模型
+    assert route_message("我最近两天接了哪些单") is Route.QUERY
