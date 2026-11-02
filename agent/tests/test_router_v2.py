@@ -1018,3 +1018,37 @@ def test_knowledge_questions_route_to_query():
 
     # 我接的单靠关键词就能判，不必依赖模型
     assert route_message("我最近两天接了哪些单") is Route.QUERY
+
+
+def test_title_follows_task_type():
+    """标题按类型推导：跑腿=地点+取/送，帮买=地点+买，排队=地点+待排队，其他=只写事。"""
+    from app.models import TaskDraft, compose_title
+
+    assert compose_title(TaskDraft(type="DELIVERY", title_base="取快递", location_from="菜鸟驿站")) == "菜鸟驿站取快递"
+    # 没有动词时补一个，避免"菜鸟驿站快递"
+    assert compose_title(TaskDraft(type="DELIVERY", title_base="快递", location_from="菜鸟驿站")) == "菜鸟驿站取快递"
+    assert compose_title(TaskDraft(type="BUY", title_base="奶茶", location_from="一食堂")) == "一食堂买奶茶"
+    assert compose_title(TaskDraft(type="QUEUE", title_base="排队买饭", location_from="一食堂")) == "一食堂待排队"
+    assert compose_title(TaskDraft(type="OTHER", title_base="帮忙看管行李")) == "帮忙看管行李"
+
+
+def test_purpose_skips_noise_and_money():
+    """提炼任务目的时跳过"算了/不要了"这类噪声，并去掉金额与时间。"""
+    from app.models import purpose_of
+
+    assert purpose_of("刚才那个不要了，帮我取个快递") == "取个快递"
+    assert purpose_of("帮我带一份食堂的饭，8块") == "带一份食堂的饭"
+    assert purpose_of("取快递8块") == "取快递"
+    assert purpose_of("明天下午三点去菜鸟驿站取快递") == "去菜鸟驿站取快递"
+
+
+def test_list_queries_route_to_query():
+    """「我发布的正在进行的任务」不能落进发单链路。"""
+    from app.agent.router import Route, route_message
+
+    for question in [
+        "我发布的正在进行的任务",
+        "看看我发布的，正在进行的任务",
+        "我发布的任务有哪些",
+    ]:
+        assert route_message(question) is Route.QUERY, question

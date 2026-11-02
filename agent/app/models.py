@@ -131,43 +131,105 @@ def required_slots(draft: TaskDraft) -> list[Slot]:
 # 任务目的里常见的礼貌前缀，拼标题时去掉，否则会变成"菜鸟驿站帮我取快递"
 _PURPOSE_PREFIX = ("请帮我", "麻烦帮我", "帮忙", "帮我", "请", "麻烦", "给我", "替我")
 
+# 开头这些是"对话噪声"，不是任务内容：上一句话的收尾、改主意、口头禅
+_PURPOSE_NOISE = (
+    "刚才那个", "刚才说的", "前面那个", "上一条", "算了", "不对", "对了", "那个",
+    "嗯", "啊", "哦", "好的", "行", "然后", "就是", "另外", "还有",
+)
+
+# 整句只是"放弃/否定"，不能拿来当任务目的（"刚才那个不要了"）
+_PURPOSE_ABANDON = re.compile(r"^(?:不|别|不用|不要|取消|放弃|撤回)")
+
+# 金额与时间不是标题的一部分："取快递8块""明天下午三点取快递"
+_TITLE_MONEY = re.compile(r"\d+(?:\.\d+)?\s*(?:元|块|块钱|毛|角)")
+_TITLE_TIME = re.compile(
+    r"(?:今天|明天|后天|大后天|今早|今晚|明早|明晚)?\s*"
+    r"(?:上午|中午|下午|晚上|早上|凌晨)?\s*"
+    r"(?:\d{1,2}|[一二三四五六七八九十]{1,3})\s*[点:：]\s*(?:\d{1,2}\s*分?)?"
+)
+# 标题里表示"搬运"的动词；没有的话按类型补一个，避免出现"菜鸟驿站快递"这种半句话
+_TITLE_VERBS = ("取", "拿", "送", "带", "还", "搬", "买", "取件", "代取", "代买")
+
+
+def _clean_purpose(text: str) -> str:
+    """把一段口语压成"任务目的"：去前缀、去噪声、去金额时间。"""
+    value = (text or "").strip()
+    for _ in range(3):  # 前缀可能叠加（"那个，麻烦帮我……"）
+        before = value
+        for noise in _PURPOSE_NOISE:
+            if value.startswith(noise):
+                value = value[len(noise):].lstrip("，,。. 、")
+        for prefix in _PURPOSE_PREFIX:
+            if value.startswith(prefix):
+                value = value[len(prefix):].lstrip("，,。. ")
+        if value == before:
+            break
+    value = _TITLE_MONEY.sub("", value)
+    value = _TITLE_TIME.sub("", value)
+    return value.strip(" ，,。.、！!~ ")
+
 
 def purpose_of(text: str) -> str | None:
     """从用户原话里提炼"任务目的"。
 
     "帮我把书还到图书馆，5块" -> "把书还到图书馆"
-    逗号后通常是金额/时间等附加信息，截掉能让标题更像一句话。
+    按逗号切成分句，**跳过纯噪声分句**再取第一个有内容的——
+    否则"刚才那个不要了，帮我取个快递"会提炼出"刚才那个不要了"，标题直接跑偏。
     """
     value = (text or "").strip()
     if not value:
         return None
-    for sep in ("，", ",", "。", "；", ";"):
-        head = value.split(sep, 1)[0].strip()
-        if head:
-            value = head
-        break
-    for prefix in _PURPOSE_PREFIX:
-        if value.startswith(prefix):
-            value = value[len(prefix):].strip(" ，,。.!！")
-            break
-    return value[:20] or None
+
+    for piece in re.split(r"[，,。；;！!\n]", value):
+        cleaned = _clean_purpose(piece)
+        if len(cleaned) < 2 or _PURPOSE_ABANDON.match(cleaned):
+            continue
+        return cleaned[:20]
+    return None
 
 
 def compose_title(draft: TaskDraft) -> str | None:
-    """标题 = 任务目的（可选带地点前缀）。
+    """标题按任务类型生成，保证"地点 + 做什么"的固定形状。
 
-    用户不用回答标题：第一句话就是任务目的，之后每轮把已知地点并进去，
-    于是"送外卖"会随着地点补齐变成"西区东门送外卖"。
-    地点已经包含在目的里时不重复拼。
+    DELIVERY -> 取货地 + 取/送什么    "菜鸟驿站取快递"
+    BUY      -> 取货地 + 买什么       "一食堂买奶茶"
+    QUEUE    -> 排队地点 + 待排队     "一食堂待排队"
+    OTHER    -> 只写这件事本身        "帮忙看管行李"
+
+    为什么不用模型直接写标题：标题要短、要稳定，而且极易被上下文污染
+    （上一单的地点、物品混进来）。用"地点 + 目的"推导，输入是什么就可预期是什么。
     """
+    # 只有"任务目的"（title_base）存在时才按类型拼；
+    # title 是历史遗留或用户直接给的成品标题，原样保留，不要拿地点去改写它
     base = (draft.title_base or "").strip()
     if not base:
         return (draft.title or "").strip() or None
-    location = (draft.location_from or "").strip()
-    if location and location not in base:
-        return f"{location}{base}"[:64]
-    return base[:64]
 
+    location = (draft.location_from or "").strip()
+    kind = draft.type
+
+    if kind == "QUEUE":
+        # 排队没有"目的地"，标题就是"在哪儿排"，"待排队"三个字说明在等
+        if location:
+            return f"{location}待排队"[:64]
+        # 不知道在哪儿排时，保留用户原话，别硬造一个"买饭待排队"
+        return base[:64]
+
+    if kind == "BUY":
+        core = base if base.startswith(("买", "代买", "购", "购买")) else f"买{base}"
+        return (f"{location}{core}" if location and location not in core else core)[:64]
+
+    if kind == "OTHER":
+        # 其他帮忙没有地点概念，只保留这件事本身
+        return base[:64]
+
+    # DELIVERY（默认）：取货地 + 动作 + 物品
+    core = base
+    if not any(verb in core for verb in _TITLE_VERBS):
+        core = f"取{core}"
+    if location and location not in core:
+        return f"{location}{core}"[:64]
+    return core[:64]
 
 def refresh_title(draft: TaskDraft) -> TaskDraft:
     """重算并写回 draft.title（title_base 不动）。"""
