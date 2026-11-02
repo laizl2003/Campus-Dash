@@ -87,7 +87,7 @@ def route_message(message: str, extractor=None, draft=None) -> Route:
     """规则优先；含糊且像提问时才问模型；模型不可用退回 task。"""
     route = guess_route(message)
     if route is not None:
-        return _draft_aware(route, message, draft)
+        return _draft_aware(route, message, draft, extractor)
 
     text = message or ""
     if not any(mark in text for mark in _NEEDS_LLM):
@@ -104,25 +104,65 @@ def route_message(message: str, extractor=None, draft=None) -> Route:
     value = answer.strip().lower()
     for route in Route:
         if route.value in value:
-            return _draft_aware(route, message, draft)
+            return _draft_aware(route, message, draft, extractor)
     return Route.TASK
 
 
-# 明确指向"账户/平台数据"的词；草稿已就绪时靠它区分"查余额"和"看当前这单多少钱"
-_ACCOUNT_WORDS = (
+# 快速通道：明确指向"平台数据"的词
+_PLATFORM_WORDS = (
     "余额", "钱包", "信用", "排名", "排行榜", "券", "我的任务", "我发",
-    "账户", "我还", "我接", "我领",
-    # 明确在看平台，而不是在改手上这一单
-    "广场", "大厅", "可接", "能接", "有什么单", "有哪些单", "可领",
+    "账户", "我还", "我接", "我领", "广场", "大厅", "可接", "能接",
+    "有什么单", "有哪些单", "可领",
+)
+
+# 快速通道：明确在说"手上这一单"的词
+_DRAFT_WORDS = (
+    "多少钱", "金额", "改一下", "改成", "送到哪", "取货", "送达", "标题",
+    "截止", "这一单", "这单", "当前这单", "草稿",
 )
 
 
-def _draft_aware(route: Route, message: str, draft) -> Route:
-    """草稿已经就绪时，模糊的问句优先理解成"看当前这一单"，而不是查账户。"""
+def judge_subject(message: str, draft, extractor=None) -> str:
+    """判断这句话的主语是"平台"还是"当前草稿"，返回 PLATFORM / DRAFT / UNSURE。
+
+    词表先兜确定的情况，剩下的交给模型——靠词表穷举每类数据是补不完的，
+    漏一个词就会把"看广场"误判成"看这单"。
+    """
+    text = message or ""
+    is_platform = any(word in text for word in _PLATFORM_WORDS)
+    is_draft = any(word in text for word in _DRAFT_WORDS)
+    if is_platform and not is_draft:
+        return "PLATFORM"
+    if is_draft and not is_platform:
+        return "DRAFT"
+    if extractor is None:
+        # 词表都命中说不清时，平台词更具体，按平台处理（原来是这么做的）
+        return "PLATFORM" if is_platform else "UNSURE"
+
+    from .prompts import SUBJECT_JUDGE_PROMPT
+
+    try:
+        answer = extractor.classify_text(SUBJECT_JUDGE_PROMPT, f"用户这句话：{text}")
+    except Exception:  # noqa: BLE001
+        return "UNSURE"
+    if not answer:
+        return "UNSURE"
+    value = answer.strip().upper()
+    if "PLATFORM" in value:
+        return "PLATFORM"
+    if "DRAFT" in value:
+        return "DRAFT"
+    return "UNSURE"
+
+def _draft_aware(route: Route, message: str, draft, extractor=None) -> Route:
+    """草稿非空时，判断这句问句到底在问平台还是问手上这一单。
+
+    以前只靠词表白名单，漏词就误判（"看看广场有什么单"会被压回发单）；
+    现在词表只做快速通道，判不出来让模型看主语，UNSURE 按保守策略留在发单。
+    """
     if draft is not None and route is Route.CANCEL:
         # 手上这一单还没发出去，"取消"就是丢掉草稿，别去动已发布的单
         try:
-            from ..models import required_slots
             pending = draft.model_dump(exclude_none=True)
         except Exception:  # noqa: BLE001
             pending = {}
@@ -132,11 +172,18 @@ def _draft_aware(route: Route, message: str, draft) -> Route:
     if route is not Route.QUERY or draft is None:
         return route
     from ..models import required_slots
+
     try:
-        ready = not required_slots(draft)
+        # 看"草稿里有没有填过东西"，而不是"还缺不缺字段"（空草稿也缺字段）
+        has_draft = any(
+            value not in (None, "", [], {}) for key, value in draft.model_dump().items()
+            if key not in ("title", "title_base")
+        )
     except Exception:  # noqa: BLE001
         return route
-    if ready and not any(word in message for word in _ACCOUNT_WORDS):
-        return Route.TASK
-    return route
+    if not has_draft:
+        return route
+
+    subject = judge_subject(message, draft, extractor)
+    return Route.QUERY if subject == "PLATFORM" else Route.TASK
 

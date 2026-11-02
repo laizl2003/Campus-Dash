@@ -205,11 +205,16 @@ _NOT_PLACE_WORDS = ("多少钱", "什么", "怎么", "为什么", "哪个", "哪
 _SENTENCE_VERBS = ("取", "送", "买", "帮", "拿", "借", "还", "排队", "代")
 
 
-def looks_like_place(text: str) -> bool:
+def looks_like_place(text: str, judge=None) -> bool:
     """判断一段文字像不像地点。
 
-    宽松到能接受"菜鸟驿站""一食堂二楼窗口""西区东门"，严到拒绝
-    "8块""明天下午三点""哈哈哈""就那个"这类明显不是地点的回答。
+    三级判断，词表只做快速通道：
+    1. 明显不是地点（纯数字/金额/时间/客套/反问）→ 直接否，不问模型；
+    2. 命中地点关键词 → 直接是，不问模型；
+    3. 都没命中（"三食""菜鸟""老地方"这类简称昵称）→ 交给 judge 判一句。
+
+    judge 是 text -> bool 的回调（由 agent 层注入模型调用）；
+    不传时退回纯词表，测试和离线场景行为不变。
     """
     value = (text or "").strip()
     if not (2 <= len(value) <= 64):
@@ -226,10 +231,18 @@ def looks_like_place(text: str) -> bool:
         keyword in value for keyword in _PLACE_KEYWORDS
     ):
         return False
-    return any(keyword in value for keyword in _PLACE_KEYWORDS)
+    if any(keyword in value for keyword in _PLACE_KEYWORDS):
+        return True
+    # 词表失配：可能是简称/昵称，让模型看一眼
+    if judge is not None:
+        try:
+            return bool(judge(value))
+        except Exception:  # noqa: BLE001
+            return False
+    return False
 
 
-def sanitize_places(patch: dict[str, object]) -> dict[str, object]:
+def sanitize_places(patch: dict[str, object], judge=None) -> dict[str, object]:
     """把不像地点的 location_* 从抽取结果里剔掉。
 
     模型偶尔会把"就那个""哈哈哈"当地点返回，这里和金额校验保持一致：
@@ -238,7 +251,7 @@ def sanitize_places(patch: dict[str, object]) -> dict[str, object]:
     clean = dict(patch)
     for field in ("location_from", "location_to"):
         value = clean.get(field)
-        if isinstance(value, str) and not looks_like_place(value):
+        if isinstance(value, str) and not looks_like_place(value, judge=judge):
             clean.pop(field, None)
     return clean
 

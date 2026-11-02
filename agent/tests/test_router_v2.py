@@ -878,3 +878,118 @@ def test_answer_mid_draft_reminds_draft_alive():
 
     assert "广场有 3 单" in reply["message"]
     assert "草稿还在" in reply["message"]
+
+
+def test_subject_judge_falls_back_to_model():
+    """词表都认不出时，由模型判主语；判不出就保守留在发单。"""
+    from app.agent.extractor import Extractor
+    from app.agent.router import judge_subject
+    from app.models import TaskDraft
+
+    class Labeler(Extractor):
+        def __init__(self, label):
+            self.label = label
+
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            return self.label
+
+    draft = TaskDraft(type="DELIVERY", title="送袜子", location_from="A", location_to="B",
+                      reward_cents=1000)
+
+    # 词表能判的不问模型
+    assert judge_subject("看看我的优惠券", draft) == "PLATFORM"
+    assert judge_subject("这单多少钱", draft) == "DRAFT"
+    # 词表判不出的交给模型
+    assert judge_subject("那边今天热闹吗", draft, Labeler("PLATFORM")) == "PLATFORM"
+    assert judge_subject("那边今天热闹吗", draft, Labeler("DRAFT")) == "DRAFT"
+    assert judge_subject("那边今天热闹吗", draft, Labeler("UNSURE")) == "UNSURE"
+
+
+def test_draft_query_uses_model_subject():
+    """草稿进行中问平台数据，模型判 PLATFORM 就放行到工具链路。"""
+    from app.agent.extractor import Extractor
+    from app.agent.router import Route, route_message
+    from app.models import TaskDraft
+
+    class Platformish(Extractor):
+        """路由器问"哪一类"答 query，主语判定问"主语是谁"答 PLATFORM。"""
+
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            if "主语" in (system_prompt or "") or "PLATFORM" in (system_prompt or ""):
+                return "PLATFORM"
+            return "query"
+
+    draft = TaskDraft(type="DELIVERY", title="送袜子", location_from="A", location_to="B",
+                      reward_cents=1000)
+    # "附近有什么好吃的"词表认不出，模型判 PLATFORM
+    assert route_message("附近有什么好吃的", draft=draft, extractor=Platformish()) is Route.QUERY
+
+
+def test_place_judge_accepts_short_names():
+    """词表认不出的简称（三食/菜鸟），模型判 YES 就能进草稿。"""
+    from app.models import looks_like_place, sanitize_places
+
+    yes = lambda text: True
+    no = lambda text: False
+
+    assert looks_like_place("三食") is False        # 纯词表：拒
+    assert looks_like_place("三食", judge=yes) is True
+    assert looks_like_place("哈哈哈", judge=no) is False
+
+    # 明显的非地点不会去问模型
+    calls = []
+    def counting_judge(text):
+        calls.append(text)
+        return True
+    assert looks_like_place("8块", judge=counting_judge) is False
+    assert calls == []
+
+    patch = sanitize_places({"location_from": "菜鸟", "location_to": "8块"}, judge=yes)
+    assert patch["location_from"] == "菜鸟"
+    assert "location_to" not in patch
+
+
+def test_place_judge_is_used_when_asking_for_location():
+    """追问地点时，"三食"不再被当成"不像地点"。"""
+    from app.agent.extractor import Extractor
+    from app.agent.graph import build_graph
+    from app.models import TaskDraft, Slot
+
+    class Campus(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            return "YES"
+
+    graph = build_graph(Campus())
+    state = graph.invoke({
+        "message": "三食",
+        "draft": TaskDraft(type="BUY", title="买饭"),
+        "missing": [Slot.LOCATION_FROM],
+        "history": [],
+        "user_token": "",
+    })
+
+    assert state.get("rejected_location") is False
+    assert state["draft"].location_from == "三食"
+
+
+def test_fallback_plan_picks_errands_over_wallet():
+    """降级计划别再一律兜到钱包：问接的单要查 grabbed，问发的单要查 published。"""
+    from app.tools.tool_loop import fallback_plan
+
+    grabbed = fallback_plan("query", "我最近两天接了哪些单")
+    assert grabbed[0] == ("list_my_errands", {"role": "grabbed", "phase": "all"})
+
+    published = fallback_plan("query", "我发的任务有哪些")
+    assert published[0] == ("list_my_errands", {"role": "published", "phase": "all"})
+
+    # 明确的资金问题仍然查钱包
+    assert fallback_plan("query", "我还有多少钱")[0] == ("get_wallet", {})

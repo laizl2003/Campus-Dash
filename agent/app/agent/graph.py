@@ -200,7 +200,7 @@ def build_graph(extractor: Extractor, tool_loop=None):
             # 或者整句糊进任务描述、字段一个都没改到。
             raw_patch = _extract(extractor, message, current, state.get("history"))
             # 地点先过校验：不像地点就不落进草稿，并给一句说明
-            patch = sanitize_places(raw_patch)
+            patch = sanitize_places(raw_patch, judge=_place_judge(extractor))
             bad_location = any(
                 key in raw_patch and key not in patch
                 for key in ("location_from", "location_to")
@@ -266,7 +266,7 @@ def build_graph(extractor: Extractor, tool_loop=None):
         # 时间进 expired_at、细节进 description，不该整句塞进某一个字段。
         # 模型返回的地点先过一道校验：不像地点就不写进草稿（和金额一样
         # 的处理方式——解析不了就继续问，而不是把随口一句当地址存下来）。
-        patch = sanitize_places(patch)
+        patch = sanitize_places(patch, judge=_place_judge(extractor))
         deadline_note = _guard_deadline(patch)
         draft = merge_draft(current, patch)
         # 用户回答追问时，可能只给一个值；只回填"当前正在追问"的那个槽位。
@@ -280,6 +280,7 @@ def build_graph(extractor: Extractor, tool_loop=None):
             draft,
             state.get("missing", []),
             patch,
+            judge=_place_judge(extractor),
         )
         # 本轮问的是地点，但回答不像地点：槽位仍空着，下一轮继续问，
         # 并在追问里说明原因，避免用户以为系统没听见。
@@ -287,7 +288,7 @@ def build_graph(extractor: Extractor, tool_loop=None):
         rejected_location = bool(
             target in (Slot.LOCATION_FROM, Slot.LOCATION_TO)
             and getattr(draft, target.value, None) is None
-            and not looks_like_place(message)
+            and not looks_like_place(message, judge=_place_judge(extractor))
         )
         # 模型漏掉时间时用规则补一张：用户说"明天下午三点"却抽不出来，
         # 这句话就会一直留在草稿外面，最后发布的任务没有截止时间。
@@ -426,6 +427,21 @@ def _looks_like_new_task(draft: TaskDraft, patch: dict) -> bool:
     return str(new_from).strip() != str(old_from).strip() and str(new_to).strip() != str(old_to).strip()
 
 
+
+
+
+def _place_judge(extractor: Extractor):
+    """把模型包成一个 "这段文字是地点吗" 的回调。"""
+    from .prompts import PLACE_JUDGE_PROMPT
+
+    def judge(text: str) -> bool:
+        answer = extractor.classify_text(PLACE_JUDGE_PROMPT, f"待判断：{text}")
+        if not answer:
+            return False
+        value = answer.strip().upper()
+        return value.startswith("YES") or "是" in value[:4]
+
+    return judge
 
 def _guard_deadline(patch: dict) -> str | None:
     """把 patch 里的截止时间收敛到未来，返回需要告诉用户的话。
@@ -611,6 +627,7 @@ def _apply_pending_answer(
     draft: TaskDraft,
     missing: list[Slot],
     patch: dict[str, object] = {},
+    judge=None,
 ) -> TaskDraft:
     """把"裸回答"回填到当前追问的槽位。
 
@@ -651,9 +668,9 @@ def _apply_pending_answer(
     # 地点必须听起来像个地方才回填：哈哈哈 / 8块 / 就那个 一律不收，
     # 槽位保持缺失，下一轮继续追问。规则和金额一致——宁可多问一次。
     if target == Slot.LOCATION_FROM and not draft.location_from:
-        return draft.model_copy(update={'location_from': text}) if looks_like_place(text) else draft
+        return draft.model_copy(update={'location_from': text}) if looks_like_place(text, judge=judge) else draft
     if target == Slot.LOCATION_TO and not draft.location_to:
-        return draft.model_copy(update={'location_to': text}) if looks_like_place(text) else draft
+        return draft.model_copy(update={'location_to': text}) if looks_like_place(text, judge=judge) else draft
     if target == Slot.DESCRIPTION and not draft.description:
         return draft.model_copy(update={"description": text})
     return draft

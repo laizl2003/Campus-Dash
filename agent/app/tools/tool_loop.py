@@ -31,6 +31,9 @@ TOOL_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿平台的助手，可以�
 4. 工具返回 ok=false 时如实说明失败原因，不要编造成功；
 5. 与校园跑腿无关的问题，直接说明你只处理跑腿相关事务。
 
+查自己的任务时：
+5. 「我接了哪些单」「我发的任务」用 list_my_errands，role 分别是 grabbed / published，
+   不要用 get_wallet；
 查条件时：
 6. 用户提到时间范围（"明天之前""最近两天"）、状态（"进行中""已完成"）时，
    必须把条件放进工具参数（expired_before / expired_after / delivered_after / phase），
@@ -127,6 +130,12 @@ def fallback_plan(route: str, message: str) -> list[tuple[str, dict[str, Any]]]:
         return [("grab_best", {"count": parse_grab_count(text)})]
 
     plan: list[tuple[str, dict[str, Any]]] = []
+    # 我接的单 / 我发的单：问法很多（"接了哪些""我发的""发布的任务"），
+    # 之前没覆盖到就兜到钱包，答非所问
+    if any(word in text for word in ("我接", "接了", "接的", "接过的", "抢的")):
+        plan.append(("list_my_errands", {"role": "grabbed", "phase": "all"}))
+    if any(word in text for word in ("我发", "发的", "发布", "我的任务")):
+        plan.append(("list_my_errands", {"role": "published", "phase": "all"}))
     if "余额" in text or "钱包" in text or "多少钱" in text:
         plan.append(("get_wallet", {}))
     if "信用" in text:
@@ -135,12 +144,10 @@ def fallback_plan(route: str, message: str) -> list[tuple[str, dict[str, Any]]]:
         plan.append(("get_ranking", {}))
     if "券" in text:
         plan.append(("list_my_vouchers", {}))
-    if "任务" in text or "发的单" in text or "我发" in text:
-        plan.append(("list_my_errands", {"limit": 10}))
-    if "广场" in text or "可接" in text:
+    if "广场" in text or "可接" in text or "大厅" in text:
         plan.append(("list_square_errands", {"limit": 20}))
-    return plan or [("get_wallet", {})]
-
+    # 什么都没命中时，先看自己手上的任务比查钱包更有用
+    return plan or [("list_my_errands", {"role": "published", "phase": "all"})]
 
 class ToolLoop:
     def __init__(self, settings: LLMSettings | None = None, client: MCPClient | None = None) -> None:
