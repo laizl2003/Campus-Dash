@@ -1028,7 +1028,7 @@ def test_title_follows_task_type():
     # 没有动词时补一个，避免"菜鸟驿站快递"
     assert compose_title(TaskDraft(type="DELIVERY", title_base="快递", location_from="菜鸟驿站")) == "菜鸟驿站取快递"
     assert compose_title(TaskDraft(type="BUY", title_base="奶茶", location_from="一食堂")) == "一食堂买奶茶"
-    assert compose_title(TaskDraft(type="QUEUE", title_base="排队买饭", location_from="一食堂")) == "一食堂待排队"
+    assert compose_title(TaskDraft(type="QUEUE", title_base="排队买饭", location_from="一食堂")) == "一食堂代排队"
     assert compose_title(TaskDraft(type="OTHER", title_base="帮忙看管行李")) == "帮忙看管行李"
 
 
@@ -1052,3 +1052,74 @@ def test_list_queries_route_to_query():
         "我发布的任务有哪些",
     ]:
         assert route_message(question) is Route.QUERY, question
+
+
+def test_title_drops_vague_goods():
+    """模糊物品（东西/一下）不写进标题，只留取货地。"""
+    from app.models import TaskDraft, compose_title
+
+    assert compose_title(TaskDraft(type="DELIVERY", title_base="取一下东西", location_from="菜鸟驿站")) == "菜鸟驿站"
+    assert compose_title(TaskDraft(type="DELIVERY", title_base="帮我拿一下", location_from="菜鸟驿站")) == "菜鸟驿站"
+    assert compose_title(TaskDraft(type="BUY", title_base="买点东西", location_from="一食堂")) == "一食堂"
+    # 有实义物品才写
+    assert compose_title(TaskDraft(type="DELIVERY", title_base="取个快递", location_from="菜鸟驿站")) == "菜鸟驿站取快递"
+
+
+def test_route_asks_model_when_rules_miss():
+    """规则没命中时一律问模型（不再要求句子里带"?吗什么"）。"""
+    from app.agent.extractor import Extractor
+    from app.agent.router import Route, route_message
+
+    class Query(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            return "query"
+
+    # 没有任何提问标记，但模型判成查询
+    assert route_message("我这单谁接的", extractor=Query()) is Route.QUERY
+
+
+def test_slot_answer_skips_model():
+    """填槽时的裸回答不浪费一次模型调用。"""
+    from app.agent.extractor import Extractor
+    from app.agent.router import Route, route_message
+    from app.models import TaskDraft
+
+    class Query(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            raise AssertionError("填槽回答不应该调用模型")
+
+    draft = TaskDraft(type="DELIVERY", location_from="菜鸟驿站", reward_cents=800)
+    assert route_message("3号楼502", extractor=Query(), draft=draft) is Route.TASK
+    assert route_message("8块", extractor=Query(), draft=draft) is Route.TASK
+
+
+def test_collapse_keeps_only_last_card_per_session():
+    """同一会话只保留最后一张草稿卡片，文字消息与顺序不变。"""
+    from app.service import collapse_draft_cards
+
+    messages = [
+        {"message_id": "1", "session_id": "s1", "role": "user", "content": "取快递", "meta": None},
+        {"message_id": "2", "session_id": "s1", "role": "assistant", "content": "卡片1", "meta": {"draft": {"a": 1}}},
+        {"message_id": "3", "session_id": "s1", "role": "user", "content": "8块", "meta": None},
+        {"message_id": "4", "session_id": "s1", "role": "assistant", "content": "卡片2", "meta": {"draft": {"a": 2}}},
+        {"message_id": "5", "session_id": "s2", "role": "assistant", "content": "卡片3", "meta": {"draft": {"a": 3}}},
+    ]
+    kept = collapse_draft_cards(messages)
+
+    ids = [m["message_id"] for m in kept]
+    assert ids == ["1", "3", "4", "5"]      # s1 只留最后一张卡片 4；s2 的 5 保留
+
+
+def test_title_strips_location_prefix_words():
+    """句首"从/在/去+地点"先剥掉，再按类型拼。"""
+    from app.models import TaskDraft, compose_title
+
+    assert compose_title(TaskDraft(type="QUEUE", title_base="在一食堂排队买饭", location_from="一食堂")) == "一食堂代排队"
+    assert compose_title(TaskDraft(type="DELIVERY", title_base="从菜鸟驿站取一下东西", location_from="菜鸟驿站")) == "菜鸟驿站"
+    assert compose_title(TaskDraft(type="DELIVERY", title_base="从菜鸟驿站取个快递", location_from="菜鸟驿站")) == "菜鸟驿站取快递"

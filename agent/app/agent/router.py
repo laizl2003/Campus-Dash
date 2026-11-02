@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from enum import Enum
 
@@ -93,24 +94,67 @@ task（发布跑腿任务）、query（查询余额/任务/信用/排名/优惠�
 "附近哪家打印店开着" -> query"""
 
 
-# 出现这些标记才值得问一次模型；否则直接当发单处理。
-# 否则"取消""帮我取快递"这种也会白白等一次模型（慢的时候要几十秒）。
+# 同时有"提问标记"和"业务关键词"时，优先问模型（否则"取消""帮我取快递"会白等一次调用）。
+# 注意：ALWAYS_ASK_MODEL=True 时这条快通道已经不拦了，保留它给关闭开关的场景用。
 _NEEDS_LLM = (
-    "有没有", "推荐", "哪家","?", "？", "吗", "多少", "几", "查", "看看", "什么", "哪些", "怎么", "接", "领", "券", "余额", "信用", "排名")
+    "有没有", "推荐", "哪家", "?", "？", "吗", "多少", "几", "查", "看看",
+    "什么", "哪些", "怎么", "接", "领", "券", "余额", "信用", "排名",
+)
+
+
+# 规则没命中时是否一律问模型。
+# 之前只在句子里有"？/吗/什么"这类提问标记时才问，导致「我发布的正在进行的任务」
+# （没有标记）直接落进发单链路，而加个"看看"又能正确走查询——同一个意图两种行为。
+# 现在默认总是问一次，用 AGENT_ROUTE_ALWAYS_LLM=false 可退回旧行为（省一次调用）。
+ALWAYS_ASK_MODEL = os.getenv("AGENT_ROUTE_ALWAYS_LLM", "true").strip().lower() not in (
+    "0", "false", "no", "off",
+)
+
+# 填槽阶段的"裸回答"不值得问模型：这些句子一定是任务参数，不是意图
+_MONEY_ONLY = re.compile(r"^\d+(?:\.\d+)?\s*(?:元|块|块钱|毛)?$")
+
+
+def _looks_like_slot_answer(text: str, draft) -> bool:
+    """判断这句话是不是在回答追问（"3号楼502""8块""明天下午三点"）。
+
+    这类句子规则能看清，问模型只会让每一轮多等 1~3 秒。
+    """
+    if draft is None:
+        return False
+    from ..models import looks_like_place, required_slots
+
+    try:
+        if not required_slots(draft):
+            return False  # 字段已经齐了，不需要再填槽
+    except Exception:  # noqa: BLE001
+        return False
+
+    value = text.strip()
+    if len(value) > 24:
+        return False
+    if _MONEY_ONLY.match(value):
+        return True
+    if any(mark in value for mark in ("?", "？", "吗", "什么", "哪", "多少")):
+        return False
+    return looks_like_place(value)
 
 
 def route_message(message: str, extractor=None, draft=None) -> Route:
-    """规则优先；含糊且像提问时才问模型；模型不可用退回 task。"""
+    """规则优先；规则没命中就问模型；模型不可用退回 task。"""
     route = guess_route(message)
     if route is not None:
         return _draft_aware(route, message, draft, extractor)
 
     text = message or ""
-    if not any(mark in text for mark in _NEEDS_LLM):
-        return Route.TASK
-
     if extractor is None:
         return Route.TASK
+
+    if not ALWAYS_ASK_MODEL and not any(mark in text for mark in _NEEDS_LLM):
+        return Route.TASK
+    # 填槽时的裸回答：跳过模型，省一次往返
+    if _looks_like_slot_answer(text, draft):
+        return Route.TASK
+
     try:
         answer = extractor.classify_text(ROUTER_PROMPT, message)
     except Exception:  # noqa: BLE001
@@ -122,7 +166,6 @@ def route_message(message: str, extractor=None, draft=None) -> Route:
         if route.value in value:
             return _draft_aware(route, message, draft, extractor)
     return Route.TASK
-
 
 # 快速通道：明确指向"平台数据"的词
 _PLATFORM_WORDS = (

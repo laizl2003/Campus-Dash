@@ -150,6 +150,17 @@ _TITLE_TIME = re.compile(
 # 标题里表示"搬运"的动词；没有的话按类型补一个，避免出现"菜鸟驿站快递"这种半句话
 _TITLE_VERBS = ("取", "拿", "送", "带", "还", "搬", "买", "取件", "代取", "代买")
 
+# 这些词没有信息量：写进标题只会变成"菜鸟驿站取东西"
+_VAGUE_GOODS = (
+    "东西", "物品", "物件", "玩意儿", "那个", "这个", "一下", "一趟", "个",
+    "啥", "什么", "部分", "相关", "若干",
+)
+# 量词：取/买后面常跟"个/一份/一杯"，去掉才是物品本身
+_MEASURE_WORDS = (
+    "一个", "一份", "一杯", "一些", "一下", "一趟", "一点", "点",
+    "个", "份", "杯", "件", "箱", "袋", "瓶", "盒", "包", "张",
+)
+
 
 def _clean_purpose(text: str) -> str:
     """把一段口语压成"任务目的"：去前缀、去噪声、去金额时间。"""
@@ -188,6 +199,44 @@ def purpose_of(text: str) -> str | None:
     return None
 
 
+def _split_action(core: str) -> tuple[str, str | None]:
+    """把"取个快递""帮我拿一下"拆成 (动作, 物品)。
+
+    物品返回 None 表示**没有有实际含义的物品**（"东西""一下"这类），
+    这时标题只写地点，不要拼出"菜鸟驿站取东西"这种废话。
+    """
+    value = (core or "").strip()
+
+    # 礼貌前缀先剥掉："帮我拿一下" -> "拿一下"
+    for prefix in _PURPOSE_PREFIX:
+        if value.startswith(prefix):
+            value = value[len(prefix):].lstrip("，,。. ")
+
+    verb = "取"
+    for candidate in ("代取", "代买", "取件", "取", "拿", "送", "带", "还", "搬", "买", "购"):
+        if value.startswith(candidate):
+            verb = candidate
+            value = value[len(candidate):]
+            break
+
+    # 量词/口头语反复剥："个""一份""一下""点"
+    changed = True
+    while changed and value:
+        changed = False
+        for word in _MEASURE_WORDS:
+            if value.startswith(word):
+                value = value[len(word):]
+                changed = True
+                break
+
+    value = value.strip("的 ，,。.")
+    if not value or value in _VAGUE_GOODS or len(value) < 2:
+        return verb, None
+    # "点东西""一些物品"这种，剥完还剩模糊词
+    if value in _VAGUE_GOODS:
+        return verb, None
+    return verb, value
+
 def compose_title(draft: TaskDraft) -> str | None:
     """标题按任务类型生成，保证"地点 + 做什么"的固定形状。
 
@@ -209,24 +258,46 @@ def compose_title(draft: TaskDraft) -> str | None:
     kind = draft.type
 
     if kind == "QUEUE":
-        # 排队没有"目的地"，标题就是"在哪儿排"，"待排队"三个字说明在等
+        # 排队没有"目的地"，标题 = 排队地点 + 代排队
         if location:
-            return f"{location}待排队"[:64]
-        # 不知道在哪儿排时，保留用户原话，别硬造一个"买饭待排队"
+            return f"{location}代排队"[:64]
+        # 不知道在哪儿排时，保留用户原话，别硬造一个"买饭代排队"
         return base[:64]
 
+    # 句首常带"从/去/在/到 + 地点"，先剥掉再按类型拼，
+    # 否则"在一食堂排队买饭"会被当成整句原样返回
+    if location:
+        for prefix in (f"从{location}", f"去{location}", f"在{location}",
+                       f"到{location}", location):
+            if base.startswith(prefix):
+                base = base[len(prefix):].lstrip("，,。. 的")
+                break
+
+    # 剥完还提到地点，说明这是用户自己组织的一句话（"把书还到图书馆"），
+    # 别再拆成"取把书还到图书馆"
+    if location and location in base:
+        return base[:64]
+
+    verb, goods = _split_action(base)
+
     if kind == "BUY":
-        core = base if base.startswith(("买", "代买", "购", "购买")) else f"买{base}"
+        if not goods:
+            # 没有有意义的物品：只写取货地
+            return (location or base)[:64]
+        core = f"买{goods}"
         return (f"{location}{core}" if location and location not in core else core)[:64]
 
     if kind == "OTHER":
         # 其他帮忙没有地点概念，只保留这件事本身
         return base[:64]
 
-    # DELIVERY（默认）：取货地 + 动作 + 物品
-    core = base
-    if not any(verb in core for verb in _TITLE_VERBS):
-        core = f"取{core}"
+    # DELIVERY（默认）：取货地 + 取/送什么（保留用户自己的动作词："还书"不是"取书"）
+    if not goods:
+        # "帮我取一下东西"这类：没有有意义的物品，标题只写取货地
+        if location:
+            return location[:64]
+        return base[:64]
+    core = f"{verb}{goods}"
     if location and location not in core:
         return f"{location}{core}"[:64]
     return core[:64]

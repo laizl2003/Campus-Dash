@@ -181,7 +181,9 @@ def panel_messages(
     user_id = _require_panel(panel_id, authorization)
     return {
         "messages": service.panel_messages(
-            panel_id, limit=limit, before_id=before_id, user_id=user_id
+            panel_id, limit=limit, before_id=before_id, user_id=user_id,
+            # 历史回放只展示每一单最后一张卡片，中间态不回放
+            collapse_cards=True,
         )
     }
 

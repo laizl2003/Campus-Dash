@@ -215,6 +215,38 @@ NEW_TASK_QUESTION = (
 
 
 
+
+
+def collapse_draft_cards(messages: list[dict]) -> list[dict]:
+    """同一个会话只保留最后一张草稿卡片。
+
+    背景：一单在填槽过程中，每轮追问都会落一条带 meta.draft 的助手消息。
+    这些是"当时的中间状态"，重新加载历史时全部展示出来会看到一叠过期卡片，
+    点进去还会提示"会话不存在"。
+
+    规则：按 session_id 分组，只保留 message_id 最大（最后一条）的卡片；
+    普通文字消息全部保留，顺序不变。
+    """
+    latest: dict[str, int] = {}
+    for message in messages:
+        meta = message.get("meta") or {}
+        if not isinstance(meta, dict) or "draft" not in meta:
+            continue
+        session_id = str(message.get("session_id") or "")
+        message_id = int(message.get("message_id") or 0)
+        if message_id > latest.get(session_id, -1):
+            latest[session_id] = message_id
+
+    kept: list[dict] = []
+    for message in messages:
+        meta = message.get("meta") or {}
+        if isinstance(meta, dict) and "draft" in meta:
+            session_id = str(message.get("session_id") or "")
+            if int(message.get("message_id") or 0) != latest.get(session_id):
+                continue
+        kept.append(message)
+    return kept
+
 class ChatService:
     def __init__(self, extractor: Extractor | None = None, store=None) -> None:
         self.extractor = extractor or default_extractor()
@@ -385,10 +417,17 @@ class ChatService:
         limit: int = 200,
         before_id: int | None = None,
         user_id: str | None = None,
+        collapse_cards: bool = False,
     ):
-        return self.store.panel_messages(
+        """整段对话。
+
+        collapse_cards=True 时同一会话只留最后一张草稿卡片——
+        给前端渲染历史用；agent 的短期记忆不需要，所以默认关闭。
+        """
+        messages = self.store.panel_messages(
             panel_id, limit=limit, before_id=before_id, user_id=user_id
         )
+        return collapse_draft_cards(messages) if collapse_cards else messages
 
     def panel_owner(self, panel_id: str) -> str | None:
         owner = getattr(self.store, "panel_owner", None)
