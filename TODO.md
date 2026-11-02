@@ -609,3 +609,31 @@
 ### 参考文件
 
 - \`campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/VoucherController.java\`
+
+## 16. RAG 知识库：扩展语料与检索优化（未完成）
+
+**目标**：把知识库从「校园基础设施」扩到「项目说明书 / 常见问答」，并把检索质量做成可回归的指标。
+
+### 现状与差距
+
+- 已有：`agent/knowledge/` 13 篇（宿舍/商铺/食堂/驿站/教学楼/校门/场馆）、125 块，关键词 + 向量混合检索，`scripts/eval_kb.py` 15 条评测集 Top1 命中 15/15
+- 缺口：没有项目说明书类语料；评测集太小（15 条）且是自造的；没有重排（rerank）；向量检索在块数上万后会变慢
+
+### 实现步骤
+
+1. 新增 `knowledge/manual/`：项目说明书、常见问答（如何发单、如何接单、仲裁规则）
+2. 评测集扩到 50 条以上，覆盖每类知识；把 Hit@k / Top1 做成脚本输出
+3. 检索加一层轻量重排（用模型对 top-8 打相关性分，取前 4）
+4. 块数超过 2 万时切到 Qdrant，保留同一套 `search_knowledge` 接口
+
+### 验收标准
+
+- [ ] 评测集 ≥50 条，Hit@3 ≥ 90%、Top1 ≥ 80% 有记录
+- [ ] 「怎么发单」这类项目问题能答到，且引用到说明书原文
+- [ ] 加/改知识文件后重启即可生效，无需手工建表
+
+### 参考文件
+
+- `agent/app/knowledge/search.py`
+- `agent/scripts/eval_kb.py`
+- `agent/knowledge/README.md`

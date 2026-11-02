@@ -47,6 +47,14 @@ async def _purge_loop() -> None:
 
 @contextlib.asynccontextmanager
 async def lifespan(_: FastAPI):
+    # 知识库索引：后台同步，失败不影响主服务（检索会退回纯关键词）
+    try:
+        from .knowledge.indexer import rebuild_in_background
+
+        rebuild_in_background()
+    except Exception:  # noqa: BLE001
+        logger.exception("知识库索引启动失败（不影响对话）")
+
     task = asyncio.create_task(_purge_loop())
     try:
         yield
@@ -58,9 +66,9 @@ async def lifespan(_: FastAPI):
 
 # v2：发单（意图识别 / 追问填槽 / 标题总结 / 草稿卡片）+ 意图路由 + MCP 工具调用
 #     （查询 / 接单 / 领券 / 直接发单 / 最优优惠券）
-AGENT_VERSION = "v2"
+AGENT_VERSION = "v3"
 
-app = FastAPI(title="CampusDash Agent", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="CampusDash Agent", version="3.0.0", lifespan=lifespan)
 service = ChatService()
 
 

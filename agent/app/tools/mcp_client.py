@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import threading
 from typing import Any
 
@@ -73,7 +74,14 @@ class MCPClient:
             loop.close()
 
     async def _serve(self) -> None:
-        params = StdioServerParameters(command=self.command, args=self.args, cwd=self.cwd)
+        # 必须显式传 env：SDK 默认只给子进程一份白名单环境变量（PATH/HOME 等），
+        # 业务配置（AGENT_MYSQL_DSN、LLM_* 等）会丢，表现为工具内连不上数据库。
+        params = StdioServerParameters(
+            command=self.command,
+            args=self.args,
+            cwd=self.cwd,
+            env={**os.environ},
+        )
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()

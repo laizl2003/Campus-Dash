@@ -31,6 +31,10 @@ TOOL_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿平台的助手，可以�
 4. 工具返回 ok=false 时如实说明失败原因，不要编造成功；
 5. 与校园跑腿无关的问题，直接说明你只处理跑腿相关事务。
 
+遇到「在哪、几点开门、多少钱、有什么」这类关于校园位置与营业时间的问题，
+先用 search_knowledge 查知识库，再根据返回的资料回答，并标出出处序号；
+资料里没有就直说没有，不要自己编。
+
 查自己的任务时：
 5. 「我接了哪些单」「我发的任务」用 list_my_errands，role 分别是 grabbed / published，
    不要用 get_wallet；
@@ -51,7 +55,7 @@ TOOL_SYSTEM_PROMPT = """你是 CampusDash 校园跑腿平台的助手，可以�
 # 按路由只暴露相关工具：schema 越少模型越快
 ROUTE_TOOLS: dict[str, tuple[str, ...]] = {
     "query": ("get_wallet", "get_credit", "get_ranking", "list_my_vouchers",
-              "list_my_errands", "list_square_errands"),
+              "list_my_errands", "list_square_errands", "search_knowledge"),
     "grab": ("list_square_errands", "grab_best", "list_my_errands"),
     # 取消要两步：先查（拿到 errand_id），再取消
     "cancel": ("list_my_errands", "cancel_errand"),

@@ -3,3 +3,6 @@ __pycache__/
 .pytest_cache/
 uvicorn.log
 uvicorn.out
+
+# 向量模型（90MB，本地下载，不入库）
+models/

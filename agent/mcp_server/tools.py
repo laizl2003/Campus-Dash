@@ -527,3 +527,28 @@ def publish_errand(
         "paid_yuan": _yuan(data.get("paidCents")),
         "discount_yuan": _yuan(data.get("discountCents")),
     }
+
+
+# ------------------------------------------------------------------ 知识库
+
+def search_knowledge(
+    user_token: str,
+    query: str,
+    category: str | None = None,
+    top_k: int = 4,
+) -> dict:
+    """检索校园知识库（商铺、宿舍楼、教学楼、校门、场馆等），返回带出处的资料。"""
+    from app.knowledge.search import search_knowledge as _search
+
+    result = _search(query, category=category, top_k=top_k)
+    if not result.get("ok"):
+        return result
+    return {
+        "ok": True,
+        "found": result["found"],
+        "answer": result["answer"],
+        "results": [
+            {"title": item["title"], "section": item["section"], "text": item["text"]}
+            for item in result["results"]
+        ],
+    }

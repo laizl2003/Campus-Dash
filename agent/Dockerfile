@@ -3,16 +3,24 @@ FROM docker.m.daocloud.io/library/python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    TZ=Asia/Shanghai
+    TZ=Asia/Shanghai \
+    PYTHONPATH=/app
 
 WORKDIR /app
 
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
  && pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
-      fastapi "uvicorn[standard]" pydantic "langgraph>=0.2" pymysql "mcp>=1.0,<2"
+      fastapi "uvicorn[standard]" pydantic "langgraph>=0.2" pymysql "mcp>=1.0,<2" \
+      numpy onnxruntime tokenizers
 
 COPY app ./app
+# 知识库原文：随镜像发布，启动时由 app.knowledge.indexer 同步进 MySQL
+COPY knowledge ./knowledge
+# 工具脚本（建索引、评测、下载模型）
+COPY scripts ./scripts
+# 向量模型不打进镜像：构建期下载不稳定，改由 compose 挂载 ../../agent/models
+# 缺失时检索自动退回纯关键词，功能仍可用
 # MCP server 以子进程方式启动（python -m mcp_server.server），必须一起进镜像
 COPY mcp_server ./mcp_server
 

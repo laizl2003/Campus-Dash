@@ -162,6 +162,10 @@ services:
       DASH_BACKEND_URL: http://app:8080
       # 会话持久化：配了就落 MySQL，容器重启后历史对话还在
       AGENT_MYSQL_DSN: mysql:3306/campus_dash?user=root&password=dash123456
+    volumes:
+      # 向量模型（90MB）不入镜像：构建期下载不稳定，改挂宿主目录，
+      # 第一次运行 scripts/fetch_embedding_model.py 之后就不再需要网络
+      - ../../agent/models:/app/models:ro
     healthcheck:
       # slim 镜像没有 curl，用 python 自带的 urllib 探活
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status==200 else 1)"]

@@ -993,3 +993,20 @@ def test_fallback_plan_picks_errands_over_wallet():
 
     # 明确的资金问题仍然查钱包
     assert fallback_plan("query", "我还有多少钱")[0] == ("get_wallet", {})
+
+
+def test_knowledge_questions_route_to_query():
+    """校园知识类问句要走工具链路（search_knowledge），不能落进发单。"""
+    from app.agent.router import Route, route_message
+
+    for question in [
+        "西区菜鸟驿站几点关门",
+        "中区综合馆有哪些场馆",
+        "东区301号楼有几层",
+        "校医院几点开门",
+        "打印店在哪",
+    ]:
+        assert route_message(question) is Route.QUERY, question
+
+    # 带任务动词的仍然按发单处理
+    assert route_message("帮我去食堂带份饭") is Route.TASK

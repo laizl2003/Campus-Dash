@@ -3,6 +3,16 @@
 > 已完成需求的增量日志。每完成一条就**追加一条**（最新的放最上面），只记"做了什么 + 怎么验证"，
 > 详细设计仍放在 `docs/` 与 `Process/`。格式：日期 / 目标 / 改动 / 验证。
 
+## 2026-11-02 · v3 RAG：校园知识库检索（关键词 + 向量混合）
+
+- **目标**：助手能回答「西区菜鸟驿站几点关门」「301号楼有几层」这类校园事实，而不是套话；知识可增量维护。
+- **改动**：
+  - 知识库 `agent/knowledge/`（13 篇 Markdown + YAML front-matter，125 块）：宿舍 3 篇、周边商铺 2 篇、校内商店/打印/食堂/驿站/教学楼/校门/场馆 8 篇，按 `##` 切块
+  - `app/knowledge/`：loader（解析 front-matter）/ chunker（按标题切，500 字内，块首补「标题/小节」）/ embedding（BGE-small-zh ONNX，512 维）/ store（`kb_document` + `kb_chunk`，FULLTEXT ngram + BLOB 向量）/ search（加权融合 + 节标题与校区规则）/ indexer（按 hash 增量同步）
+  - 新工具 `search_knowledge`（第 13 个 MCP 工具），`query` 路由挂上；路由词表补「几点/营业时间/开门/场馆/几层…」
+  - 模型 90MB 不入镜像，改挂 `agent/models`（构建期下载不稳定，实测丢过一次）；`scripts/fetch_embedding_model.py` / `build_kb.py` / `eval_kb.py`
+- **验证**：`231 passed, 1 skipped`；`kb_document=13, kb_chunk=125, 带向量=125, dim=512`；`scripts/eval_kb.py` **Top1 15/15、Hit@3 15/15**；端到端「西区菜鸟驿站几点关门」→ 调 `search_knowledge` 答「20:00 关门，正式名称西区小木屋…[1]」
+- **踩坑**：MCP 子进程默认只继承白名单环境变量（丢 `AGENT_MYSQL_DSN`）；`hf-mirror` 对无 UA 请求返回 403（只缺 tokenizer.json）；DSN 无 `mysql://` 前缀，`urlparse` 会解析错
 ## 2026-11-02 · v3 先行两项：主语判定与地点判定交给模型
 
 - **目标**：把两处「靠词表穷举」的判断升级成「词表快通道 + 模型复核」，消掉一整类误判。

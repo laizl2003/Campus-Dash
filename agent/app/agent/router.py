@@ -36,6 +36,10 @@ _QUERY_WORDS = (
     "发过哪些", "优惠券", "我的券", "几张券", "还剩多少", "账户",
     # 平台侧数据：广场/大厅/可接的单，这些词跟"当前草稿"没有歧义
     "广场", "大厅", "可接", "能接", "有什么单", "有哪些单", "可领",
+    # 校园知识库：问位置/营业时间/设施，走 search_knowledge
+    "几点", "营业时间", "开门", "关门", "在哪", "怎么走", "几层", "几间",
+    "有几个", "场馆", "多少层", "哪栋", "食堂", "超市", "驿站", "打印店", "健身房",
+    "游泳馆", "校医院", "宿舍楼", "教学楼",
 )
 # 明显的发单动词：命中后即使带了"多少"也按发单处理
 _TASK_VERBS = ("取", "送", "买", "带", "排队", "代取", "代买", "帮", "拿")
@@ -59,7 +63,9 @@ def guess_route(message: str) -> Route | None:
     has_query_word = any(word in text for word in _QUERY_WORDS)
     if has_query_word:
         # "帮我取快递多少钱" 这种是发单 + 问价，交给发单链路
-        has_task_verb = any(verb in text for verb in _TASK_VERBS) and "我" not in text[:2]
+        # "我还有多少钱"这种以"我"开头的问句是在问账户，不是发单；
+        # 但"帮我去食堂带份饭"是发单（虽然第二个字也是"我"），所以只看开头
+        has_task_verb = any(verb in text for verb in _TASK_VERBS) and not text.startswith("我")
         if not has_task_verb:
             return Route.QUERY
         return None
@@ -75,7 +81,11 @@ task（发布跑腿任务）、query（查询余额/任务/信用/排名/优惠�
 "我还有多少钱" -> query
 "帮我接两单" -> grab
 "把能领的券都领了" -> coupon
-"帮我取个快递" -> task"""
+"帮我取个快递" -> task
+"西区菜鸟驿站几点关门" -> query
+"中区综合馆有哪些场馆" -> query
+"东区301号楼有几层" -> query
+"帮我带一份食堂的饭" -> task"""
 
 
 # 出现这些标记才值得问一次模型；否则直接当发单处理。

@@ -146,6 +146,21 @@ def publish_errand(
     )
 
 
+@mcp.tool()
+def search_knowledge(
+    user_token: str,
+    query: str,
+    category: str | None = None,
+    top_k: int = 4,
+) -> str:
+    """检索校园知识库：周边商铺、校内食堂/超市/打印店/快递驿站、宿舍楼、
+    教学楼、校门、体育场馆等。回答地点、营业时间、设施这类问题前先用它查。"""
+    return json.dumps(
+        tools.search_knowledge(user_token, query, category=category, top_k=top_k),
+        ensure_ascii=False,
+    )
+
+
 def main() -> None:
     mcp.run()
 
