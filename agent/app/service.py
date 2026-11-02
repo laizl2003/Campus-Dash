@@ -55,8 +55,10 @@ class SessionStore:
         return session
 
     def get_active_session(self, panel_id: str) -> Session | None:
-        for session in self._sessions.values():
-            if session.panel_id == panel_id:
+        # 只看"进行中"的会话：CLOSED/CANCELED 之后应该开新的，
+        # 否则取消草稿后还会往旧会话里写（内存版和 MySQL 版语义要一致）
+        for session in reversed(list(self._sessions.values())):
+            if session.panel_id == panel_id and session.status not in ("CLOSED", "CANCELED"):
                 return session
         return None
 
@@ -206,6 +208,56 @@ def parse_confirmation(
         return False
     return None
 
+
+# 放弃当前草稿（不等于取消已发布的单）：说这些词就丢掉草稿、开新会话
+_DISCARD_HINTS = (
+    "取消草稿", "取消当前草稿", "取消这个草稿", "取消这一单的草稿", "不要草稿了",
+    "清空草稿", "清掉草稿", "删掉草稿", "这单不发了", "这单不要了", "放弃这单",
+    "重新开始", "重新来一单", "重新发一单", "重新填",
+)
+
+# 草稿里"有东西"才算数：空草稿没有可取消的东西
+_DRAFT_FIELDS = ("type", "location_from", "location_to", "reward_cents", "expired_at", "description")
+
+
+def _has_draft_content(draft) -> bool:
+    try:
+        data = draft.model_dump()
+    except Exception:  # noqa: BLE001
+        return False
+    return any(data.get(field) not in (None, "", [], {}) for field in _DRAFT_FIELDS)
+
+
+def looks_like_discard(message: str) -> bool:
+    text = (message or "").strip()
+    if not text or len(text) > 20:
+        return False
+    return any(hint in text for hint in _DISCARD_HINTS)
+
+
+DISCARD_JUDGE_PROMPT = """判断用户是不是要**放弃当前还在填写的草稿**、重新开始。
+
+YES 的例子：取消草稿、这单先不发了、不要了重来、清空重填、算了重新开一单
+NO  的例子：取消我昨天发布的那个订单、帮我改一下金额、看看我的任务、先别取消
+
+注意区分：取消**已发布的订单**是另一件事，只有当用户明确指"草稿/这单还没发"时才是 YES。
+只输出 YES 或 NO。"""
+
+
+def judge_discard(message: str, extractor) -> bool:
+    """规则判不出来时，让模型判断是不是"放弃草稿"。"""
+    if looks_like_discard(message):
+        return True
+    text = (message or "").strip()
+    if not text or len(text) > 24 or extractor is None:
+        return False
+    if not any(word in text for word in ("草稿", "重来", "重填", "不发了", "不要了")):
+        return False
+    try:
+        answer = extractor.classify_text(DISCARD_JUDGE_PROMPT, f"用户说：{text}")
+    except Exception:  # noqa: BLE001
+        return False
+    return bool(answer) and answer.strip().upper().startswith("YES")
 
 NEW_TASK_QUESTION = (
     "这看起来是新的一单，不是要改当前这一单。\n"
@@ -455,7 +507,56 @@ class ChatService:
         self._voucher_cache[key] = value
         return value
 
+    def _discard_draft(self, session, message: str) -> AgentReply:
+        """丢掉当前草稿并开一张新单。
+
+        和"取消已发布的订单"是两件事：这里没有资金、没有状态机，
+        只是把这张没发出去的草稿作废——会话置 CANCELED（卡片留档显示"已取消"），
+        紧接着在同一 panel 下开一个新会话，用户下一句话就是全新的一单。
+        """
+        panel_id = session.panel_id
+        old_id = session.id
+        owner = session.user_id
+
+        # 用户这句话先落库，保证历史顺序是"我要取消草稿 → 已取消"
+        if hasattr(self.store, "append_message"):
+            self.store.append_message(old_id, "user", message, user_id=owner)
+
+        self.record_cancelled(session_id=old_id, announce=False)
+
+        # 旧会话已 CANCELED（active_key 变 NULL），这里会新建一个空会话
+        new_session = self.store.ensure_session(panel_id, user_id=owner)
+        blank = TaskDraft()
+
+        text = "已取消当前草稿，重新开始吧。想发什么任务？直接告诉我。"
+        if hasattr(self.store, "append_message"):
+            self.store.append_message(old_id, "assistant", text, user_id=owner)
+
+        return {
+            "status": "ASKING",
+            "message": text,
+            "draft": blank.model_dump(mode="json"),
+            "missing": [slot.value for slot in required_slots(blank)],
+            "question": None,
+            "intent": "CANCEL",
+            "can_publish": False,
+            "cleared": True,
+            "show_draft": False,
+            "unclear": False,
+            "updated_fields": [],
+            "session_id": new_session.id,
+            "panel_id": panel_id,
+        }
+
     def _chat(self, session, message: str, user_token: str | None = None) -> AgentReply:
+        # 明确要"放弃草稿"：关掉当前会话，立刻开一张空白单。
+        # 放在最前面：这是一条命令，不该再走填槽/意图判断。
+        if _has_draft_content(session.draft) and (
+            looks_like_discard(message)
+            or judge_discard(message, getattr(self, "extractor", None))
+        ):
+            return self._discard_draft(session, message)
+
         # 上一轮问了"这是新的一单吗"，这一轮先把"是/不"翻译成实际动作
         prefix = ""
         force_merge = False

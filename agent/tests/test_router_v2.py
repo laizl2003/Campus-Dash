@@ -1123,3 +1123,60 @@ def test_title_strips_location_prefix_words():
     assert compose_title(TaskDraft(type="QUEUE", title_base="在一食堂排队买饭", location_from="一食堂")) == "一食堂代排队"
     assert compose_title(TaskDraft(type="DELIVERY", title_base="从菜鸟驿站取一下东西", location_from="菜鸟驿站")) == "菜鸟驿站"
     assert compose_title(TaskDraft(type="DELIVERY", title_base="从菜鸟驿站取个快递", location_from="菜鸟驿站")) == "菜鸟驿站取快递"
+
+
+def test_discard_draft_starts_new_session():
+    """「取消草稿」：旧会话 CANCELED，新会话空白，卡片留档。"""
+    from app.agent.extractor import Extractor
+    from app.models import TaskDraft
+    from app.service import ChatService
+
+    class Noop(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            return "NO"
+
+    service = ChatService(Noop())
+    session = service.store.create(user_id="u-1", panel_id="p-1")
+    session.draft = TaskDraft(type="DELIVERY", location_from="菜鸟驿站", reward_cents=800)
+    service.store.save(session)
+
+    reply = service._chat(session, "取消当前草稿", "tok")
+
+    assert reply["cleared"] is True
+    assert reply["session_id"] != session.id                 # 换了新会话
+    assert service.store.get(session.id).status == "CANCELED"
+    assert service.store.get(reply["session_id"]).status == "ACTIVE"
+    assert reply["draft"]["location_from"] is None           # 新草稿是空的
+
+
+def test_empty_draft_discard_does_not_fire():
+    """没草稿时说"取消草稿"不该开新会话。"""
+    from app.agent.extractor import Extractor
+    from app.service import ChatService
+
+    class Noop(Extractor):
+        def extract(self, message, draft, history=None):
+            return {}
+
+        def classify_text(self, system_prompt, user_text):
+            return "NO"
+
+    service = ChatService(Noop())
+    session = service.store.create(user_id="u-1", panel_id="p-1")
+    service.graph.invoke = lambda state: {**state, "draft": state["draft"], "missing": [],
+                                          "status": "ASKING", "intent": None}
+
+    reply = service._chat(session, "取消草稿", "tok")
+    assert reply["session_id"] == session.id
+
+
+def test_discard_ignores_cancel_published_order():
+    """「取消我昨天发布的那个订单」不是放弃草稿。"""
+    from app.service import looks_like_discard
+
+    assert looks_like_discard("取消草稿") is True
+    assert looks_like_discard("取消当前草稿") is True
+    assert looks_like_discard("取消我昨天发布的那个订单") is False
