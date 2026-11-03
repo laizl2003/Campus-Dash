@@ -131,7 +131,7 @@ public class JdbcErrandRepository implements ErrandRepository {
         return jdbc.update("""
                 UPDATE errand
                    SET status = 'EXPIRED', version = version + 1
-                 WHERE id = ? AND status = 'PUBLISHED' AND version = ?
+                 WHERE id = ? AND status IN ('PUBLISHED','LOCKED','ACCEPTED','PICKED_UP','DELIVERED') AND version = ?
                 """, errandId, expectedVersion);
     }
 

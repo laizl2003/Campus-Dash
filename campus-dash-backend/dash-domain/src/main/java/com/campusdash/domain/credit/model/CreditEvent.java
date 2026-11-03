@@ -19,6 +19,11 @@ public record CreditEvent(long id, String bizNo, String userId, CreditEventType 
         return "revert:" + errandId + ":" + round;
     }
 
+    /** 接单后超时未送达：一个任务只会触发一次，天然幂等 */
+    public static String expireAfterGrabBizNo(long errandId) {
+        return "expiregrab:" + errandId;
+    }
+
     public static String cancelAfterGrabBizNo(long errandId) {
         return "cancelgrab:" + errandId;
     }

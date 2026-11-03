@@ -18,6 +18,7 @@ public enum CreditEventType {
     GRAB_TIMEOUT_REVERT(-5, "抢中后超时未确认"),
     CANCEL_AFTER_GRAB(-10, "被抢单后取消（浪费跑腿时间）"),
     DELIVERY_LATE(-3, "送达超时"),
+    EXPIRE_AFTER_GRAB(-5, "接单后超时未送达"),
     DISPUTE_LOSE(-8, "争议败诉");
 
     private final int delta;

@@ -662,3 +662,29 @@
 
 - `agent/app/knowledge/search.py`
 - `agent/scripts/eval_kb.py`
+
+## 18. 修 FundOperationSafetyTest 的既有失败（未完成）
+
+**目标**：让后端全量测试回到全绿。
+
+### 现状与差距
+
+- 现状：`mvn test` 有 2 例失败——`settlement_accepts_publisher_and_internal_worker_and_balances_ledger`（期望 1 条 creditEvent，实际 2 条）、`arbitration_to_runner_commits_through_the_transactional_step_proxy`（第 2 条信用事件被判定为"事务外写入"）
+- 已验证：回退 2026-11-03 的状态机改动后仍失败，说明与本次需求无关
+- 疑似原因：665f4fd 给发单人也加了 +2 信用分，但该测试的期望序列没同步更新
+
+### 实现步骤
+
+1. 确认生产路径里两条 creditEvent 是否都在同一事务内（SettleErrandUseCase 中两处 applyEvent 看起来都在）
+2. 若是测试未更新：把期望序列补成 2 条 creditEvent，并让仲裁用例的 fake 事务管理器接受第二条
+3. 若是仲裁路径真的在事务外写：把发单人加分挪进 `ArbitrateSettleStep` 的事务范围
+
+### 验收标准
+
+- [ ] `mvn test` 全绿（34/34）
+- [ ] 「事务外写入」断言不再触发
+
+### 参考文件
+
+- `campus-dash-backend/dash-application/src/test/java/com/campusdash/application/usecase/FundOperationSafetyTest.java`
+- `campus-dash-backend/dash-application/src/main/java/com/campusdash/application/usecase/SettleErrandUseCase.java`

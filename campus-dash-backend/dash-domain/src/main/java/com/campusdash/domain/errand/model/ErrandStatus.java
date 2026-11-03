@@ -31,10 +31,12 @@ public enum ErrandStatus {
 
     private static final Set<ErrandStatus> FROM_DRAFT = EnumSet.of(PUBLISHED, CANCELLED);
     private static final Set<ErrandStatus> FROM_PUBLISHED = EnumSet.of(LOCKED, CANCELLED, EXPIRED);
-    private static final Set<ErrandStatus> FROM_LOCKED = EnumSet.of(ACCEPTED, LOCKED, PUBLISHED, CANCELLED);
-    private static final Set<ErrandStatus> FROM_ACCEPTED = EnumSet.of(PICKED_UP, DISPUTED, CANCELLED);
-    private static final Set<ErrandStatus> FROM_PICKED_UP = EnumSet.of(DELIVERED, DISPUTED);
-    private static final Set<ErrandStatus> FROM_DELIVERED = EnumSet.of(SETTLED, DISPUTED);
+    // EXPIRED 不只从 PUBLISHED 来：接了单一直不送达，到点也要作废并退款。
+    // 所以 PUBLISHED -> SETTLED 之间的状态都能转 EXPIRED（SETTLED 之后不可）。
+    private static final Set<ErrandStatus> FROM_LOCKED = EnumSet.of(ACCEPTED, LOCKED, PUBLISHED, CANCELLED, EXPIRED);
+    private static final Set<ErrandStatus> FROM_ACCEPTED = EnumSet.of(PICKED_UP, DISPUTED, CANCELLED, EXPIRED);
+    private static final Set<ErrandStatus> FROM_PICKED_UP = EnumSet.of(DELIVERED, DISPUTED, EXPIRED);
+    private static final Set<ErrandStatus> FROM_DELIVERED = EnumSet.of(SETTLED, DISPUTED, EXPIRED);
     private static final Set<ErrandStatus> FROM_DISPUTED = EnumSet.of(SETTLED, REFUNDED);
     private static final Set<ErrandStatus> FROM_SETTLED = EnumSet.of(CLOSED);
     private static final Set<ErrandStatus> FROM_EXPIRED = EnumSet.of(CLOSED);

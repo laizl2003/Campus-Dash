@@ -113,6 +113,15 @@
 .account-message-aside > a { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--accent); padding: 10px 0; text-decoration: none; }
 .account-message-aside > a:hover { color: var(--primary-ink); }
 .account-message-groups { padding: 7px 25px 14px; }
+/* 消息中心：固定可视高度 + 内部滚动。
+   高度按"约五条 + 分组小标题"估：单条约 76px，5 条约 380px，留一点余量到 420px。
+   超出后由滚动加载兜底，而不是把页面越拉越长。 */
+.account-message-scroll { height: 420px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.account-message-scroll::-webkit-scrollbar { width: 6px; }
+.account-message-scroll::-webkit-scrollbar-thumb { background: #dcd8c8; border-radius: 3px; }
+.account-message-scroll::-webkit-scrollbar-track { background: transparent; }
+.account-scroll-foot { padding: 10px 25px 16px; font-size: 11px; color: var(--muted); text-align: center; }
+.account-scroll-hint { font-size: 11px; color: var(--muted); }
 /* 分页器：一条消息一页五条，两端对齐让"第 N 页"居中稳定 */
 .account-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 25px 18px; border-top: 1px solid #f0eee6; }
 .account-pager .btn { min-height: 34px; padding: 0 12px; font-size: 12px; }

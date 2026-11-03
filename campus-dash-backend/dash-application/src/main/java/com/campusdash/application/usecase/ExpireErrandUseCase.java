@@ -1,5 +1,9 @@
 package com.campusdash.application.usecase;
 
+import com.campusdash.domain.credit.model.CreditEvent;
+import com.campusdash.domain.credit.model.CreditEventType;
+import com.campusdash.domain.credit.ports.CreditRankingPort;
+import com.campusdash.domain.credit.ports.CreditRepository;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.model.ErrandStatus;
 import com.campusdash.domain.errand.ports.ErrandCachePort;
@@ -39,6 +43,17 @@ public class ExpireErrandUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ExpireErrandUseCase.class);
     private static final String ESCROW_ACCOUNT_OWNER = "-1";
+
+    /**
+     * 允许过期作废的状态：PUBLISHED 到 SETTLED 之前。
+     *
+     * 业务含义：接了单但一直不送达，到点也要作废并退款，
+     * 否则钱会永远冻在托管里、跑腿人也不会被追责。
+     * SETTLED 之后钱已经结算给跑腿人，不在本用例范围内。
+     */
+    private static final java.util.Set<ErrandStatus> EXPIRABLE = java.util.EnumSet.of(
+            ErrandStatus.PUBLISHED, ErrandStatus.LOCKED, ErrandStatus.ACCEPTED,
+            ErrandStatus.PICKED_UP, ErrandStatus.DELIVERED);
     /** 站内消息类型：前端按这个值展示图标与筛选 */
     public static final String NOTIFICATION_TYPE = "EXPIRED";
 
@@ -50,6 +65,8 @@ public class ExpireErrandUseCase {
     private final ErrandCachePort cachePort;
     private final NotificationRepository notificationRepository;
     private final RealtimeNotifier notifier;
+    private final CreditRepository creditRepository;
+    private final CreditRankingPort creditRankingPort;
 
     public ExpireErrandUseCase(ErrandRepository errandRepository,
                                WalletRepository walletRepository,
@@ -58,9 +75,13 @@ public class ExpireErrandUseCase {
                                SnowflakeIdGenerator idGenerator,
                                ErrandCachePort cachePort,
                                NotificationRepository notificationRepository,
-                               RealtimeNotifier notifier) {
+                               RealtimeNotifier notifier,
+                               CreditRepository creditRepository,
+                               CreditRankingPort creditRankingPort) {
         this.notificationRepository = notificationRepository;
         this.notifier = notifier;
+        this.creditRepository = creditRepository;
+        this.creditRankingPort = creditRankingPort;
         this.errandRepository = errandRepository;
         this.walletRepository = walletRepository;
         this.voucherRepository = voucherRepository;
@@ -82,7 +103,7 @@ public class ExpireErrandUseCase {
         }
         Errand errand = found.get();
 
-        if (errand.status() != ErrandStatus.PUBLISHED) {
+        if (!EXPIRABLE.contains(errand.status())) {
             log.debug("过期消息跳过：状态已是 {} errandId={}", errand.status(), errandId);
             return Outcome.SKIPPED;
         }
@@ -95,6 +116,7 @@ public class ExpireErrandUseCase {
         }
 
         // transito 内部会自增版本，CAS 必须用自增前的版本号
+        ErrandStatus fromStatus = errand.status();
         long expectedVersion = errand.version();
         errand.transitTo(ErrandStatus.EXPIRED, expectedVersion);
 
@@ -104,7 +126,7 @@ public class ExpireErrandUseCase {
             return Outcome.SKIPPED;
         }
 
-        errandRepository.appendStatusLog(errandId, ErrandStatus.PUBLISHED, ErrandStatus.EXPIRED,
+        errandRepository.appendStatusLog(errandId, fromStatus, ErrandStatus.EXPIRED,
                 errand.round(), Errand.SYSTEM_OPERATOR);
 
         // 退款 + 退券：顺序不能变，先把钱退回去，再释放券
@@ -115,7 +137,11 @@ public class ExpireErrandUseCase {
             log.info("任务过期，优惠券已退回 errandId={} count={}", errandId, restored);
         }
 
-        notifyExpired(errand, refundedCents, restored > 0);
+        // 有人接了单却没在截止前送达：跑腿人要扣信用分。
+        // bizNo 带 errandId，重复消费时靠唯一索引幂等跳过。
+        penalizeGrabber(errand, fromStatus);
+
+        notifyExpired(errand, refundedCents, restored > 0, fromStatus);
 
         cachePort.evict(errandId);
         log.info("任务已过期并已退款 errandId={} expiredAt={} refundedCents={} voucherRestored={}",
@@ -177,14 +203,73 @@ public class ExpireErrandUseCase {
     }
 
     /**
+     * 接了单却超时未送达：扣跑腿人信用分。
+     *
+     * 为什么在过期用例里做而不是单独一个 job：
+     *   "任务作废"和"跑腿人被追责"是同一件事的两面，分开做会出现
+     *   "单过期了但没人担责"或"扣了分但单还在"的中状态。
+     * 幂等靠 credit_event.biz_no 的唯一索引，与退款 CAS 是同一套思路。
+     */
+    private void penalizeGrabber(Errand errand, ErrandStatus fromStatus) {
+        String grabberId = errand.grabberId();
+        if (grabberId == null || grabberId.isBlank()) {
+            // 没人接单：只过期退款，不涉及信用
+            return;
+        }
+        try {
+            boolean applied = creditRepository.applyEvent(new CreditEvent(
+                    idGenerator.nextId(),
+                    CreditEvent.expireAfterGrabBizNo(errand.id()),
+                    grabberId,
+                    CreditEventType.EXPIRE_AFTER_GRAB,
+                    CreditEventType.EXPIRE_AFTER_GRAB.delta(),
+                    "ERRAND", errand.id(), Instant.now()));
+            if (!applied) {
+                log.info("信用事件已存在，跳过 errandId={} grabber={}", errand.id(), grabberId);
+                return;
+            }
+            creditRankingPort.update(errand.campusId(), grabberId, creditRepository.scoreOf(grabberId));
+            notifier.creditChanged(grabberId, creditRepository.scoreOf(grabberId),
+                    CreditEventType.EXPIRE_AFTER_GRAB.delta(), "接单后超时未送达");
+            notifyRunner(errand, grabberId);
+            log.info("接单超时未送达，已扣信用分 errandId={} grabber={} from={}",
+                    errand.id(), grabberId, fromStatus);
+        } catch (RuntimeException e) {
+            // 扣分失败不能让退款回滚：钱是硬约束，信用分可以补
+            log.warn("过期扣信用分失败 errandId={}", errand.id(), e);
+        }
+    }
+
+    /** 通知跑腿人：这一单已经作废、你被扣分了 */
+    private void notifyRunner(Errand errand, String grabberId) {
+        String content = String.format(
+                "任务「%s」已到截止时间且未送达，已作废并退款给发单人，你的信用分被扣 %d 分",
+                errand.title(), -CreditEventType.EXPIRE_AFTER_GRAB.delta());
+        try {
+            notificationRepository.insertIfAbsent(idGenerator.nextId(),
+                    "expire-runner:" + errand.id(), grabberId, errand.id(),
+                    NOTIFICATION_TYPE, content);
+        } catch (RuntimeException e) {
+            log.warn("过期通知(跑腿人)落库失败 errandId={}", errand.id(), e);
+        }
+        try {
+            notifier.notificationArrived(grabberId, errand.id(), NOTIFICATION_TYPE, content);
+        } catch (RuntimeException e) {
+            log.warn("过期通知(跑腿人)推送失败 errandId={}", errand.id(), e);
+        }
+    }
+
+    /**
      * 推送"任务截止已退款"消息到发单人的消息中心。
      *
      * 落库失败不应让整个过期事务回滚（钱已经退了），所以这里吞掉异常只记日志；
      * 推送失败同理——消息表已经是事实，前端刷新就能看到。
      */
-    private void notifyExpired(Errand errand, long refundedCents, boolean voucherRestored) {
+    private void notifyExpired(Errand errand, long refundedCents, boolean voucherRestored,
+                               ErrandStatus fromStatus) {
         long errandId = errand.id();
-        String content = buildExpireContent(refundedCents, voucherRestored);
+        boolean wasGrabbed = errand.grabberId() != null && !errand.grabberId().isBlank();
+        String content = buildExpireContent(refundedCents, voucherRestored, wasGrabbed);
         try {
             // msgKey 带上 errandId：同一个任务只会过期一次，天然幂等
             notificationRepository.insertIfAbsent(idGenerator.nextId(),
@@ -200,17 +285,19 @@ public class ExpireErrandUseCase {
         }
     }
 
-    /** 文案要能自解释：钱退了多少、券有没有回来，用户不用去别处核对 */
-    private static String buildExpireContent(long refundedCents, boolean voucherRestored) {
+    /** 文案要能自解释：钱退了多少、券有没有回来、是不是有人接了没送达 */
+    private static String buildExpireContent(long refundedCents, boolean voucherRestored,
+                                             boolean wasGrabbed) {
+        String reason = wasGrabbed ? "跑腿超时未送达" : "无人接单";
         if (refundedCents <= 0) {
             return voucherRestored
-                    ? "任务已到截止时间，无人接单已过期，使用的优惠券已退回你的账户"
-                    : "任务已到截止时间，无人接单已过期";
+                    ? String.format("任务已到截止时间（%s）已作废，使用的优惠券已退回你的账户", reason)
+                    : String.format("任务已到截止时间（%s）已作废", reason);
         }
         String money = String.format("%.2f 元", refundedCents / 100.0);
         return voucherRestored
-                ? String.format("任务已到截止时间，无人接单已过期，%s已退回你的账户，使用的优惠券已退回", money)
-                : String.format("任务已到截止时间，无人接单已过期，%s已退回你的账户", money);
+                ? String.format("任务已到截止时间（%s）已作废，%s已退回你的账户，使用的优惠券已退回", reason, money)
+                : String.format("任务已到截止时间（%s）已作废，%s已退回你的账户", reason, money);
     }
 
     public enum Outcome {

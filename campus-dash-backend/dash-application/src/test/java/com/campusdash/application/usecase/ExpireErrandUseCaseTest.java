@@ -1,5 +1,10 @@
 package com.campusdash.application.usecase;
 
+import com.campusdash.domain.credit.model.CreditEvent;
+import com.campusdash.domain.credit.model.CreditEventType;
+import com.campusdash.domain.credit.model.CreditScore;
+import com.campusdash.domain.credit.ports.CreditRankingPort;
+import com.campusdash.domain.credit.ports.CreditRepository;
 import com.campusdash.domain.errand.model.Errand;
 import com.campusdash.domain.errand.model.ErrandStatus;
 import com.campusdash.domain.errand.model.ErrandType;
@@ -39,10 +44,15 @@ class ExpireErrandUseCaseTest {
     }
 
     private static ExpireErrandUseCase useCase(StubErrand repo, StubVoucher voucher) {
+        return useCase(repo, voucher, new StubCredit());
+    }
+
+    private static ExpireErrandUseCase useCase(StubErrand repo, StubVoucher voucher, StubCredit credit) {
         return new ExpireErrandUseCase(repo, new StubWallet(), voucher,
                 (a, b, c, d, e, f, g) -> { },
                 new SnowflakeIdGenerator(1L), new NoopCache(),
-                new StubNotification(), new NoopNotifier());
+                new StubNotification(), new NoopNotifier(),
+                credit, credit);
     }
 
     private static ExpireErrandUseCase useCase(StubErrand repo) {
@@ -58,6 +68,30 @@ class ExpireErrandUseCaseTest {
     }
 
     @Test
+    void expiresWhenGrabbedButNotDelivered() {
+        // 有人接了单（ACCEPTED）且已过截止：也要作废，而不是只认 PUBLISHED
+        Errand grabbed = Errand.rehydrate(1L, 1L, "pub", ErrandType.DELIVERY, "qukuaidi",
+                null, null, Instant.now().minusSeconds(1), null,
+                Money.ofCents(500), 1, "runner-1", ErrandStatus.ACCEPTED, 1, 0, 3L, null, null);
+        StubErrand repo = new StubErrand(grabbed, 1);
+        StubCredit credit = new StubCredit();
+
+        assertEquals(ExpireErrandUseCase.Outcome.EXPIRED, useCase(repo, new StubVoucher(), credit).expire(1L));
+        assertEquals(1, credit.events.size(), "接单超时未送达必须扣信用分");
+        assertEquals(CreditEventType.EXPIRE_AFTER_GRAB, credit.events.get(0).type());
+        assertEquals(-5, credit.events.get(0).delta());
+        assertEquals("runner-1", credit.events.get(0).userId());
+    }
+
+    @Test
+    void doesNotPenalizeWhenNobodyGrabbed() {
+        StubErrand repo = new StubErrand(errand(ErrandStatus.PUBLISHED, Instant.now().minusSeconds(1)), 1);
+        StubCredit credit = new StubCredit();
+        useCase(repo, new StubVoucher(), credit).expire(1L);
+        assertTrue(credit.events.isEmpty(), "无人接单不该扣信用分");
+    }
+
+    @Test
     void restoresVoucherWhenExpired() {
         StubErrand repo = new StubErrand(errand(ErrandStatus.PUBLISHED, Instant.now().minusSeconds(1)), 1);
         StubVoucher voucher = new StubVoucher();
@@ -69,37 +103,53 @@ class ExpireErrandUseCaseTest {
     void notifiesPublisherWhenExpired() {
         StubErrand repo = new StubErrand(errand(ErrandStatus.PUBLISHED, Instant.now().minusSeconds(1)), 1);
         StubNotification notification = new StubNotification();
+        StubCredit credit = new StubCredit();
         ExpireErrandUseCase useCase = new ExpireErrandUseCase(repo, new StubWallet(), new StubVoucher(),
                 (a, b, c, d, e, f, g) -> { },
-                new SnowflakeIdGenerator(1L), new NoopCache(), notification, new NoopNotifier());
+                new SnowflakeIdGenerator(1L), new NoopCache(), notification, new NoopNotifier(),
+                credit, credit);
         assertEquals(ExpireErrandUseCase.Outcome.EXPIRED, useCase.expire(1L));
         assertEquals(1, notification.inserted, "过期成功后必须往消息中心写一条通知");
     }
 
     @Test
     void doesNotNotifyWhenSkipped() {
-        StubErrand repo = new StubErrand(errand(ErrandStatus.LOCKED, Instant.now().minusSeconds(1)), 1);
+        // 用 SETTLED：钱已经结算给跑腿人，这时不能再作废
+        StubErrand repo = new StubErrand(errand(ErrandStatus.SETTLED, Instant.now().minusSeconds(1)), 1);
         StubNotification notification = new StubNotification();
+        StubCredit credit = new StubCredit();
         ExpireErrandUseCase useCase = new ExpireErrandUseCase(repo, new StubWallet(), new StubVoucher(),
                 (a, b, c, d, e, f, g) -> { },
-                new SnowflakeIdGenerator(1L), new NoopCache(), notification, new NoopNotifier());
+                new SnowflakeIdGenerator(1L), new NoopCache(), notification, new NoopNotifier(),
+                credit, credit);
         assertEquals(ExpireErrandUseCase.Outcome.SKIPPED, useCase.expire(1L));
         assertEquals(0, notification.inserted, "跳过时不应该推送通知");
     }
 
     @Test
     void doesNotRestoreVoucherWhenSkipped() {
-        StubErrand repo = new StubErrand(errand(ErrandStatus.LOCKED, Instant.now().minusSeconds(1)), 1);
+        StubErrand repo = new StubErrand(errand(ErrandStatus.SETTLED, Instant.now().minusSeconds(1)), 1);
         StubVoucher voucher = new StubVoucher();
         assertEquals(ExpireErrandUseCase.Outcome.SKIPPED, useCase(repo, voucher).expire(1L));
         assertEquals(0, voucher.restored, "跳过时不能碰券");
     }
 
     @Test
-    void skipsWhenAlreadyLocked() {
-        StubErrand repo = new StubErrand(errand(ErrandStatus.LOCKED, Instant.now().minusSeconds(1)), 1);
+    void skipsWhenAlreadySettled() {
+        StubErrand repo = new StubErrand(errand(ErrandStatus.SETTLED, Instant.now().minusSeconds(1)), 1);
         assertEquals(ExpireErrandUseCase.Outcome.SKIPPED, useCase(repo).expire(1L));
         assertNull(repo.casVersion);
+    }
+
+    @Test
+    void expiresFromEveryStatusBeforeSettled() {
+        // 接了单没送达，到点也要作废：LOCKED/ACCEPTED/PICKED_UP/DELIVERED 都能转 EXPIRED
+        for (ErrandStatus status : List.of(ErrandStatus.PUBLISHED, ErrandStatus.LOCKED,
+                ErrandStatus.ACCEPTED, ErrandStatus.PICKED_UP, ErrandStatus.DELIVERED)) {
+            assertTrue(status.canTransitTo(ErrandStatus.EXPIRED), status + " 应能过期");
+        }
+        assertFalse(ErrandStatus.SETTLED.canTransitTo(ErrandStatus.EXPIRED), "已结算不能回退成过期");
+        assertFalse(ErrandStatus.CANCELLED.canTransitTo(ErrandStatus.EXPIRED));
     }
 
     @Test
@@ -129,7 +179,7 @@ class ExpireErrandUseCaseTest {
     @Test
     void statusMachineAllowsPublishedToExpired() {
         assertTrue(ErrandStatus.PUBLISHED.canTransitTo(ErrandStatus.EXPIRED));
-        assertFalse(ErrandStatus.LOCKED.canTransitTo(ErrandStatus.EXPIRED));
+        assertTrue(ErrandStatus.LOCKED.canTransitTo(ErrandStatus.EXPIRED));
         assertFalse(ErrandStatus.EXPIRED.canTransitTo(ErrandStatus.PUBLISHED));
     }
 
@@ -242,5 +292,20 @@ class ExpireErrandUseCaseTest {
         @Override public int lockForErrand(long voucherId, String userId, long errandId, long runnerBearCents) { return 1; }
         @Override public int markUsedByErrand(long errandId) { return 0; }
         @Override public Optional<VoucherUse> findUseByErrand(long errandId) { return Optional.empty(); }
+    }
+    /** 信用仓储 + 排名桩：只关心"记了哪些事件" */
+    static class StubCredit implements CreditRepository, CreditRankingPort {
+        final List<CreditEvent> events = new ArrayList<>();
+        final List<String> ranked = new ArrayList<>();
+
+        @Override public boolean applyEvent(CreditEvent event) { return events.add(event); }
+        @Override public int scoreOf(String userId) { return 55; }
+        @Override public Optional<CreditScore> find(String userId) { return Optional.empty(); }
+        @Override public void ensureScore(String userId, int score) { }
+        @Override public List<CreditEvent> recentEvents(String userId, int days, int limit) { return List.of(); }
+        @Override public int windowDelta(String userId, int windowDays) { return 0; }
+        @Override public int calibrateScores(int windowDays, int limit) { return 0; }
+        @Override public void update(long campusId, String userId, int score) { ranked.add(userId); }
+        @Override public List<Entry> top(long campusId, int limit) { return List.of(); }
     }
 }
