@@ -42,9 +42,10 @@ class FakeToolLoop:
         self.seen: list[tuple[str, str]] = []
         self.routes: list[str] = []
 
-    def run(self, message, token, history=None, route="query"):
+    def run(self, message, token, history=None, route="query", draft=None):
         self.seen.append((message, token))
         self.routes.append(route)
+        self.draft = draft
         return {"ok": True, "reply": f"余额 995 元（{message}）", "calls": [{"name": "get_wallet"}]}
 
 
@@ -1180,3 +1181,42 @@ def test_discard_ignores_cancel_published_order():
     assert looks_like_discard("取消草稿") is True
     assert looks_like_discard("取消当前草稿") is True
     assert looks_like_discard("取消我昨天发布的那个订单") is False
+
+
+def test_draft_block_injected_into_tool_context():
+    """工具链路的 system prompt 要带上当前草稿，否则模型不知道"这一单"是什么。"""
+    from app.models import TaskDraft
+    from app.tools.tool_loop import ToolLoop, draft_block
+
+    # 空草稿不注入
+    assert draft_block(TaskDraft()) is None
+
+    block = draft_block(TaskDraft(type="DELIVERY", title="菜鸟驿站取快递",
+                                  location_from="菜鸟驿站", reward_cents=800))
+    assert "菜鸟驿站取快递" in block and "8.0元" in block
+
+    captured = {}
+
+    class FakeClient:
+        def list_tools(self):
+            return [{
+                "type": "function",
+                "function": {"name": "get_wallet", "description": "查余额",
+                             "parameters": {"type": "object", "properties": {}}},
+            }]
+
+        def call_tool(self, name, arguments):
+            return {"ok": True}
+
+    loop = ToolLoop(client=FakeClient())
+
+    def fake_chat(messages, tools, force_answer=False):
+        captured["system"] = messages[0]["content"]
+        return {"choices": [{"message": {"content": "好的"}}]}
+
+    loop._chat = fake_chat
+    loop.run("我这单多少钱", "tok", history=[], route="query",
+             draft=TaskDraft(type="DELIVERY", title="菜鸟驿站取快递", reward_cents=800))
+
+    assert "【当前草稿】" in captured["system"]
+    assert "菜鸟驿站取快递" in captured["system"]

@@ -153,6 +153,50 @@ def fallback_plan(route: str, message: str) -> list[tuple[str, dict[str, Any]]]:
     # 什么都没命中时，先看自己手上的任务比查钱包更有用
     return plan or [("list_my_errands", {"role": "published", "phase": "all"})]
 
+
+
+def draft_block(draft) -> str | None:
+    """把当前草稿压成一句话，塞进工具链路的上下文。
+
+    为什么需要：工具链路原来只拿 message + 最近 6 条历史，模型不知道用户手上
+    还有一张没发布的单，于是「我这单多少钱」会被理解成「查钱包」。
+    草稿本来就每轮从 session 里加载了，只是没往下传——这里补上。
+
+    只放已填字段，空字段不出现，避免模型把 null 当成有效值。
+    """
+    if draft is None:
+        return None
+    try:
+        data = draft.model_dump(mode="json")
+    except AttributeError:
+        return None
+
+    parts: list[str] = []
+    if data.get("title"):
+        parts.append(f"标题={data['title']}")
+    if data.get("type"):
+        parts.append(f"类型={data['type']}")
+    if data.get("location_from"):
+        parts.append(f"取货地={data['location_from']}")
+    if data.get("location_to"):
+        parts.append(f"送达地={data['location_to']}")
+    if data.get("reward_cents"):
+        parts.append(f"悬赏={data['reward_cents'] / 100:.1f}元")
+    if data.get("expired_at"):
+        parts.append(f"截止={data['expired_at']}")
+    if data.get("description"):
+        text = str(data["description"])
+        parts.append(f"说明={text[:60]}")
+
+    if not parts:
+        return None
+    return (
+        "【当前草稿】用户手上有一单还没发布，字段如下：\n"
+        + "；".join(parts)
+        + "\n用户说「这一单」「我的单」时通常指这张草稿，不要当成已发布的订单；"
+        "查平台数据的工具照常用，回答时可以顺带提一下这单的状态。"
+    )
+
 class ToolLoop:
     def __init__(self, settings: LLMSettings | None = None, client: MCPClient | None = None) -> None:
         self.settings = settings or LLMSettings.from_env()
@@ -166,6 +210,7 @@ class ToolLoop:
         token: str,
         history: list[dict] | None = None,
         route: str = "query",
+        draft=None,
     ) -> dict[str, Any]:
         if not token:
             return {"ok": False, "reply": "需要登录后才能查询这些数据。", "calls": []}
@@ -182,7 +227,11 @@ class ToolLoop:
             # 模型/工具任一不可用，直接走确定性计划
             return self._degraded(client, message, token, route, reason="工具列表不可用")
 
-        messages: list[dict[str, Any]] = [{"role": "system", "content": TOOL_SYSTEM_PROMPT}]
+        system_prompt = TOOL_SYSTEM_PROMPT
+        context = draft_block(draft)
+        if context:
+            system_prompt = f"{system_prompt}\n\n{context}"
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         for item in (history or [])[-6:]:
             content = str(item.get("content") or "").strip()
             if content:

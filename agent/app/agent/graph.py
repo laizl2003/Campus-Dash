@@ -124,6 +124,9 @@ def build_graph(extractor: Extractor, tool_loop=None):
             state.get("user_token") or "",
             state.get("history") or [],
             route=state.get("route") or "query",
+            # 草稿每轮都从 session 加载，但工具链路原来没接——模型因此不知道
+            # 用户手上还有一张没发布的单（"我这单多少钱"会被当成查钱包）
+            draft=state.get("draft"),
         )
         return {
             "status": "ANSWER",
