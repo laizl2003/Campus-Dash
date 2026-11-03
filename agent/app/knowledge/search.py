@@ -123,7 +123,10 @@ def _fuse(
     # 两路都可能一条没召回（"今天天气怎么样"），max() 空序列会抛异常
     keyword_max = max(((row[5] or 0.0) for row in keyword_rows), default=0.0) or 1.0
     keyword_scores = {row[0]: float(row[5] or 0.0) / keyword_max for row in keyword_rows}
-    vector_scores = {row[0][0]: float(score) for row, score in vector_rows}
+    # row 是数据库行元组，row[0] 才是 chunk_id；
+    # 早先写成 row[0][0] 取到的是 chunk_id 的首字母 'c'，与任何块都对不上，
+    # 导致 0.45 × 余弦 恒为 0——"混合检索"实际退化成纯关键词。
+    vector_scores = {row[0]: float(score) for row, score in vector_rows}
 
     scores: dict[str, float] = {}
     for chunk_id in set(keyword_scores) | set(vector_scores):
