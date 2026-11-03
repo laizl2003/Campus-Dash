@@ -9,9 +9,22 @@ const TYPE_LABELS: Record<string, string> = { SETTLED: '结算通知', REFUNDED:
 /** 每次加载五条；列表固定高度、滚到底再拉下一批 */
 const PAGE_SIZE = 5;
 
-/** 历史消息里存的是"1310 分"，统一显示为"13.10 元"；新消息本身已是元 */
+/**
+ * 历史消息里存的是"1310 分"（分），统一显示为"13.10 元"；新消息本身已是元。
+ *
+ * 但"信用分被扣 5 分"里的 5 是**分值**，不是金额——早期版本无脑替换，
+ * 结果把扣 5 分显示成"扣 0.05 元"。所以这里加两道闸：
+ *   1. 信用相关的消息整条不做换算；
+ *   2. "扣/加/减"后面跟的数字也不换算。
+ */
 function formatContent(content: string) {
-  return content.replace(/(\d+)\s*分/g, (_, fen: string) => `${(Number(fen) / 100).toFixed(2)} 元`);
+  if (!content) return content;
+  if (content.includes('信用')) return content;
+  return content.replace(/(\d+)\s*分/g, (match: string, fen: string, offset: number, whole: string) => {
+    const before = whole.slice(Math.max(0, offset - 3), offset);
+    if (/[扣加减]/.test(before)) return match;
+    return `${(Number(fen) / 100).toFixed(2)} 元`;
+  });
 }
 
 export default function Notifications() {

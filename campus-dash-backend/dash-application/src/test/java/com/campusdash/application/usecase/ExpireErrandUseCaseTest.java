@@ -84,6 +84,30 @@ class ExpireErrandUseCaseTest {
     }
 
     @Test
+    void runnerNotificationShowsScoreDeductionNotMoney() {
+        // 曾经把"扣 5 分"显示成"扣 0.05 元"：文案里必须写清是分，不能带金额
+        Errand grabbed = Errand.rehydrate(1L, 1L, "pub", ErrandType.DELIVERY, "qukuaidi",
+                null, null, Instant.now().minusSeconds(1), null,
+                Money.ofCents(500), 1, "runner-1", ErrandStatus.ACCEPTED, 1, 0, 3L, null, null);
+        StubNotification notification = new StubNotification();
+        StubCredit credit = new StubCredit();
+        ExpireErrandUseCase useCase = new ExpireErrandUseCase(
+                new StubErrand(grabbed, 1), new StubWallet(), new StubVoucher(),
+                (a, b, c, d, e, f, g) -> { },
+                new SnowflakeIdGenerator(1L), new NoopCache(), notification, new NoopNotifier(),
+                credit, credit);
+
+        useCase.expire(1L);
+
+        String toRunner = notification.contents.stream()
+                .filter(text -> text.contains("信用分"))
+                .findFirst().orElseThrow();
+        assertTrue(toRunner.contains("扣 5 分"), "必须写明扣了 5 分：" + toRunner);
+        assertTrue(toRunner.contains("当前"), "要带上扣完后的分数：" + toRunner);
+        assertFalse(toRunner.contains("元"), "信用分通知里不能出现金额单位：" + toRunner);
+    }
+
+    @Test
     void doesNotPenalizeWhenNobodyGrabbed() {
         StubErrand repo = new StubErrand(errand(ErrandStatus.PUBLISHED, Instant.now().minusSeconds(1)), 1);
         StubCredit credit = new StubCredit();
@@ -186,9 +210,11 @@ class ExpireErrandUseCaseTest {
     /** 站内消息桩：记录写入次数，用于验证"过期后推送了通知" */
     static class StubNotification implements NotificationRepository {
         int inserted = 0;
+        final List<String> contents = new ArrayList<>();
         @Override public boolean insertIfAbsent(long id, String msgKey, String userId, long errandId,
                                                 String type, String content) {
             inserted++;
+            contents.add(content);
             return true;
         }
     }

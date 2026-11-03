@@ -242,9 +242,10 @@ public class ExpireErrandUseCase {
 
     /** 通知跑腿人：这一单已经作废、你被扣分了 */
     private void notifyRunner(Errand errand, String grabberId) {
+        int current = creditRepository.scoreOf(grabberId);
         String content = String.format(
-                "任务「%s」已到截止时间且未送达，已作废并退款给发单人，你的信用分被扣 %d 分",
-                errand.title(), -CreditEventType.EXPIRE_AFTER_GRAB.delta());
+                "任务「%s」已到截止时间且未送达，已作废并退款给发单人；你的信用分被扣 %d 分，当前 %d 分",
+                errand.title(), -CreditEventType.EXPIRE_AFTER_GRAB.delta(), current);
         try {
             notificationRepository.insertIfAbsent(idGenerator.nextId(),
                     "expire-runner:" + errand.id(), grabberId, errand.id(),
