@@ -637,3 +637,28 @@
 - `agent/app/knowledge/search.py`
 - `agent/scripts/eval_kb.py`
 - `agent/knowledge/README.md`
+
+## 17. 检索排序：长查询相关度衰减（未完成）
+
+**目标**：修掉「西区学专超市几点关门」这类长查询被宿舍块抢走 Top1 的问题。
+
+### 现状与差距
+
+- 现状：MySQL InnoDB 全文对长查询的相关度会衰减，同一块用「超市」查得 1.47 分、用整句查只有 0.01；评测集 Top1 47/50
+- 差距：换存储（ES / Qdrant）或自己算 BM25 才能真正解决
+
+### 实现步骤
+
+1. 在 `keyword_search` 里把查询切成 2~3 个核心词分别检索，按命中数加权合并
+2. 或者本地算 BM25（语料才 125 块，纯 Python 毫秒级）
+3. 用 `scripts/eval_kb.py` 回归，目标 Top1 ≥ 96%
+
+### 验收标准
+
+- [ ] Top1 ≥ 96%、Hit@3 = 100%、拒答 = 100%
+- [ ] 「西区学专超市几点关门」「东区宿舍是哪几栋」都能命中正确块
+
+### 参考文件
+
+- `agent/app/knowledge/search.py`
+- `agent/scripts/eval_kb.py`

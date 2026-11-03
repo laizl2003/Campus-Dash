@@ -212,8 +212,20 @@ def _split_action(core: str) -> tuple[str, str | None]:
         if value.startswith(prefix):
             value = value[len(prefix):].lstrip("，,。. ")
 
+    # 动作词不一定在开头："去三食取个外卖" 要先截到"取"，
+    # 否则取出来的"物品"是整句话，标题会变成"西区学生食堂取去三食取个外卖"
+    verbs = ("代取", "代买", "取件", "取", "拿", "送", "带", "还", "搬", "买", "购")
     verb = "取"
-    for candidate in ("代取", "代买", "取件", "取", "拿", "送", "带", "还", "搬", "买", "购"):
+    cut = -1
+    for candidate in verbs:
+        index = value.find(candidate)
+        if index >= 0 and (cut < 0 or index < cut):
+            cut = index
+            verb = candidate
+    if cut > 0:
+        value = value[cut:]
+
+    for candidate in verbs:
         if value.startswith(candidate):
             verb = candidate
             value = value[len(candidate):]

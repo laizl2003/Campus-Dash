@@ -694,6 +694,10 @@ class ChatService:
         if note:
             reply["deadline_note"] = note
             reply["message"] = f"{note}\n{reply.get('message') or question or ''}"
+        place_note = state.get("place_note")
+        if place_note:
+            reply["place_note"] = place_note
+            reply["message"] = f"{place_note}\n{reply.get('message') or ''}"
         if prefix:
             reply["message"] = f"{prefix}{reply.get('message') or ''}"
         reply_text = reply.get("message") or question or ""

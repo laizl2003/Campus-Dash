@@ -1220,3 +1220,33 @@ def test_draft_block_injected_into_tool_context():
 
     assert "【当前草稿】" in captured["system"]
     assert "菜鸟驿站取快递" in captured["system"]
+
+
+def test_title_cuts_to_first_verb():
+    """"去三食取个外卖"要截到"取"，否则标题会拼成整句话。"""
+    from app.models import TaskDraft, compose_title
+
+    assert compose_title(TaskDraft(type="DELIVERY", title_base="去三食取个外卖",
+                                   location_from="西区学生食堂")) == "西区学生食堂取外卖"
+    assert compose_title(TaskDraft(type="DELIVERY", title_base="从小木屋拿个快递",
+                                   location_from="西区小木屋")) == "西区小木屋拿快递"
+
+
+def test_confidence_levels():
+    """置信度用绝对分：余弦 + BM25，而不是归一化的融合分。"""
+    from app.knowledge.search import confidence_of
+
+    assert confidence_of(0.63, 2.6)[1] == "high"
+    assert confidence_of(0.51, 2.8)[1] == "medium"     # "三食"这种短查询
+    assert confidence_of(0.54, 2.3)[1] == "low"        # "校长办公室"：匹配不上
+    assert confidence_of(0.0, 1.9)[1] == "low"         # "明天会下雨吗"
+
+
+def test_expand_queries_variants():
+    """多路召回的变体：去口语、去疑问句、去校区前缀。"""
+    from app.knowledge.search import expand_queries
+
+    variants = expand_queries("西区学专超市几点关门")
+    assert "西区学专超市几点关门" in variants
+    assert any("营业时间" in v for v in variants)
+    assert any(v == "学专超市" or v.endswith("学专超市") for v in variants)

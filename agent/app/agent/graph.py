@@ -85,6 +85,8 @@ class AgentState(TypedDict, total=False):
     published: dict
     # 截止时间被纠正过时，要顺带告诉用户一句话
     deadline_note: str | None
+    # 地名被归一成正式名时，要告诉用户一句
+    place_note: str | None
     # 疑似新任务时，暂存用户这句话，等确认
     new_task_hint: str
     # 用户已经确认"就是改当前这单"：这一轮别再判新单
@@ -204,6 +206,8 @@ def build_graph(extractor: Extractor, tool_loop=None):
             raw_patch = _extract(extractor, message, current, state.get("history"))
             # 地点先过校验：不像地点就不落进草稿，并给一句说明
             patch = sanitize_places(raw_patch, judge=_place_judge(extractor))
+            place_notes: list[str] = []
+            patch = _normalize_places(patch, place_notes)
             bad_location = any(
                 key in raw_patch and key not in patch
                 for key in ("location_from", "location_to")
@@ -270,6 +274,8 @@ def build_graph(extractor: Extractor, tool_loop=None):
         # 模型返回的地点先过一道校验：不像地点就不写进草稿（和金额一样
         # 的处理方式——解析不了就继续问，而不是把随口一句当地址存下来）。
         patch = sanitize_places(patch, judge=_place_judge(extractor))
+        place_notes = []
+        patch = _normalize_places(patch, place_notes)
         deadline_note = _guard_deadline(patch)
         draft = merge_draft(current, patch)
         # 用户回答追问时，可能只给一个值；只回填"当前正在追问"的那个槽位。
@@ -285,6 +291,11 @@ def build_graph(extractor: Extractor, tool_loop=None):
             patch,
             judge=_place_judge(extractor),
         )
+        # 裸回答回填的地名也要归一（"三食" 是直接写进 draft 的，绕过了上面的 patch 归一化）
+        normalized_draft = _normalize_draft_places(draft, place_notes)
+        if normalized_draft is not draft:
+            draft = normalized_draft
+
         # 本轮问的是地点，但回答不像地点：槽位仍空着，下一轮继续问，
         # 并在追问里说明原因，避免用户以为系统没听见。
         target = (state.get("missing") or [None])[0]
@@ -319,6 +330,7 @@ def build_graph(extractor: Extractor, tool_loop=None):
             "extracted": patch,
             "rejected_location": rejected_location,
             "deadline_note": deadline_note,
+            "place_note": "；".join(place_notes) or None,
         }
 
     def check_node(state: AgentState) -> AgentState:
@@ -431,6 +443,50 @@ def _looks_like_new_task(draft: TaskDraft, patch: dict) -> bool:
 
 
 
+
+
+
+
+def _normalize_places(patch: dict, notes: list[str]) -> dict:
+    """把口语地名换成知识库里的正式名（"三食" -> "西区学生食堂"）。
+
+    只改**检索能确认是别名**的说法：知识库没写过"三食"就原样保留，
+    绝不让规则或模型去猜地点。改动会记一条提示，回复里说明"我按…记的"。
+    """
+    try:
+        from ..knowledge.search import normalize_place
+    except Exception:  # noqa: BLE001
+        return patch
+
+    clean = dict(patch)
+    for field in ("location_from", "location_to"):
+        value = clean.get(field)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        try:
+            match = normalize_place(value)
+        except Exception:  # noqa: BLE001
+            continue
+        canonical = (match or {}).get("canonical")
+        if canonical and canonical != value:
+            clean[field] = canonical
+            notes.append("「%s」我按「%s」记的" % (value, canonical))
+    return clean
+
+def _normalize_draft_places(draft: TaskDraft, notes: list[str]) -> TaskDraft:
+    """对草稿里已有的地点做一次归一化（用于裸回答回填路径）。"""
+    patch = {}
+    for field in ("location_from", "location_to"):
+        value = getattr(draft, field, None)
+        if value:
+            patch[field] = value
+    if not patch:
+        return draft
+    before = len(notes)
+    cleaned = _normalize_places(patch, notes)
+    if len(notes) == before:
+        return draft
+    return draft.model_copy(update=cleaned)
 
 
 def _place_judge(extractor: Extractor):
