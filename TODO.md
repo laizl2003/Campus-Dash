@@ -691,3 +691,74 @@
 
 - `campus-dash-backend/dash-application/src/test/java/com/campusdash/application/usecase/FundOperationSafetyTest.java`
 - `campus-dash-backend/dash-application/src/main/java/com/campusdash/application/usecase/SettleErrandUseCase.java`
+
+
+## 19. 抢单请求补上 X-Request-Id（未完成）
+
+**目标**：让「同一次用户动作的重试」复用同一个请求幂等键，使 `errand:idem:` 这层真正生效。
+
+### 现状与差距
+
+- 现状：`campus-dash-frontend/src/api.ts` 的 `grab()` 只发 POST，不带 `X-Request-Id`；`ErrandController.grab` 兜底 `UUID.randomUUID()`，每次点击都是新键。
+- 后果：请求级幂等形同虚设，目前只靠 `SISMEMBER grabbed` 与 `uk_errand_round_user` 兜底（业务正确，但重复请求仍会打到 Redis/DB）。
+
+### 实现步骤
+
+1. `api.ts`：`grab(id, requestId?)` 支持可选 header；`request()` 透传 `X-Request-Id`。
+2. 详情页抢单按钮：点击时生成一次 UUID 存 ref，失败重试复用；成功后清空。
+3. 压测脚本（`dash-bench`）保持每次新键，用于验证并发场景。
+
+### 验收标准
+
+- [ ] 同一按钮连续点击 N 次，Redis `errand:idem:` 只出现 1 个键，`GRAB` 返回 `DUPLICATE_REQUEST` 而非再次进入 L4。
+- [ ] 换账号/换任务仍是新键，互不影响。
+
+### 参考文件
+- `campus-dash-frontend/src/api.ts`
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/ErrandController.java`
+
+## 20. WebSocket 多实例推送（未完成）
+
+**目标**：后端多实例部署时，广场消息与站内通知能推到任意实例上的连接。
+
+### 现状与差距
+
+- 现状：`WsSessionRegistry` 是进程内 `ConcurrentHashMap`，A 实例广播只覆盖自己持有的连接。
+- 差距：水平扩容后用户收到的消息取决于连到了哪个实例。
+
+### 实现步骤
+
+1. 方案 A：Redis Pub/Sub，频道 `ws:broadcast`，各实例订阅后只推本地连接（实现最轻）。
+2. 方案 B：复用 RocketMQ 新增 `ws-fanout` topic，每实例一个消费者组。
+3. 发送侧每连接一个有界队列 + 独立发送线程，避免慢连接拖住广播。
+
+### 验收标准
+
+- [ ] 起两个实例，客户端分别连不同实例，任一方发消息两边都能收到。
+- [ ] 慢连接不阻塞其他连接（压测 1000 连接下 P99 可接受）。
+
+### 参考文件
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/realtime/WsSessionRegistry.java`
+
+## 21. WS 握手 token 改为一次性 ticket（未完成）
+
+**目标**：避免 access token 出现在 URL（网关日志、代理记录、浏览器历史）。
+
+### 现状与差距
+
+- 现状：`WsAuthHandshakeInterceptor` 从 `?token=` 取 token，原因是浏览器原生 WebSocket 不能自定义 header。
+- 差距：token 生命周期 120 分钟，泄露面比短时效 ticket 大。
+
+### 实现步骤
+
+1. 新增 `POST /api/auth/ws-ticket`：用当前会话换一个 30 秒、一次性（`GETDEL`）的 ticket。
+2. 握手拦截器改为校验 ticket，并映射回 userId。
+3. 前端连接前先取 ticket，再拼到 URL。
+
+### 验收标准
+
+- [ ] ticket 用过一次即失效，重复使用拒绝握手。
+- [ ] 日志中不再出现 access token。
+
+### 参考文件
+- `campus-dash-backend/dash-presentation/src/main/java/com/campusdash/presentation/realtime/WsAuthHandshakeInterceptor.java`
